@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.research.views import CompanyResearchView, FinancialResearchView
+from apps.research.views import CompanyResearchView, FinancialResearchView, KeyMetricsResearchView
 
 
 urlpatterns = [
@@ -13,5 +13,10 @@ urlpatterns = [
         "financials/",
         FinancialResearchView.as_view(),
         name="research-financials",
+    ),
+    path(
+        "metrics/",
+        KeyMetricsResearchView.as_view(),
+        name="research-metrics",
     ),
 ]

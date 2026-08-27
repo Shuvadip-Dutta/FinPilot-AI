@@ -134,3 +134,55 @@ class FinancialResearchView(APIView):
                 ],
             }
         )    
+        
+class KeyMetricsResearchView(APIView):
+
+    def get(self, request):
+
+        serializer = CompanyResearchQuerySerializer(
+            data=request.query_params
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        ticker = serializer.validated_data["ticker"].upper()
+        market = Market(
+            serializer.validated_data["market"]
+        )
+
+        service = ResearchService()
+
+        try:
+            key_metrics = service.get_key_metrics(
+                ticker,
+                market,
+            )
+
+        except ValueError as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except requests.RequestException as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "ticker": ticker,
+                "market": market,
+                "metrics": [
+                    {
+                        "category": metric.category,
+                        "name": metric.name,
+                        "key": metric.key,
+                        "value": metric.value,
+                        "raw_value": metric.raw_value,
+                    }
+                    for metric in key_metrics.metrics
+                ],
+            }
+        )

@@ -11,6 +11,8 @@ from apps.research.services.schemas import (
     MarketQuote,
     FinancialStatement,
     FinancialMetric,
+    KeyMetricsResearch,
+    KeyMetric,
 )
 
 
@@ -382,4 +384,162 @@ class CompanyResearchAPITestCase(APITestCase):
         self.assertEqual(
             response.data["error"],
             "Financials not found for ticker: XYZNOTAREALSTOCK",
+        )
+        
+    @patch(
+    "apps.research.views.ResearchService.get_key_metrics"
+    )
+    def test_indian_key_metrics(self, mock_key_metrics):
+
+        mock_key_metrics.return_value = KeyMetricsResearch(
+            ticker="RELIANCE",
+            metrics=[
+                KeyMetric(
+                    category="mgmtEffectiveness",
+                    name="Return on average equity - 5 year average",
+                    key="returnOnAverageEquity5YearAverage",
+                    value=8.78,
+                    raw_value="8.78",
+                ),
+                KeyMetric(
+                    category="valuation",
+                    name="Peg Ratio",
+                    key="pegRatio",
+                    value=3.48,
+                    raw_value="3.48",
+                ),
+            ],
+        )
+
+        response = self.client.get(
+            "/api/research/metrics/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["ticker"],
+            "RELIANCE",
+        )
+
+        self.assertEqual(
+            len(response.data["metrics"]),
+            2,
+        )
+
+        self.assertEqual(
+            response.data["metrics"][0]["value"],
+            8.78,
+        )
+
+        self.assertEqual(
+            response.data["metrics"][0]["raw_value"],
+            "8.78",
+        )
+
+        mock_key_metrics.assert_called_once()
+        
+    def test_metrics_missing_ticker(self):
+
+        response = self.client.get(
+            "/api/research/metrics/",
+            {
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        
+    def test_metrics_invalid_market(self):
+
+        response = self.client.get(
+            "/api/research/metrics/",
+            {
+                "ticker": "RELIANCE",
+                "market": "UK",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        
+    def test_metrics_empty_ticker(self):
+
+        response = self.client.get(
+            "/api/research/metrics/",
+            {
+                "ticker": "",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_key_metrics"
+    )
+    def test_metrics_not_found(self, mock_key_metrics):
+
+        mock_key_metrics.side_effect = ValueError(
+            "Key metrics not found for ticker: XYZNOTAREALSTOCK"
+        )
+
+        response = self.client.get(
+            "/api/research/metrics/",
+            {
+                "ticker": "XYZNOTAREALSTOCK",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "Key metrics not found for ticker: XYZNOTAREALSTOCK",
+        )
+        
+    @patch(
+    "apps.research.views.ResearchService.get_key_metrics"
+    )
+    def test_metrics_provider_error(self, mock_key_metrics):
+
+        mock_key_metrics.side_effect = requests.RequestException(
+            "Indian API unavailable"
+        )
+
+        response = self.client.get(
+            "/api/research/metrics/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_502_BAD_GATEWAY,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "Indian API unavailable",
         )
