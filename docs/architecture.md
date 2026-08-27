@@ -29,3 +29,18 @@
                  SEC Filings / PDFs
                           |
           Yahoo Finance / NewsAPI / Tavily
+
+
+#Research Service Architecture v1
+                    
+                         ResearchService
+                               │
+                 ┌─────────────┴─────────────┐
+                 ↓                           ↓
+             Market.US                  Market.INDIA
+                 │                           │
+                 ↓                           ↓
+          FinnhubProvider             IndianAPIProvider
+                 │                           │
+                 ↓                           ↓
+             US Profile              Indian Profile
