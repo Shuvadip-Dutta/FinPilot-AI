@@ -1,0 +1,245 @@
+from unittest.mock import patch
+
+from django.urls import reverse
+import requests
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.research.services.schemas import (
+    CompanyProfile,
+    ExchangeQuote,
+    MarketQuote,
+)
+
+
+class CompanyResearchAPITestCase(APITestCase):
+
+    @patch(
+        "apps.research.views.ResearchService.get_company_profile"
+    )
+    @patch(
+        "apps.research.views.ResearchService.get_market_data"
+    )
+    def test_us_company_research(
+        self,
+        mock_market_data,
+        mock_profile,
+    ):
+        mock_profile.return_value = CompanyProfile(
+            ticker="AAPL",
+            name="Apple Inc",
+            exchange="NASDAQ",
+            country="US",
+            industry="Technology",
+        )
+
+        mock_market_data.return_value = MarketQuote(
+            ticker="AAPL",
+            price=310.12,
+            change=-3.33,
+            percent_change=-1.0624,
+            high=312.035,
+            low=309.4001,
+            open=311.0125,
+            previous_close=313.45,
+        )
+
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "ticker": "AAPL",
+                "market": "US",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["ticker"],
+            "AAPL",
+        )
+
+        self.assertEqual(
+            response.data["company"]["name"],
+            "Apple Inc",
+        )
+
+        self.assertEqual(
+            response.data["market_data"]["price"],
+            310.12,
+        )
+
+    @patch(
+        "apps.research.views.ResearchService.get_company_profile"
+    )
+    @patch(
+        "apps.research.views.ResearchService.get_market_data"
+    )
+    def test_indian_company_research(
+        self,
+        mock_market_data,
+        mock_profile,
+    ):
+        mock_profile.return_value = CompanyProfile(
+            ticker="RELIANCE",
+            name="Reliance Industries",
+            exchange="NSE/BSE",
+            country="India",
+            industry="Oil & Gas Operations",
+            isin="INE002A01018",
+            nse_symbol="RELIANCE",
+            bse_code="500325",
+        )
+
+        mock_market_data.return_value = [
+            ExchangeQuote(
+                exchange="NSE",
+                price=1317.0,
+                percent_change=0.39,
+                year_high=1611.2,
+                year_low=1250.55,
+            ),
+            ExchangeQuote(
+                exchange="BSE",
+                price=1312.6,
+                percent_change=0.39,
+                year_high=1611.2,
+                year_low=1250.55,
+            ),
+        ]
+
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["company"]["name"],
+            "Reliance Industries",
+        )
+
+        self.assertEqual(
+            response.data["company"]["isin"],
+            "INE002A01018",
+        )
+
+        self.assertEqual(
+            len(response.data["market_data"]),
+            2,
+        )
+
+    def test_missing_ticker(self):
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "market": "US",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_invalid_market(self):
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "ticker": "AAPL",
+                "market": "UK",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_empty_ticker(self):
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "ticker": "",
+                "market": "US",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    @patch(
+    "apps.research.views.ResearchService.get_market_data"
+    )
+    @patch(
+        "apps.research.views.ResearchService.get_company_profile"
+    )
+    def test_company_not_found(
+        self,
+        mock_profile,
+        mock_market_data,
+    ):
+        mock_profile.side_effect = ValueError(
+            "Company not found for ticker: XYZNOTAREALSTOCK"
+        )
+
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "ticker": "XYZNOTAREALSTOCK",
+                "market": "US",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "Company not found for ticker: XYZNOTAREALSTOCK",
+        )
+
+        mock_market_data.assert_not_called()
+        
+    @patch(
+    "apps.research.views.ResearchService.get_company_profile"
+    )
+    def test_provider_unavailable(
+        self,
+        mock_profile,
+    ):
+        mock_profile.side_effect = requests.RequestException(
+            "Provider unavailable"
+        )
+
+        response = self.client.get(
+            "/api/research/company/",
+            {
+                "ticker": "AAPL",
+                "market": "US",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_502_BAD_GATEWAY,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "External market data provider is unavailable.",
+        )

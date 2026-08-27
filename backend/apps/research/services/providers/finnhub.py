@@ -57,6 +57,8 @@ class FinnhubProvider(MarketDataProvider):
             "stock/profile2",
             {"symbol": provider_symbol},
         )
+        if not data.get("name"):
+            raise ValueError(f"Company not found for ticker: {ticker}")
 
         return CompanyProfile(
             ticker=ticker.upper(),
@@ -82,6 +84,11 @@ class FinnhubProvider(MarketDataProvider):
             "quote",
             {"symbol": provider_symbol},
         )
+        if data.get("c") is None:
+            raise ValueError(
+                f"Quote not found for ticker: {ticker}"
+            )
+        
 
         return MarketQuote(
             ticker=ticker.upper(),

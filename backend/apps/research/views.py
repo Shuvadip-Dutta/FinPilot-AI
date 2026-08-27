@@ -5,7 +5,7 @@ from dataclasses import asdict
 from apps.research.serializers import CompanyResearchQuerySerializer
 from apps.research.services.research_service import ResearchService
 from apps.research.services.symbols import Market
-
+import requests
 
 class CompanyResearchView(APIView):
 
@@ -35,10 +35,18 @@ class CompanyResearchView(APIView):
                 market,
             )
 
-        except Exception as exc:
+        except ValueError as exc:
             return Response(
                 {
                     "error": str(exc),
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except requests.RequestException:
+            return Response(
+                {
+                    "error": "External market data provider is unavailable."
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
