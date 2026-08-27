@@ -36,3 +36,39 @@ class ExchangeQuote:
     percent_change: float | None
     year_high: float | None
     year_low: float | None
+    
+@dataclass
+class FinancialMetric:
+    name: str
+    key: str
+    value: float | None
+
+
+@dataclass
+class FinancialStatement:
+    #CAS = Cash Flow, BAL = Balance Sheet, INC = Income Statement
+    statement_type: str
+    fiscal_year: str | None
+    end_date: str | None
+    period_type: str | None
+    period_length: int | None
+    metrics: list[FinancialMetric]
+
+
+@dataclass
+class FinancialResearch:
+    ticker: str
+    statements: list[FinancialStatement]
+    
+@dataclass
+class KeyMetric:
+    category: str
+    name: str
+    key: str
+    value: float | None
+    raw_value: str | None = None
+    
+@dataclass
+class KeyMetricsResearch:
+    ticker: str
+    metrics: list[KeyMetric]

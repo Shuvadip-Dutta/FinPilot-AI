@@ -46,3 +46,25 @@ class ResearchService:
         raise ValueError(
             f"Unsupported market: {market}"
         )
+        
+    def get_financials(self, ticker: str, market: Market):
+        if market == Market.INDIA:
+            return self.indian_api.get_financials(
+                ticker,
+                market,
+                )
+    
+        raise ValueError(
+            f"Financial data is not yet supported for market: {market}"
+        )    
+        
+    def get_key_metrics(self, ticker: str, market: Market):
+        if market == Market.INDIA:
+            return self.indian_api.get_key_metrics(
+                ticker,
+                market,
+            )
+
+        raise ValueError(
+            f"Key metrics are not yet supported for market: {market}"
+        )

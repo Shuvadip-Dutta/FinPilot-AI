@@ -9,6 +9,8 @@ from apps.research.services.schemas import (
     CompanyProfile,
     ExchangeQuote,
     MarketQuote,
+    FinancialStatement,
+    FinancialMetric,
 )
 
 
@@ -242,4 +244,142 @@ class CompanyResearchAPITestCase(APITestCase):
         self.assertEqual(
             response.data["error"],
             "External market data provider is unavailable.",
+        )
+        
+    @patch("apps.research.views.ResearchService.get_financials")
+    def test_indian_financials(self, mock_financials):
+
+        mock_financials.return_value = [
+            FinancialStatement(
+                statement_type="INC",
+                fiscal_year="2026",
+                end_date="2026-03-31",
+                period_type="Months",
+                period_length=12,
+                metrics=[
+                    FinancialMetric(
+                        name="Revenue",
+                        key="Revenue",
+                        value=1075675.0,
+                    ),
+                    FinancialMetric(
+                        name="Net Income",
+                        key="NetIncome",
+                        value=80775.0,
+                    ),
+                ],
+            )
+        ]
+
+        response = self.client.get(
+            "/api/research/financials/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["ticker"],
+            "RELIANCE",
+        )
+
+        self.assertEqual(
+            response.data["market"],
+            "IN",
+        )
+
+        self.assertEqual(
+            len(response.data["financials"]),
+            1,
+        )
+
+        self.assertEqual(
+            response.data["financials"][0]["statement_type"],
+            "INC",
+        )
+
+        self.assertEqual(
+            response.data["financials"][0]["metrics"][0]["value"],
+            1075675.0,
+        )
+
+        mock_financials.assert_called_once()    
+        
+    def test_financials_missing_ticker(self):
+
+        response = self.client.get(
+            "/api/research/financials/",
+            {
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+    def test_financials_invalid_market(self):
+
+        response = self.client.get(
+            "/api/research/financials/",
+            {
+                "ticker": "RELIANCE",
+                "market": "UK",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+    def test_financials_empty_ticker(self):
+
+        response = self.client.get(
+            "/api/research/financials/",
+            {
+                "ticker": "",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_financials"
+    )
+    def test_financials_not_found(self, mock_financials):
+
+        mock_financials.side_effect = ValueError(
+            "Financials not found for ticker: XYZNOTAREALSTOCK"
+        )
+
+        response = self.client.get(
+            "/api/research/financials/",
+            {
+                "ticker": "XYZNOTAREALSTOCK",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "Financials not found for ticker: XYZNOTAREALSTOCK",
         )

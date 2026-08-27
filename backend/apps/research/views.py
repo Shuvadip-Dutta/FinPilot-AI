@@ -74,3 +74,63 @@ class CompanyResearchView(APIView):
                 ),
             }
         )
+        
+class FinancialResearchView(APIView):
+
+    def get(self, request):
+
+        serializer = CompanyResearchQuerySerializer(
+            data=request.query_params
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        ticker = serializer.validated_data["ticker"].upper()
+        market = Market(
+            serializer.validated_data["market"]
+        )
+
+        service = ResearchService()
+
+        try:
+            financials = service.get_financials(
+                ticker,
+                market,
+            )
+
+        except ValueError as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except requests.RequestException as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "ticker": ticker,
+                "market": market,
+                "financials": [
+                    {
+                        "statement_type": statement.statement_type,
+                        "fiscal_year": statement.fiscal_year,
+                        "end_date": statement.end_date,
+                        "period_type": statement.period_type,
+                        "period_length": statement.period_length,
+                        "metrics": [
+                            {
+                                "name": metric.name,
+                                "key": metric.key,
+                                "value": metric.value,
+                            }
+                            for metric in statement.metrics
+                        ],
+                    }
+                    for statement in financials
+                ],
+            }
+        )    
