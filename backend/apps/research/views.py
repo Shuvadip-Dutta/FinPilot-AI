@@ -1,0 +1,68 @@
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from dataclasses import asdict
+from apps.research.serializers import CompanyResearchQuerySerializer
+from apps.research.services.research_service import ResearchService
+from apps.research.services.symbols import Market
+
+
+class CompanyResearchView(APIView):
+
+    def get(self, request):
+
+        serializer = CompanyResearchQuerySerializer(
+            data=request.query_params
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        ticker = serializer.validated_data["ticker"].upper()
+        market = Market(
+            serializer.validated_data["market"]
+        )
+
+        service = ResearchService()
+
+        try:
+            profile = service.get_company_profile(
+                ticker,
+                market,
+            )
+
+            market_data = service.get_market_data(
+                ticker,
+                market,
+            )
+
+        except Exception as exc:
+            return Response(
+                {
+                    "error": str(exc),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "ticker": ticker,
+                "market": market,
+                "company": {
+                    "ticker": profile.ticker,
+                    "name": profile.name,
+                    "exchange": profile.exchange,
+                    "country": profile.country,
+                    "sector": profile.sector,
+                    "industry": profile.industry,
+                    "description": profile.description,
+                    "isin": profile.isin,
+                    "nse_symbol": profile.nse_symbol,
+                    "bse_code": profile.bse_code,
+                },
+                "market_data": (
+                    [asdict(item) for item in market_data]
+                    if isinstance(market_data, list)
+                    else asdict(market_data)
+                ),
+            }
+        )
