@@ -1,6 +1,7 @@
 from apps.research.services.providers.finnhub import FinnhubProvider
 from apps.research.services.providers.indian_api import IndianAPIProvider
 from apps.research.services.symbols import Market
+from apps.research.services.news_aggregator import NewsAggregator
 
 
 class ResearchService:
@@ -8,6 +9,7 @@ class ResearchService:
     def __init__(self):
         self.finnhub = FinnhubProvider()
         self.indian_api = IndianAPIProvider()
+        self.news_aggregator = NewsAggregator()
 
     def get_company_profile(
         self,
@@ -67,4 +69,10 @@ class ResearchService:
 
         raise ValueError(
             f"Key metrics are not yet supported for market: {market}"
+        )
+        
+    def get_news(self, ticker: str, market: Market):
+        return self.news_aggregator.get_news(
+            ticker,
+            market,
         )

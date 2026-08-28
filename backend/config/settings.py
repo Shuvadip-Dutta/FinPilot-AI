@@ -31,7 +31,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
 ALLOWED_HOSTS = []
 
-
+MARKETAUX_API_TOKEN = os.getenv("MARKETAUX_API_TOKEN")
 # Application definition
 
 INSTALLED_APPS = [

@@ -44,3 +44,36 @@
                  │                           │
                  ↓                           ↓
              US Profile              Indian Profile
+
+
+                    ┌── IndianAPI ──────┐
+                    │                   │
+Research Request ───┼── Marketaux ──────┼──> NewsArticle
+                    │                   │
+                    └── Upstox News ────┘
+                              ↓
+                       Deduplicate
+                              ↓
+                       Relevance filter
+                              ↓
+                       Combined News
+
+                       
+
+             ResearchService
+                    │
+              NewsAggregator
+              /            \
+             ↓              ↓
+        IndianAPI       Marketaux
+          10              N
+       articles        articles
+             \              /
+              ↓            ↓
+                Normalize
+                    ↓
+               Deduplicate
+                    ↓
+             Sort by date
+                    ↓
+               NewsResearch

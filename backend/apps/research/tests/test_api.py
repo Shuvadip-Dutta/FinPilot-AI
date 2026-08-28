@@ -13,6 +13,8 @@ from apps.research.services.schemas import (
     FinancialMetric,
     KeyMetricsResearch,
     KeyMetric,
+    NewsArticle,
+    NewsResearch,
 )
 
 
@@ -543,3 +545,114 @@ class CompanyResearchAPITestCase(APITestCase):
             response.data["error"],
             "Indian API unavailable",
         )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_news"
+    )
+    def test_news_success(
+        self,
+        mock_get_news,
+    ):
+        mock_get_news.return_value = NewsResearch(
+            ticker="RELIANCE",
+            articles=[
+                NewsArticle(
+                    title="Reliance announces new investment",
+                    summary="Reliance plans a major investment.",
+                    url="https://example.com/reliance",
+                    source="example.com",
+                    published_at="2026-08-28T10:00:00Z",
+                    image_url=None,
+                    relevance_score=90.0,
+                    entities=[],
+                )
+            ],
+        )
+
+        response = self.client.get(
+            "/api/research/news/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["ticker"],
+            "RELIANCE",
+        )
+
+        self.assertEqual(
+            len(response.data["articles"]),
+            1,
+        )
+
+        self.assertEqual(
+            response.data["articles"][0]["title"],
+            "Reliance announces new investment",
+        )    
+
+    @patch(
+        "apps.research.views.ResearchService.get_news"
+    )
+    def test_news_provider_unavailable(
+        self,
+        mock_get_news,
+    ):
+        mock_get_news.side_effect = requests.RequestException(
+            "Marketaux unavailable"
+        )
+
+        response = self.client.get(
+            "/api/research/news/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_502_BAD_GATEWAY,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "External market data provider is unavailable.",
+        )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_news"
+    )
+    def test_news_empty_result(
+        self,
+        mock_get_news,
+    ):
+        mock_get_news.return_value = NewsResearch(
+            ticker="RELIANCE",
+            articles=[],
+        )
+
+        response = self.client.get(
+            "/api/research/news/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["articles"],
+            [],
+        )
+        

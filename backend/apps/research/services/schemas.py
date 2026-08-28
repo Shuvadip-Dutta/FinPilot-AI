@@ -72,3 +72,32 @@ class KeyMetric:
 class KeyMetricsResearch:
     ticker: str
     metrics: list[KeyMetric]
+    
+@dataclass
+class NewsEntity:
+    symbol: str
+    name: str
+    country: str | None = None
+    entity_type: str | None = None
+    match_score: float | None = None
+    sentiment_score: float | None = None
+    
+@dataclass
+class NewsArticle:
+    title: str
+    summary: str | None
+    url: str
+    source: str
+    published_at: str | None
+    image_url: str | None = None
+
+    relevance_score: float | None = None
+    target_match_score: float | None = None
+    relevance_type: str | None = None
+
+    entities: list[NewsEntity] | None = None
+
+@dataclass
+class NewsResearch:
+    ticker: str
+    articles: list[NewsArticle]

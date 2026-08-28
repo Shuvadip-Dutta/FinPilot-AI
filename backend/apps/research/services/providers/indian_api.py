@@ -4,7 +4,7 @@ from typing import Any
 import requests
 from dotenv import load_dotenv
 
-from apps.research.services.schemas import CompanyProfile, ExchangeQuote, FinancialMetric,FinancialStatement, KeyMetric,KeyMetricsResearch
+from apps.research.services.schemas import CompanyProfile, ExchangeQuote, FinancialMetric,FinancialStatement, KeyMetric,KeyMetricsResearch, NewsArticle, NewsResearch
 from apps.research.services.symbols import Market
 
 load_dotenv()
@@ -274,4 +274,50 @@ class IndianAPIProvider:
         return KeyMetricsResearch(
             ticker=ticker,
             metrics=metrics,
+        )
+        
+    def get_news(self, ticker: str, market: Market = Market.INDIA) -> NewsResearch:
+
+        if market != Market.INDIA:
+            raise ValueError(
+                "IndianAPIProvider currently supports India only."
+            )
+
+        data = self.get_stock(
+            ticker,
+            market,
+        )
+
+        articles: list[NewsArticle] = []
+
+        for item in data.get("recentNews") or []:
+            relative_url = item.get("url") or ""
+
+            if relative_url.startswith("http"):
+                url = relative_url
+            else:
+                url = f"https://www.livemint.com{relative_url}"
+
+            articles.append(
+                NewsArticle(
+                    title=item.get("headline", ""),
+                    summary=item.get("summary"),
+                    url=url,
+                    source="livemint.com",
+                    published_at=(
+                        item.get("lastPublishedDate")
+                        or item.get("date")
+                    ),
+                    image_url=(
+                        item.get("thumbnailImage")
+                        or item.get("listimage")
+                    ),
+                    relevance_score=None,
+                    entities=None,
+                )
+            )
+
+        return NewsResearch(
+            ticker=ticker.upper(),
+            articles=articles,
         )

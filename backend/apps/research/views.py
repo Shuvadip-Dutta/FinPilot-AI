@@ -186,3 +186,75 @@ class KeyMetricsResearchView(APIView):
                 ],
             }
         )
+        
+class NewsResearchView(APIView):
+
+    def get(self, request):
+
+        serializer = CompanyResearchQuerySerializer(
+            data=request.query_params
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        ticker = serializer.validated_data["ticker"].upper()
+
+        market = Market(
+            serializer.validated_data["market"]
+        )
+
+        service = ResearchService()
+
+        try:
+            research = service.get_news(
+                ticker,
+                market,
+            )
+
+        except requests.RequestException:
+            return Response(
+                {
+                    "error": "External market data provider is unavailable.",
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        except Exception as exc:
+            return Response(
+                {
+                    "error": str(exc),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "ticker": research.ticker,
+                "articles": [
+                    {
+                        "title": article.title,
+                        "summary": article.summary,
+                        "url": article.url,
+                        "source": article.source,
+                        "published_at": article.published_at,
+                        "image_url": article.image_url,
+                        "relevance_score": article.relevance_score,
+                        "target_match_score": article.target_match_score,
+                        "relevance_type": article.relevance_type,
+                        "entities": [
+                            {
+                                "symbol": entity.symbol,
+                                "name": entity.name,
+                                "country": entity.country,
+                                "entity_type": entity.entity_type,
+                                "match_score": entity.match_score,
+                                "sentiment_score": entity.sentiment_score,
+                            }
+                            for entity in article.entities or []
+                        ],
+                    }
+                    for article in research.articles
+                ],
+            }
+        )
+        
