@@ -1,5 +1,6 @@
-from django.test import SimpleTestCase
 from unittest.mock import patch
+
+from django.test import SimpleTestCase
 
 from apps.research.services.news_aggregator import NewsAggregator
 from apps.research.services.schemas import (
@@ -8,8 +9,12 @@ from apps.research.services.schemas import (
 )
 from apps.research.services.symbols import Market
 
+
 class NewsAggregatorTestCase(SimpleTestCase):
 
+    @patch(
+        "apps.research.services.news_aggregator.UpstoxProvider"
+    )
     @patch(
         "apps.research.services.news_aggregator.MarketauxProvider"
     )
@@ -20,6 +25,7 @@ class NewsAggregatorTestCase(SimpleTestCase):
         self,
         mock_indian_provider,
         mock_marketaux_provider,
+        mock_upstox_provider,
     ):
 
         indian_article = NewsArticle(
@@ -38,6 +44,14 @@ class NewsAggregatorTestCase(SimpleTestCase):
             published_at="2026-08-28T10:00:00Z",
         )
 
+        upstox_article = NewsArticle(
+            title="Reliance Upstox News",
+            summary="Upstox article",
+            url="https://example.com/upstox",
+            source="upstox.com",
+            published_at="2026-08-28T11:00:00Z",
+        )
+
         mock_indian_provider.return_value.get_news.return_value = (
             NewsResearch(
                 ticker="RELIANCE",
@@ -49,6 +63,13 @@ class NewsAggregatorTestCase(SimpleTestCase):
             NewsResearch(
                 ticker="RELIANCE",
                 articles=[marketaux_article],
+            )
+        )
+
+        mock_upstox_provider.return_value.get_news.return_value = (
+            NewsResearch(
+                ticker="RELIANCE",
+                articles=[upstox_article],
             )
         )
 
@@ -66,14 +87,27 @@ class NewsAggregatorTestCase(SimpleTestCase):
 
         self.assertEqual(
             len(result.articles),
-            2,
+            3,
         )
 
         self.assertEqual(
             result.articles[0].title,
+            "Reliance Upstox News",
+        )
+
+        self.assertEqual(
+            result.articles[1].title,
             "Reliance Marketaux News",
         )
 
+        self.assertEqual(
+            result.articles[2].title,
+            "Reliance Indian News",
+        )
+
+    @patch(
+        "apps.research.services.news_aggregator.UpstoxProvider"
+    )
     @patch(
         "apps.research.services.news_aggregator.MarketauxProvider"
     )
@@ -84,6 +118,7 @@ class NewsAggregatorTestCase(SimpleTestCase):
         self,
         mock_indian_provider,
         mock_marketaux_provider,
+        mock_upstox_provider,
     ):
 
         duplicate_url = "https://example.com/reliance"
@@ -104,6 +139,14 @@ class NewsAggregatorTestCase(SimpleTestCase):
             published_at="2026-08-28T10:00:00Z",
         )
 
+        upstox_article = NewsArticle(
+            title="Upstox version",
+            summary="Third version",
+            url=duplicate_url,
+            source="livemint.com",
+            published_at="2026-08-29T10:00:00Z",
+        )
+
         mock_indian_provider.return_value.get_news.return_value = (
             NewsResearch(
                 ticker="RELIANCE",
@@ -118,6 +161,13 @@ class NewsAggregatorTestCase(SimpleTestCase):
             )
         )
 
+        mock_upstox_provider.return_value.get_news.return_value = (
+            NewsResearch(
+                ticker="RELIANCE",
+                articles=[upstox_article],
+            )
+        )
+
         aggregator = NewsAggregator()
 
         result = aggregator.get_news(
@@ -128,4 +178,9 @@ class NewsAggregatorTestCase(SimpleTestCase):
         self.assertEqual(
             len(result.articles),
             1,
+        )
+
+        self.assertEqual(
+            result.articles[0].title,
+            "Indian API version",
         )

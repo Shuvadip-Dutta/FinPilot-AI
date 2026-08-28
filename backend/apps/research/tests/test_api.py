@@ -15,6 +15,8 @@ from apps.research.services.schemas import (
     KeyMetric,
     NewsArticle,
     NewsResearch,
+    HistoricalCandle,
+    HistoricalMarketData,
 )
 
 
@@ -655,4 +657,157 @@ class CompanyResearchAPITestCase(APITestCase):
             response.data["articles"],
             [],
         )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_historical_data"
+    )
+    def test_historical_success(
+        self,
+        mock_historical,
+    ):
+        mock_historical.return_value = HistoricalMarketData(
+            ticker="RELIANCE",
+            candles=[
+                HistoricalCandle(
+                    timestamp="2026-08-27T00:00:00+05:30",
+                    open=1305.0,
+                    high=1308.4,
+                    low=1282.2,
+                    close=1282.2,
+                    volume=11271497,
+                    open_interest=0,
+                )
+            ],
+        )
+
+        response = self.client.get(
+            "/api/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "to_date": "2026-08-28",
+                "from_date": "2026-08-25",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["ticker"],
+            "RELIANCE",
+        )
+
+        self.assertEqual(
+            len(response.data["candles"]),
+            1,
+        )
+
+        self.assertEqual(
+            response.data["candles"][0]["close"],
+            1282.2,
+        )
+        
+    def test_historical_missing_to_date(self):
+
+        response = self.client.get(
+            "/api/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "to_date is required.",
+        )
+        
+    def test_historical_missing_to_date(self):
+
+        response = self.client.get(
+            "/api/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "to_date is required.",
+        )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_historical_data"
+    )
+    def test_historical_provider_unavailable(
+        self,
+        mock_historical,
+    ):
+        mock_historical.side_effect = requests.RequestException(
+            "Upstox unavailable"
+        )
+
+        response = self.client.get(
+            "/api/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "to_date": "2026-08-28",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_502_BAD_GATEWAY,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "External market data provider is unavailable.",
+        )
+        
+    @patch(
+        "apps.research.views.ResearchService.get_historical_data"
+    )
+    def test_historical_invalid_ticker(
+        self,
+        mock_historical,
+    ):
+        mock_historical.side_effect = ValueError(
+            "Unsupported Upstox ticker: UNKNOWN"
+        )
+
+        response = self.client.get(
+            "/api/research/historical/",
+            {
+                "ticker": "UNKNOWN",
+                "market": "IN",
+                "to_date": "2026-08-28",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertEqual(
+            response.data["error"],
+            "Unsupported Upstox ticker: UNKNOWN",
+        )
+        
         

@@ -2,6 +2,7 @@ from apps.research.services.providers.finnhub import FinnhubProvider
 from apps.research.services.providers.indian_api import IndianAPIProvider
 from apps.research.services.symbols import Market
 from apps.research.services.news_aggregator import NewsAggregator
+from apps.research.services.providers.upstox import UpstoxProvider
 
 
 class ResearchService:
@@ -10,6 +11,7 @@ class ResearchService:
         self.finnhub = FinnhubProvider()
         self.indian_api = IndianAPIProvider()
         self.news_aggregator = NewsAggregator()
+        self.upstox = UpstoxProvider()
 
     def get_company_profile(
         self,
@@ -71,8 +73,22 @@ class ResearchService:
             f"Key metrics are not yet supported for market: {market}"
         )
         
+    def get_historical_data(self, ticker: str, to_date: str, from_date: str | None = None, market: Market = Market.INDIA):
+        if market == Market.INDIA:
+            return self.upstox.get_historical(
+                ticker,
+                to_date,
+                from_date,
+                market,
+            )
+
+        raise ValueError(
+            f"Historical data is not yet supported for market: {market}"
+        )
+        
     def get_news(self, ticker: str, market: Market):
         return self.news_aggregator.get_news(
             ticker,
             market,
         )
+        

@@ -257,4 +257,73 @@ class NewsResearchView(APIView):
                 ],
             }
         )
-        
+
+class HistoricalResearchView(APIView):
+
+    def get(self, request):
+
+        serializer = CompanyResearchQuerySerializer(
+            data=request.query_params
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        ticker = serializer.validated_data["ticker"].upper()
+
+        market = Market(
+            serializer.validated_data["market"]
+        )
+
+        to_date = request.query_params.get("to_date")
+        from_date = request.query_params.get("from_date")
+
+        if not to_date:
+            return Response(
+                {
+                    "error": "to_date is required.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = ResearchService()
+
+        try:
+            historical = service.get_historical_data(
+                ticker,
+                to_date=to_date,
+                from_date=from_date,
+                market=market,
+            )
+
+        except ValueError as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except requests.RequestException:
+            return Response(
+                {
+                    "error": "External market data provider is unavailable.",
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "ticker": historical.ticker,
+                "market": market,
+                "candles": [
+                    {
+                        "timestamp": candle.timestamp,
+                        "open": candle.open,
+                        "high": candle.high,
+                        "low": candle.low,
+                        "close": candle.close,
+                        "volume": candle.volume,
+                        "open_interest": candle.open_interest,
+                    }
+                    for candle in historical.candles
+                ],
+            }
+        )

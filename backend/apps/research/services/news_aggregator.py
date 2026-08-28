@@ -1,5 +1,6 @@
 from apps.research.services.providers.indian_api import IndianAPIProvider
 from apps.research.services.providers.marketaux import MarketauxProvider
+from apps.research.services.providers.upstox import UpstoxProvider
 from apps.research.services.schemas import (
     NewsArticle,
     NewsResearch,
@@ -12,6 +13,7 @@ class NewsAggregator:
     def __init__(self):
         self.indian_api = IndianAPIProvider()
         self.marketaux = MarketauxProvider()
+        self.upstox = UpstoxProvider()
 
     def get_news(
         self,
@@ -37,10 +39,17 @@ class NewsAggregator:
             market,
             limit=limit,
         )
+        
+        upstox_news = self.upstox.get_news(
+            ticker,
+            market,
+            limit=limit,
+        )
 
         articles = (
             indian_news.articles
             + marketaux_news.articles
+            + upstox_news.articles
         )
 
         articles = self._deduplicate(articles)

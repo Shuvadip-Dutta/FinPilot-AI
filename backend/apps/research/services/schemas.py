@@ -101,3 +101,18 @@ class NewsArticle:
 class NewsResearch:
     ticker: str
     articles: list[NewsArticle]
+    
+@dataclass
+class HistoricalCandle:
+    timestamp: str
+    open: float | None
+    high: float | None
+    low: float | None
+    close: float | None
+    volume: int | None
+    open_interest: int | None
+    
+@dataclass
+class HistoricalMarketData:
+    ticker: str
+    candles: list[HistoricalCandle]

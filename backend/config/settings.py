@@ -32,6 +32,9 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = []
 
 MARKETAUX_API_TOKEN = os.getenv("MARKETAUX_API_TOKEN")
+UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
+    "UPSTOX_ANALYTICS_ACCESS_TOKEN"
+)
 # Application definition
 
 INSTALLED_APPS = [
