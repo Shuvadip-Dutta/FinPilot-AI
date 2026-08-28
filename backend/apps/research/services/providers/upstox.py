@@ -1,7 +1,7 @@
 import requests
 
 from django.conf import settings
-
+from apps.research.services.exceptions import ProviderResponseError
 from apps.research.services.symbols import Market
 from apps.research.services.schemas import (
     HistoricalCandle,
@@ -47,6 +47,36 @@ class UpstoxProvider:
 
         return response.json()
     
+    @staticmethod
+    def _validate_dict_response(
+        data: dict,
+        provider: str = "Upstox",
+    ) -> dict:
+
+        if not isinstance(data, dict):
+            raise ProviderResponseError(
+                f"{provider} returned an invalid response."
+            )
+
+        if not isinstance(data.get("data"), dict):
+            raise ProviderResponseError(
+                f"{provider} returned an invalid data payload."
+            )
+
+        return data
+    
+    @staticmethod
+    def _validate_candle(
+        candle,
+    ) -> bool:
+
+        if not isinstance(candle, list):
+            return False
+
+        if len(candle) < 7:
+            return False
+
+        return True
     
     
     def get_stock(
@@ -71,14 +101,38 @@ class UpstoxProvider:
             },
         )
 
+        data = self._validate_dict_response(data)
+
         quote = data["data"].get(
             f"NSE_EQ:{ticker}"
         )
-
+        
         if quote is None:
             raise ValueError(
                 f"No market data found for {ticker}."
             )
+                    
+
+        if not isinstance(quote, dict):
+            raise ProviderResponseError(
+                f"Upstox returned invalid market data for {ticker}."
+            )
+
+        required_fields = (
+            "instrument_token",
+            "last_price",
+            "ltq",
+            "volume",
+            "cp",
+        )
+
+        if not all(
+            field in quote
+            for field in required_fields
+        ):
+            raise ProviderResponseError(
+                f"Upstox returned incomplete market data for {ticker}."
+            )    
 
         return {
             "ticker": ticker,
@@ -89,7 +143,13 @@ class UpstoxProvider:
             "previous_close": quote["cp"],
         }
         
-    def get_historical(self, ticker: str, to_date: str, from_date: str | None = None, market: Market = Market.INDIA) -> dict:
+    def get_historical(
+    self,
+    ticker: str,
+    to_date: str,
+    from_date: str | None = None,
+    market: Market = Market.INDIA,
+    ) -> HistoricalMarketData:
 
         if market != Market.INDIA:
             raise ValueError(
@@ -98,7 +158,9 @@ class UpstoxProvider:
 
         ticker = ticker.upper()
 
-        instrument_key = self.instrument_resolver.resolve_nse_equity(ticker)
+        instrument_key = self.instrument_resolver.resolve_nse_equity(
+            ticker
+        )
 
         endpoint = (
             f"historical-candle/"
@@ -115,10 +177,20 @@ class UpstoxProvider:
             {},
         )
 
-        candles = data.get("data", {}).get(
-            "candles",
-            [],
-        )
+        data = self._validate_dict_response(data)
+
+        candles = data["data"].get("candles", [])
+
+        if not isinstance(candles, list):
+            raise ProviderResponseError(
+                f"Upstox returned invalid historical data for {ticker}."
+            )
+
+        for candle in candles:
+            if not self._validate_candle(candle):
+                raise ProviderResponseError(
+                    f"Upstox returned malformed historical data for {ticker}."
+                )
 
         return HistoricalMarketData(
             ticker=ticker,
@@ -158,22 +230,49 @@ class UpstoxProvider:
             base_url=self.NEWS_BASE_URL,
         )
 
-        raw_articles = data.get("data", {}).get(
+        data = self._validate_dict_response(data)
+
+        raw_articles = data["data"].get(
             instrument_key,
             [],
         )
+
+        if not isinstance(raw_articles, list):
+            raise ProviderResponseError(
+                f"Upstox returned invalid news data for {ticker}."
+            )
 
         articles: list[NewsArticle] = []
 
         for item in raw_articles:
 
-            published_at = item.get("published_time")
+            if not isinstance(item, dict):
+                raise ProviderResponseError(
+                    f"Upstox returned malformed news data for {ticker}."
+                )
 
-            if published_at is not None:
-                published_at = datetime.fromtimestamp(
-                    published_at / 1000,
-                    tz=timezone.utc,
-                ).isoformat()
+            published_time = item.get("published_time")
+
+            if published_time is not None:
+                if not isinstance(
+                    published_time,
+                    (int, float),
+                ):
+                    raise ProviderResponseError(
+                        f"Upstox returned invalid publication time for {ticker}."
+                    )
+
+                try:
+                    published_at = datetime.fromtimestamp(
+                        published_time / 1000,
+                        tz=timezone.utc,
+                    ).isoformat()
+                except (OverflowError, OSError, ValueError):
+                    raise ProviderResponseError(
+                        f"Upstox returned invalid publication time for {ticker}."
+                    )
+            else:
+                published_at = None
 
             articles.append(
                 NewsArticle(

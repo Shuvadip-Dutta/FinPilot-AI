@@ -6,7 +6,11 @@ from apps.research.services.schemas import (
     NewsResearch,
 )
 from apps.research.services.symbols import Market
+import logging
 
+from requests import RequestException
+
+logger = logging.getLogger("finpilot")
 
 class NewsAggregator:
 
@@ -15,12 +19,7 @@ class NewsAggregator:
         self.marketaux = MarketauxProvider()
         self.upstox = UpstoxProvider()
 
-    def get_news(
-        self,
-        ticker: str,
-        market: Market,
-        limit: int = 10,
-    ) -> NewsResearch:
+    def get_news(self, ticker: str, market: Market, limit: int = 10) -> NewsResearch:
 
         if market != Market.INDIA:
             raise ValueError(
@@ -29,28 +28,52 @@ class NewsAggregator:
 
         ticker = ticker.upper()
 
-        indian_news = self.indian_api.get_news(
-            ticker,
-            market,
-        )
+        articles: list[NewsArticle] = []
 
-        marketaux_news = self.marketaux.get_news(
-            ticker,
-            market,
-            limit=limit,
-        )
-        
-        upstox_news = self.upstox.get_news(
-            ticker,
-            market,
-            limit=limit,
-        )
+        providers = [
+            (
+                "Indian API",
+                lambda: self.indian_api.get_news(
+                    ticker,
+                    market,
+                ),
+            ),
+            (
+                "Marketaux",
+                lambda: self.marketaux.get_news(
+                    ticker,
+                    market,
+                    limit=limit,
+                ),
+            ),
+            (
+                "Upstox",
+                lambda: self.upstox.get_news(
+                    ticker,
+                    market,
+                    limit=limit,
+                ),
+            ),
+        ]
 
-        articles = (
-            indian_news.articles
-            + marketaux_news.articles
-            + upstox_news.articles
-        )
+        for provider_name, fetch_news in providers:
+            try:
+                result = fetch_news()
+                articles.extend(result.articles)
+
+            except RequestException:
+                logger.exception(
+                    "%s news provider unavailable for %s",
+                    provider_name,
+                    ticker,
+                )
+
+            except ValueError:
+                logger.exception(
+                    "%s returned invalid news data for %s",
+                    provider_name,
+                    ticker,
+                )
 
         articles = self._deduplicate(articles)
 

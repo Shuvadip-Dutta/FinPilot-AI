@@ -725,11 +725,91 @@ class CompanyResearchAPITestCase(APITestCase):
             status.HTTP_400_BAD_REQUEST,
         )
 
+        self.assertIn(
+            "to_date",
+            response.data,
+        )
+    def test_historical_invalid_to_date(self):
+        response = self.client.get(
+            "/api/v1/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "to_date": "2026-99-99",
+            },
+        )
+
         self.assertEqual(
-            response.data["error"],
-            "to_date is required.",
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "to_date",
+            response.data,
         )
         
+    def test_historical_invalid_from_date(self):
+        response = self.client.get(
+            "/api/v1/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "to_date": "2026-08-28",
+                "from_date": "invalid-date",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "from_date",
+            response.data,
+        )
+        
+    def test_historical_reversed_date_range(self):
+        response = self.client.get(
+            "/api/v1/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "to_date": "2026-08-25",
+                "from_date": "2026-08-28",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "from_date",
+            response.data,
+        )    
+        
+    def test_historical_future_to_date(self):
+        response = self.client.get(
+            "/api/v1/research/historical/",
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "to_date": "2099-01-01",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "to_date",
+            response.data,
+        )
         
     @patch(
         "apps.research.views.ResearchService.get_historical_data"

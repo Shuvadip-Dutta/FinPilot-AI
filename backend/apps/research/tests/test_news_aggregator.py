@@ -8,6 +8,7 @@ from apps.research.services.schemas import (
     NewsResearch,
 )
 from apps.research.services.symbols import Market
+from requests import RequestException
 
 
 class NewsAggregatorTestCase(SimpleTestCase):
@@ -183,4 +184,71 @@ class NewsAggregatorTestCase(SimpleTestCase):
         self.assertEqual(
             result.articles[0].title,
             "Indian API version",
+        )
+        
+    @patch(
+    "apps.research.services.news_aggregator.UpstoxProvider"
+    )
+    @patch(
+        "apps.research.services.news_aggregator.MarketauxProvider"
+    )
+    @patch(
+        "apps.research.services.news_aggregator.IndianAPIProvider"
+    )
+    def test_provider_failure_does_not_stop_aggregation(
+        self,
+        mock_indian_provider,
+        mock_marketaux_provider,
+        mock_upstox_provider,
+    ):
+
+        indian_article = NewsArticle(
+            title="Indian News",
+            summary="Indian article",
+            url="https://example.com/indian",
+            source="indian.com",
+            published_at="2026-08-27T10:00:00Z",
+        )
+
+        upstox_article = NewsArticle(
+            title="Upstox News",
+            summary="Upstox article",
+            url="https://example.com/upstox",
+            source="upstox.com",
+            published_at="2026-08-28T10:00:00Z",
+        )
+
+        mock_indian_provider.return_value.get_news.side_effect = (
+            RequestException("Indian API unavailable")
+        )
+
+        mock_marketaux_provider.return_value.get_news.return_value = (
+            NewsResearch(
+                ticker="RELIANCE",
+                articles=[indian_article],
+            )
+        )
+
+        mock_upstox_provider.return_value.get_news.return_value = (
+            NewsResearch(
+                ticker="RELIANCE",
+                articles=[upstox_article],
+            )
+        )
+
+        aggregator = NewsAggregator()
+
+        result = aggregator.get_news(
+            "RELIANCE",
+            Market.INDIA,
+        )
+
+        self.assertEqual(
+            len(result.articles),
+            2,
+        )
+
+        self.assertEqual(
+            result.articles[0].title,
+            "Upstox News",
         )

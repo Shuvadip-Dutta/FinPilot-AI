@@ -1,8 +1,9 @@
+from django.db.migrations import serializer
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from dataclasses import asdict
-from apps.research.serializers import CompanyResearchQuerySerializer
+from apps.research.serializers import CompanyResearchQuerySerializer, HistoricalResearchQuerySerializer, IndiaOnlyResearchQuerySerializer
 from apps.research.services.research_service import ResearchService
 from apps.research.services.symbols import Market
 import requests
@@ -79,7 +80,7 @@ class FinancialResearchView(APIView):
 
     def get(self, request):
 
-        serializer = CompanyResearchQuerySerializer(
+        serializer = IndiaOnlyResearchQuerySerializer(
             data=request.query_params
         )
 
@@ -106,7 +107,7 @@ class FinancialResearchView(APIView):
 
         except requests.RequestException as exc:
             return Response(
-                {"error": str(exc)},
+                {"error": "External market data provider is unavailable."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -139,7 +140,7 @@ class KeyMetricsResearchView(APIView):
 
     def get(self, request):
 
-        serializer = CompanyResearchQuerySerializer(
+        serializer = IndiaOnlyResearchQuerySerializer(
             data=request.query_params
         )
 
@@ -191,7 +192,7 @@ class NewsResearchView(APIView):
 
     def get(self, request):
 
-        serializer = CompanyResearchQuerySerializer(
+        serializer = IndiaOnlyResearchQuerySerializer(
             data=request.query_params
         )
 
@@ -260,7 +261,7 @@ class HistoricalResearchView(APIView):
 
     def get(self, request):
 
-        serializer = CompanyResearchQuerySerializer(
+        serializer = HistoricalResearchQuerySerializer(
             data=request.query_params
         )
 
@@ -272,8 +273,8 @@ class HistoricalResearchView(APIView):
             serializer.validated_data["market"]
         )
 
-        to_date = request.query_params.get("to_date")
-        from_date = request.query_params.get("from_date")
+        to_date = serializer.validated_data["to_date"]
+        from_date = serializer.validated_data.get("from_date")
 
         if not to_date:
             return Response(
@@ -288,8 +289,12 @@ class HistoricalResearchView(APIView):
         try:
             historical = service.get_historical_data(
                 ticker,
-                to_date=to_date,
-                from_date=from_date,
+                to_date=to_date.isoformat(),
+                from_date=(
+                    from_date.isoformat()
+                    if from_date
+                    else None
+                ),
                 market=market,
             )
 

@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from requests import RequestException
-
+from apps.research.services.exceptions import ProviderResponseError
 from apps.research.services.providers.upstox import (
     UpstoxProvider,
 )
@@ -258,6 +258,76 @@ class UpstoxProviderTestCase(SimpleTestCase):
             [],
         )
         
+        
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxProvider._get"
+    )
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_historical_invalid_candles_payload(
+        self,
+        mock_resolver,
+        mock_get,
+    ):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
+
+        mock_get.return_value = {
+            "status": "success",
+            "data": {
+                "candles": "invalid",
+            },
+        }
+
+        provider = UpstoxProvider()
+
+        with self.assertRaises(ProviderResponseError):
+            provider.get_historical(
+                "RELIANCE",
+                to_date="2026-08-28",
+                market=Market.INDIA,
+            )
+    
+        
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxProvider._get"
+    )
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_historical_malformed_candle(
+        self,
+        mock_resolver,
+        mock_get,
+    ):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
+
+        mock_get.return_value = {
+            "status": "success",
+            "data": {
+                "candles": [
+                    [
+                        "2026-08-28T00:00:00+05:30",
+                        1282.2,
+                        1295.0,
+                    ]
+                ],
+            },
+        }
+
+        provider = UpstoxProvider()
+
+        with self.assertRaises(ProviderResponseError):
+            provider.get_historical(
+                "RELIANCE",
+                to_date="2026-08-28",
+                market=Market.INDIA,
+            )        
+        
     @patch(
     "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
@@ -402,4 +472,63 @@ class UpstoxProviderTestCase(SimpleTestCase):
                 "RELIANCE",
                 Market.INDIA,
             )
+
+
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxProvider._get"
+    )
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_news_invalid_data_payload(
+        self,
+        mock_resolver,
+        mock_get,
+    ):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
+
+        mock_get.return_value = {
+            "status": "success",
+            "data": [],
+        }
+
+        provider = UpstoxProvider()
+
+        with self.assertRaises(ProviderResponseError):
+            provider.get_news(
+                "RELIANCE",
+                Market.INDIA,
+            )
             
+            
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxProvider._get"
+    )
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_news_invalid_articles_payload(
+        self,
+        mock_resolver,
+        mock_get,
+    ):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
+
+        mock_get.return_value = {
+            "status": "success",
+            "data": {
+                "NSE_EQ|INE002A01018": "invalid",
+            },
+        }
+
+        provider = UpstoxProvider()
+
+        with self.assertRaises(ProviderResponseError):
+            provider.get_news(
+                "RELIANCE",
+                Market.INDIA,
+            )                        
