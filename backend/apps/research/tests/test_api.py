@@ -53,7 +53,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "ticker": "AAPL",
                 "market": "US",
@@ -120,7 +120,7 @@ class CompanyResearchAPITestCase(APITestCase):
         ]
 
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -149,7 +149,7 @@ class CompanyResearchAPITestCase(APITestCase):
 
     def test_missing_ticker(self):
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "market": "US",
             },
@@ -162,7 +162,7 @@ class CompanyResearchAPITestCase(APITestCase):
 
     def test_invalid_market(self):
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "ticker": "AAPL",
                 "market": "UK",
@@ -176,7 +176,7 @@ class CompanyResearchAPITestCase(APITestCase):
 
     def test_empty_ticker(self):
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "ticker": "",
                 "market": "US",
@@ -204,7 +204,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "ticker": "XYZNOTAREALSTOCK",
                 "market": "US",
@@ -235,7 +235,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/company/",
+            "/api/v1/research/company/",
             {
                 "ticker": "AAPL",
                 "market": "US",
@@ -278,7 +278,7 @@ class CompanyResearchAPITestCase(APITestCase):
         ]
 
         response = self.client.get(
-            "/api/research/financials/",
+            "/api/v1/research/financials/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -320,7 +320,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_financials_missing_ticker(self):
 
         response = self.client.get(
-            "/api/research/financials/",
+            "/api/v1/research/financials/",
             {
                 "market": "IN",
             },
@@ -335,7 +335,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_financials_invalid_market(self):
 
         response = self.client.get(
-            "/api/research/financials/",
+            "/api/v1/research/financials/",
             {
                 "ticker": "RELIANCE",
                 "market": "UK",
@@ -351,7 +351,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_financials_empty_ticker(self):
 
         response = self.client.get(
-            "/api/research/financials/",
+            "/api/v1/research/financials/",
             {
                 "ticker": "",
                 "market": "IN",
@@ -373,7 +373,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/financials/",
+            "/api/v1/research/financials/",
             {
                 "ticker": "XYZNOTAREALSTOCK",
                 "market": "IN",
@@ -416,7 +416,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/metrics/",
+            "/api/v1/research/metrics/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -453,7 +453,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_metrics_missing_ticker(self):
 
         response = self.client.get(
-            "/api/research/metrics/",
+            "/api/v1/research/metrics/",
             {
                 "market": "IN",
             },
@@ -467,7 +467,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_metrics_invalid_market(self):
 
         response = self.client.get(
-            "/api/research/metrics/",
+            "/api/v1/research/metrics/",
             {
                 "ticker": "RELIANCE",
                 "market": "UK",
@@ -482,7 +482,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_metrics_empty_ticker(self):
 
         response = self.client.get(
-            "/api/research/metrics/",
+            "/api/v1/research/metrics/",
             {
                 "ticker": "",
                 "market": "IN",
@@ -504,7 +504,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/metrics/",
+            "/api/v1/research/metrics/",
             {
                 "ticker": "XYZNOTAREALSTOCK",
                 "market": "IN",
@@ -531,7 +531,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/metrics/",
+            "/api/v1/research/metrics/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -572,7 +572,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/news/",
+            "/api/v1/research/news/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -611,7 +611,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/news/",
+            "/api/v1/research/news/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -641,7 +641,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/news/",
+            "/api/v1/research/news/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -681,7 +681,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/historical/",
+            "/api/v1/research/historical/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -713,7 +713,7 @@ class CompanyResearchAPITestCase(APITestCase):
     def test_historical_missing_to_date(self):
 
         response = self.client.get(
-            "/api/research/historical/",
+            "/api/v1/research/historical/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -730,25 +730,6 @@ class CompanyResearchAPITestCase(APITestCase):
             "to_date is required.",
         )
         
-    def test_historical_missing_to_date(self):
-
-        response = self.client.get(
-            "/api/research/historical/",
-            {
-                "ticker": "RELIANCE",
-                "market": "IN",
-            },
-        )
-
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-        self.assertEqual(
-            response.data["error"],
-            "to_date is required.",
-        )
         
     @patch(
         "apps.research.views.ResearchService.get_historical_data"
@@ -762,7 +743,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/historical/",
+            "/api/v1/research/historical/",
             {
                 "ticker": "RELIANCE",
                 "market": "IN",
@@ -792,7 +773,7 @@ class CompanyResearchAPITestCase(APITestCase):
         )
 
         response = self.client.get(
-            "/api/research/historical/",
+            "/api/v1/research/historical/",
             {
                 "ticker": "UNKNOWN",
                 "market": "IN",

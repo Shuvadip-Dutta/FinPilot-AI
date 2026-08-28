@@ -210,19 +210,17 @@ class NewsResearchView(APIView):
                 ticker,
                 market,
             )
+            
+        except ValueError as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         except requests.RequestException:
             return Response(
                 {
                     "error": "External market data provider is unavailable.",
-                },
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        except Exception as exc:
-            return Response(
-                {
-                    "error": str(exc),
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
             )

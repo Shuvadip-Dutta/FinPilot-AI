@@ -8,6 +8,9 @@ from apps.research.services.schemas import (
     HistoricalMarketData,
 )
 from datetime import datetime, timezone
+from apps.research.services.instrument_resolver import (
+    UpstoxInstrumentResolver,
+)
 
 from apps.research.services.schemas import (
     HistoricalCandle,
@@ -16,9 +19,6 @@ from apps.research.services.schemas import (
     NewsResearch,
 )
 
-INSTRUMENT_KEYS = {
-        "RELIANCE": "NSE_EQ|INE002A01018",
-    }
 class UpstoxProvider:
     BASE_URL = "https://api.upstox.com/v3"
     NEWS_BASE_URL = "https://api.upstox.com/v2"
@@ -27,13 +27,9 @@ class UpstoxProvider:
         self.access_token = (
             settings.UPSTOX_ANALYTICS_ACCESS_TOKEN
         )
+        self.instrument_resolver = UpstoxInstrumentResolver()
 
-    def _get(
-    self,
-    endpoint: str,
-    params: dict,
-    base_url: str | None = None,
-    ) -> dict:
+    def _get(self, endpoint: str, params: dict, base_url: str | None = None) -> dict:
 
         response = requests.get(
             f"{base_url or self.BASE_URL}/{endpoint}",
@@ -66,12 +62,7 @@ class UpstoxProvider:
 
         ticker = ticker.upper()
 
-        instrument_key = INSTRUMENT_KEYS.get(ticker)
-
-        if instrument_key is None:
-            raise ValueError(
-                f"Unsupported Upstox ticker: {ticker}"
-            )
+        instrument_key = self.instrument_resolver.resolve_nse_equity(ticker)
 
         data = self._get(
             "market-quote/ltp",
@@ -107,12 +98,7 @@ class UpstoxProvider:
 
         ticker = ticker.upper()
 
-        instrument_key = INSTRUMENT_KEYS.get(ticker)
-
-        if instrument_key is None:
-            raise ValueError(
-                f"Unsupported Upstox ticker: {ticker}"
-            )
+        instrument_key = self.instrument_resolver.resolve_nse_equity(ticker)
 
         endpoint = (
             f"historical-candle/"
@@ -159,12 +145,7 @@ class UpstoxProvider:
 
         ticker = ticker.upper()
 
-        instrument_key = INSTRUMENT_KEYS.get(ticker)
-
-        if instrument_key is None:
-            raise ValueError(
-                f"Unsupported Upstox ticker: {ticker}"
-            )
+        instrument_key = self.instrument_resolver.resolve_nse_equity(ticker)
 
         data = self._get(
             "news",

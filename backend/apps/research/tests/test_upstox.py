@@ -8,14 +8,20 @@ from apps.research.services.providers.upstox import (
 )
 
 from apps.research.services.symbols import Market
-from datetime import datetime
 
 class UpstoxProviderTestCase(SimpleTestCase):
 
     @patch(
         "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_get_stock(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    
+    def test_get_stock(self, mock_resolver, mock_get):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.return_value = {
             "status": "success",
@@ -72,7 +78,13 @@ class UpstoxProviderTestCase(SimpleTestCase):
     @patch(
         "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_api_failure(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_api_failure(self, mock_resolver, mock_get):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.side_effect = RequestException(
             "Upstox unavailable"
@@ -101,25 +113,16 @@ class UpstoxProviderTestCase(SimpleTestCase):
             "UpstoxProvider currently supports India only.",
         )
 
-    def test_unsupported_ticker(self):
-
-        provider = UpstoxProvider()
-
-        with self.assertRaises(ValueError) as context:
-            provider.get_stock(
-                "UNKNOWN",
-                Market.INDIA,
-            )
-
-        self.assertEqual(
-            str(context.exception),
-            "Unsupported Upstox ticker: UNKNOWN",
-        )
-
     @patch(
         "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_missing_quote(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_missing_quote(self, mock_resolver, mock_get):
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.return_value = {
             "status": "success",
@@ -142,7 +145,14 @@ class UpstoxProviderTestCase(SimpleTestCase):
     @patch(
     "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_get_historical(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_get_historical(self, mock_resolver, mock_get):
+
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.return_value = {
             "status": "success",
@@ -219,7 +229,14 @@ class UpstoxProviderTestCase(SimpleTestCase):
     @patch(
     "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_get_historical_empty(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_get_historical_empty(self, mock_resolver, mock_get):
+
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.return_value = {
             "status": "success",
@@ -244,7 +261,14 @@ class UpstoxProviderTestCase(SimpleTestCase):
     @patch(
     "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_get_news(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_get_news(self, mock_resolver, mock_get):
+
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.return_value = {
             "status": "success",
@@ -324,7 +348,14 @@ class UpstoxProviderTestCase(SimpleTestCase):
     @patch(
     "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_get_news_empty(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_get_news_empty(self, mock_resolver, mock_get):
+
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.return_value = {
             "status": "success",
@@ -351,7 +382,14 @@ class UpstoxProviderTestCase(SimpleTestCase):
     @patch(
     "apps.research.services.providers.upstox.UpstoxProvider._get"
     )
-    def test_get_news_api_failure(self, mock_get):
+    @patch(
+        "apps.research.services.providers.upstox.UpstoxInstrumentResolver"
+    )
+    def test_get_news_api_failure(self, mock_resolver, mock_get):
+
+        mock_resolver.return_value.resolve_nse_equity.return_value = (
+            "NSE_EQ|INE002A01018"
+        )
 
         mock_get.side_effect = RequestException(
             "Upstox news unavailable"
@@ -365,18 +403,3 @@ class UpstoxProviderTestCase(SimpleTestCase):
                 Market.INDIA,
             )
             
-    def test_get_news_unsupported_ticker(self):
-
-        provider = UpstoxProvider()
-
-        with self.assertRaises(ValueError) as context:
-            provider.get_news(
-                "UNKNOWN",
-                Market.INDIA,
-            )
-
-        self.assertEqual(
-            str(context.exception),
-            "Unsupported Upstox ticker: UNKNOWN",
-        )
-    
