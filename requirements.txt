@@ -3,3 +3,5 @@ djangorestframework
 psycopg[binary] 
 python-dotenv
 requests
+groq
+mcp[cli]

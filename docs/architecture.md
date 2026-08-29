@@ -77,3 +77,50 @@ Research Request ───┼── Marketaux ──────┼──> NewsA
              Sort by date
                     ↓
                NewsResearch
+
+
+
+                              USER
+                                │
+                                ▼
+                     ┌─────────────────────┐
+                     │   API / Chat Layer  │
+                     └──────────┬──────────┘
+                                │
+                                ▼
+                     ┌─────────────────────┐
+                     │   ORCHESTRATOR      │
+                     │  Deterministic      │
+                     │  Workflow Engine    │
+                     └──────────┬──────────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              │                 │                 │
+              ▼                 ▼                 ▼
+       ┌────────────┐    ┌────────────┐    ┌────────────┐
+       │ Financial  │    │   Market   │    │    News    │
+       │   Agent    │    │   Agent    │    │   Agent    │
+       └─────┬──────┘    └─────┬──────┘    └─────┬──────┘
+             │                 │                 │
+             ▼                 ▼                 ▼
+        MCP Tools          MCP Tools          MCP/Web
+             │                 │                 │
+             ▼                 ▼                 ▼
+       Financial          Market Data       News/Search
+        Findings           Findings          Findings
+             └─────────────────┼─────────────────┘
+                               ▼
+                    ┌─────────────────────┐
+                    │ Portfolio Analysis  │
+                    │ / Risk / Optimizer  │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    Portfolio Recommendation
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Synthesis Agent   │
+                    └──────────┬──────────┘
+                               ▼
+                            USER

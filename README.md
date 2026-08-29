@@ -84,3 +84,21 @@ Completed:
 - Comprehensive automated testing
 - Real API integration verification
 - Production-oriented research architecture
+
+## Phase 5 — AI + MCP Foundation ✅
+
+- Groq LLM integration
+- Qwen qwen/qwen3.6-27b integration
+- LLM service/provider abstraction
+- Groq configuration validation
+- MCP v2 server
+- MCP tool registration/execution
+- Reusable research tool layer
+- Six research MCP tools
+- LLM tool schemas
+- Agent tool-calling prototype
+- Agent result schema
+- System prompt
+- AI chat API
+- Comprehensive unit/API tests
+- Real Groq + research-tool verification
