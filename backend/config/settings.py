@@ -36,6 +36,10 @@ MARKETAUX_API_TOKEN = os.getenv("MARKETAUX_API_TOKEN")
 UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
     "UPSTOX_ANALYTICS_ACCESS_TOKEN"
 )
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL")
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -48,6 +52,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "apps.core",
     "apps.research",
+    "apps.ai",
 ]
 
 MIDDLEWARE = [
