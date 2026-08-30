@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
+from apps.ai.mcp.access import AgentToolPolicy
 from apps.ai.services.agent_service import AgentService
 from apps.ai.services.schemas import AgentResult
 
@@ -395,9 +396,337 @@ class AgentServiceTestCase(SimpleTestCase):
 
         self.assertEqual(
             str(context.exception),
-            "Maximum tool-call limit exceeded.",
+            "Maximum MCP round limit exceeded.",
         )
         
+    def test_default_policy_preserves_existing_behavior(self):
+        service = AgentService()
+
+        self.assertEqual(
+            service.policy.allowed_tools,
+            set(service.tool_registry.keys()),
+        )
+        self.assertEqual(
+            service.max_rounds,
+            service.MAX_TOOL_ROUNDS,
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.research_tools.get_news"
+    )
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_allowed_tool_executes(self, mock_groq_provider, mock_get_news):
+        mock_service = mock_groq_provider.return_value
+
+        tool_call = SimpleNamespace(
+            id="call_news",
+            function=SimpleNamespace(
+                name="get_news",
+                arguments='{"ticker":"RELIANCE","market":"IN","limit":2}',
+            ),
+        )
+
+        first_response = MagicMock()
+        first_response.choices[0].message.tool_calls = [tool_call]
+        first_response.choices[0].message.content = None
+
+        second_response = MagicMock()
+        second_response.choices[0].message.tool_calls = None
+        second_response.choices[0].message.content = "News summary available."
+
+        mock_service.generate_with_tools.side_effect = [first_response, second_response]
+        mock_get_news.return_value = {"ticker": "RELIANCE", "articles": []}
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_news"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        result = service.run("Get news for Reliance.")
+
+        self.assertEqual(result.response, "News summary available.")
+        self.assertEqual(result.tools_used, ["get_news"])
+        mock_get_news.assert_called_once_with(
+            ticker="RELIANCE",
+            market="IN",
+            limit=2,
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_disallowed_tool_is_rejected(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+
+        tool_call = SimpleNamespace(
+            id="call_news",
+            function=SimpleNamespace(
+                name="get_news",
+                arguments='{"ticker":"RELIANCE"}',
+            ),
+        )
+
+        response = MagicMock()
+        response.choices[0].message.tool_calls = [tool_call]
+        response.choices[0].message.content = None
+        mock_service.generate_with_tools.return_value = response
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_company_profile"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        with self.assertRaises(ValueError) as context:
+            service.run("Get news.")
+
+        self.assertEqual(
+            str(context.exception),
+            "MCP tool not allowed for this agent: get_news",
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_unknown_tool_is_rejected(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+
+        tool_call = SimpleNamespace(
+            id="call_unknown",
+            function=SimpleNamespace(
+                name="unknown_tool",
+                arguments="{}",
+            ),
+        )
+
+        response = MagicMock()
+        response.choices[0].message.tool_calls = [tool_call]
+        response.choices[0].message.content = None
+        mock_service.generate_with_tools.return_value = response
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_company_profile"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        with self.assertRaises(ValueError) as context:
+            service.run("Use unknown tool.")
+
+        self.assertEqual(
+            str(context.exception),
+            "Unknown tool: unknown_tool",
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_max_tool_calls_is_enforced(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+
+        first_tool_call = SimpleNamespace(
+            id="call_market",
+            function=SimpleNamespace(
+                name="get_market_data",
+                arguments='{"ticker":"RELIANCE","market":"IN"}',
+            ),
+        )
+        second_tool_call = SimpleNamespace(
+            id="call_news",
+            function=SimpleNamespace(
+                name="get_news",
+                arguments='{"ticker":"RELIANCE","market":"IN","limit":2}',
+            ),
+        )
+
+        response = MagicMock()
+        response.choices[0].message.tool_calls = [first_tool_call, second_tool_call]
+        response.choices[0].message.content = None
+        mock_service.generate_with_tools.return_value = response
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_market_data", "get_news"},
+                max_tool_calls=1,
+                max_rounds=2,
+            )
+        )
+
+        with self.assertRaises(ValueError) as context:
+            service.run("Get market and news.")
+
+        self.assertEqual(
+            str(context.exception),
+            "Maximum MCP tool-call limit exceeded.",
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_max_rounds_is_enforced(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+
+        tool_call = SimpleNamespace(
+            id="call_loop",
+            function=SimpleNamespace(
+                name="get_market_data",
+                arguments='{"ticker":"RELIANCE","market":"IN"}',
+            ),
+        )
+
+        first_response = MagicMock()
+        first_response.choices[0].message.tool_calls = [tool_call]
+        first_response.choices[0].message.content = None
+
+        second_response = MagicMock()
+        second_response.choices[0].message.tool_calls = [tool_call]
+        second_response.choices[0].message.content = None
+
+        mock_service.generate_with_tools.side_effect = [first_response, second_response]
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_market_data"},
+                max_tool_calls=5,
+                max_rounds=1,
+            )
+        )
+
+        with self.assertRaises(ValueError) as context:
+            service.run("Keep analyzing Reliance.")
+
+        self.assertEqual(
+            str(context.exception),
+            "Maximum MCP round limit exceeded.",
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_only_allowed_tool_schemas_are_sent_to_llm(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+        mock_service.generate_with_tools.return_value.choices[0].message.tool_calls = None
+        mock_service.generate_with_tools.return_value.choices[0].message.content = "ok"
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_market_data", "get_news"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        service.run("Give me a market update.")
+
+        sent_tools = mock_service.generate_with_tools.call_args.kwargs["tools"]
+        self.assertEqual(
+            [tool["function"]["name"] for tool in sent_tools],
+            ["get_market_data", "get_news"],
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.research_tools.get_market_data"
+    )
+    @patch(
+        "apps.ai.services.agent_service.research_tools.get_news"
+    )
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_multiple_calls_within_limit_succeed(
+        self,
+        mock_groq_provider,
+        mock_get_news,
+        mock_get_market_data,
+    ):
+        mock_service = mock_groq_provider.return_value
+
+        first_tool_call = SimpleNamespace(
+            id="call_market",
+            function=SimpleNamespace(
+                name="get_market_data",
+                arguments='{"ticker":"RELIANCE","market":"IN"}',
+            ),
+        )
+        second_tool_call = SimpleNamespace(
+            id="call_news",
+            function=SimpleNamespace(
+                name="get_news",
+                arguments='{"ticker":"RELIANCE","market":"IN","limit":2}',
+            ),
+        )
+
+        first_response = MagicMock()
+        first_response.choices[0].message.tool_calls = [first_tool_call, second_tool_call]
+        first_response.choices[0].message.content = None
+
+        second_response = MagicMock()
+        second_response.choices[0].message.tool_calls = None
+        second_response.choices[0].message.content = "Clean summary."
+
+        mock_service.generate_with_tools.side_effect = [first_response, second_response]
+        mock_get_market_data.return_value = {"ticker": "RELIANCE", "last_price": 1287.0}
+        mock_get_news.return_value = {"ticker": "RELIANCE", "articles": []}
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_market_data", "get_news"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        result = service.run("Give me an overview.")
+
+        self.assertEqual(result.response, "Clean summary.")
+        self.assertEqual(result.tools_used, ["get_market_data", "get_news"])
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_limits_are_checked_before_executing_another_tool(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+
+        first_tool_call = SimpleNamespace(
+            id="call_market",
+            function=SimpleNamespace(
+                name="get_market_data",
+                arguments='{"ticker":"RELIANCE","market":"IN"}',
+            ),
+        )
+        second_tool_call = SimpleNamespace(
+            id="call_news",
+            function=SimpleNamespace(
+                name="get_news",
+                arguments='{"ticker":"RELIANCE","market":"IN","limit":2}',
+            ),
+        )
+
+        response = MagicMock()
+        response.choices[0].message.tool_calls = [first_tool_call, second_tool_call]
+        response.choices[0].message.content = None
+        mock_service.generate_with_tools.return_value = response
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_market_data", "get_news"},
+                max_tool_calls=1,
+                max_rounds=2,
+            )
+        )
+
+        with self.assertRaises(ValueError):
+            service.run("Too many tool calls.")
+
     def test_system_prompt_is_used(self):
 
         service = AgentService()
@@ -444,4 +773,4 @@ class AgentServiceTestCase(SimpleTestCase):
         self.assertEqual(
             result.tools_used,
             ["get_news"],
-        )    
+        )

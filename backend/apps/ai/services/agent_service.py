@@ -1,19 +1,21 @@
 import json
 
-from apps.ai.services.llm_service import LLMService
-from apps.ai.services.tool_schemas import RESEARCH_TOOLS
-from apps.ai.services import research_tools
 from dataclasses import asdict, is_dataclass
+
+from apps.ai.mcp.access import AgentToolAccess, AgentToolPolicy
+from apps.ai.services import research_tools
+from apps.ai.services.llm_service import LLMService
 from apps.ai.services.prompts import (
     FINPILOT_SYSTEM_PROMPT,
 )
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.tool_schemas import RESEARCH_TOOLS
 
 
 class AgentService:
     MAX_TOOL_ROUNDS = 5
 
-    def __init__(self):
+    def __init__(self, policy: AgentToolPolicy | None = None):
         self.llm = LLMService()
 
         self.tool_registry = {
@@ -36,6 +38,52 @@ class AgentService:
                 research_tools.get_news
             ),
         }
+
+        self.access = AgentToolAccess(
+            available_tools=set(self.tool_registry.keys())
+        )
+
+        if policy is None:
+            policy = AgentToolPolicy(
+                allowed_tools=set(self.tool_registry.keys()),
+                max_tool_calls=5,
+                max_rounds=self.MAX_TOOL_ROUNDS,
+            )
+
+        self.policy = policy
+        self.max_rounds = self.policy.max_rounds
+        self.allowed_tools = self.access.get_allowed_tools(self.policy)
+
+    def _get_allowed_tool_schemas(self):
+        allowed = self.access.get_allowed_tools(self.policy)
+        return [
+            tool
+            for tool in RESEARCH_TOOLS
+            if tool["function"]["name"] in allowed
+        ]
+
+    @staticmethod
+    def _validate_policy_limits(
+        tool_calls: int,
+        rounds: int,
+        policy: AgentToolPolicy,
+    ) -> None:
+        try:
+            AgentToolAccess.validate_limits(
+                tool_calls=tool_calls,
+                rounds=rounds,
+                policy=policy,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message in {
+                "Maximum MCP tool-call limit exceeded.",
+                "Maximum MCP round limit exceeded.",
+            }:
+                raise ValueError(
+                    "Maximum tool-call limit exceeded."
+                ) from exc
+            raise
 
     def _serialize_tool_result(
     self,
@@ -79,12 +127,13 @@ class AgentService:
     ) -> AgentResult:
         tools_used: list[str] = []
         tool_rounds = 0
+        tool_calls = 0
 
         messages = self._build_messages(message)
 
         response = self.llm.generate_with_tools(
             messages=messages,
-            tools=RESEARCH_TOOLS,
+            tools=self._get_allowed_tool_schemas(),
         )
 
         while True:
@@ -99,13 +148,13 @@ class AgentService:
                     ),
                     tools_used=tools_used,
                 )
-                
-            tool_rounds += 1
 
-            if tool_rounds > self.MAX_TOOL_ROUNDS:
-                raise ValueError(
-                    "Maximum tool-call limit exceeded."
-                )
+            tool_rounds += 1
+            self.access.validate_limits(
+                tool_calls=tool_calls,
+                rounds=tool_rounds,
+                policy=self.policy,
+            )
 
             messages.append(
                 {
@@ -130,13 +179,25 @@ class AgentService:
             )
 
             for tool_call in assistant_message.tool_calls:
-
                 tool_name = tool_call.function.name
 
                 if tool_name not in self.tool_registry:
                     raise ValueError(
                         f"Unknown tool: {tool_name}"
                     )
+
+                self.access.validate_tool(
+                    tool_name,
+                    self.policy,
+                )
+
+                self.access.validate_limits(
+                    tool_calls=tool_calls + 1,
+                    rounds=tool_rounds,
+                    policy=self.policy,
+                )
+
+                tool_calls += 1
                 tools_used.append(tool_name)
 
                 arguments = json.loads(
@@ -169,5 +230,5 @@ class AgentService:
 
             response = self.llm.generate_with_tools(
                 messages=messages,
-                tools=RESEARCH_TOOLS,
+                tools=self._get_allowed_tool_schemas(),
             )
