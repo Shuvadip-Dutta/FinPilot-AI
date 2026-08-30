@@ -1,6 +1,7 @@
 """Query-to-vector-store retrieval orchestration."""
 
 from apps.ai.rag.embeddings import EmbeddingProvider
+from apps.ai.exceptions import RAGError
 from apps.ai.rag.schemas import RetrievalResult
 from apps.ai.rag.vector_store import VectorStore
 
@@ -19,9 +20,15 @@ class Retriever:
         if top_k <= 0:
             raise ValueError("top_k must be greater than zero.")
 
-        embeddings = self.embedding_provider.embed([query])
+        try:
+            embeddings = self.embedding_provider.embed([query])
+        except (ValueError, TypeError) as exc:
+            raise RAGError(f"Unable to embed retrieval query: {exc}") from exc
 
         if len(embeddings) != 1:
             raise ValueError("Embedding provider must return one query embedding.")
 
-        return self.vector_store.search(embeddings[0], top_k)
+        try:
+            return self.vector_store.search(embeddings[0], top_k)
+        except (ValueError, TypeError) as exc:
+            raise RAGError(f"Unable to search RAG vectors: {exc}") from exc

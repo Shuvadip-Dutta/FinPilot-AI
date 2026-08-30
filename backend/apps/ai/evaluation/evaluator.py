@@ -8,6 +8,7 @@ from apps.ai.evaluation.schemas import (
     EvaluationReport,
     EvaluationResult,
 )
+from apps.ai.exceptions import LLMError
 
 
 ModelCallable = Callable[[list[dict[str, str]]], str]
@@ -28,7 +29,7 @@ class FinanceModelEvaluator:
         """Evaluate one case while containing model-boundary failures."""
         try:
             response = self.model(self._build_messages(case))
-        except Exception as exc:
+        except (LLMError, ValueError, TypeError) as exc:
             return self._failed_result(
                 case=case,
                 response=f"[Evaluation model failure: {exc}]",

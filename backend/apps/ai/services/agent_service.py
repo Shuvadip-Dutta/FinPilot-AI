@@ -2,6 +2,7 @@ import json
 
 from dataclasses import asdict, is_dataclass
 
+from apps.ai.exceptions import ToolExecutionError
 from apps.ai.mcp.access import AgentToolAccess, AgentToolPolicy
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
@@ -62,28 +63,6 @@ class AgentService:
             if tool["function"]["name"] in allowed
         ]
 
-    @staticmethod
-    def _validate_policy_limits(
-        tool_calls: int,
-        rounds: int,
-        policy: AgentToolPolicy,
-    ) -> None:
-        try:
-            AgentToolAccess.validate_limits(
-                tool_calls=tool_calls,
-                rounds=rounds,
-                policy=policy,
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message in {
-                "Maximum MCP tool-call limit exceeded.",
-                "Maximum MCP round limit exceeded.",
-            }:
-                raise ValueError(
-                    "Maximum tool-call limit exceeded."
-                ) from exc
-            raise
 
     def _serialize_tool_result(
     self,
@@ -182,14 +161,17 @@ class AgentService:
                 tool_name = tool_call.function.name
 
                 if tool_name not in self.tool_registry:
-                    raise ValueError(
+                    raise ToolExecutionError(
                         f"Unknown tool: {tool_name}"
                     )
 
-                self.access.validate_tool(
-                    tool_name,
-                    self.policy,
-                )
+                try:
+                    self.access.validate_tool(
+                        tool_name,
+                        self.policy,
+                    )
+                except ValueError as exc:
+                    raise ToolExecutionError(str(exc)) from exc
 
                 self.access.validate_limits(
                     tool_calls=tool_calls + 1,
@@ -200,9 +182,19 @@ class AgentService:
                 tool_calls += 1
                 tools_used.append(tool_name)
 
-                arguments = json.loads(
-                    tool_call.function.arguments
-                )
+                try:
+                    arguments = json.loads(
+                        tool_call.function.arguments
+                    )
+                except json.JSONDecodeError as exc:
+                    raise ToolExecutionError(
+                        f"Malformed arguments for tool {tool_name}."
+                    ) from exc
+
+                if not isinstance(arguments, dict):
+                    raise ToolExecutionError(
+                        f"Arguments for tool {tool_name} must be a JSON object."
+                    )
 
                 tool_function = self.tool_registry[
                     tool_name
@@ -213,7 +205,7 @@ class AgentService:
                         **arguments
                     )
 
-                except (ValueError, TypeError) as exc:
+                except (ToolExecutionError, ValueError, TypeError) as exc:
                     result = {
                         "error": str(exc),
                     }

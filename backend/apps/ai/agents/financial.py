@@ -4,6 +4,7 @@ import re
 from collections.abc import Callable
 
 from apps.ai.agents.base import BaseAgent
+from apps.ai.exceptions import ToolExecutionError
 from apps.ai.services import research_tools
 from apps.ai.services.schemas import AgentResult
 
@@ -64,7 +65,7 @@ class FinancialAnalysisAgent(BaseAgent):
                 market=self.market,
             )
             tools_used.append("get_key_metrics")
-        except Exception as exc:
+        except (ToolExecutionError, ValueError, TypeError) as exc:
             return AgentResult(
                 response=(
                     f"Unable to retrieve financial analysis for {ticker}: {exc}"

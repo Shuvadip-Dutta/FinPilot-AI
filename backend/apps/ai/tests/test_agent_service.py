@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
+from apps.ai.exceptions import ToolExecutionError
 from apps.ai.mcp.access import AgentToolPolicy
 from apps.ai.services.agent_service import AgentService
 from apps.ai.services.schemas import AgentResult
@@ -337,7 +338,7 @@ class AgentServiceTestCase(SimpleTestCase):
 
         service = AgentService()
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ToolExecutionError) as context:
             service.run(
                 "Use an unknown tool."
             )
@@ -484,7 +485,7 @@ class AgentServiceTestCase(SimpleTestCase):
             )
         )
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ToolExecutionError) as context:
             service.run("Get news.")
 
         self.assertEqual(
@@ -519,7 +520,7 @@ class AgentServiceTestCase(SimpleTestCase):
             )
         )
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ToolExecutionError) as context:
             service.run("Use unknown tool.")
 
         self.assertEqual(
@@ -560,6 +561,7 @@ class AgentServiceTestCase(SimpleTestCase):
                 max_rounds=2,
             )
         )
+        service.tool_registry["get_market_data"] = lambda **kwargs: {}
 
         with self.assertRaises(ValueError) as context:
             service.run("Get market and news.")
@@ -600,6 +602,7 @@ class AgentServiceTestCase(SimpleTestCase):
                 max_rounds=1,
             )
         )
+        service.tool_registry["get_market_data"] = lambda **kwargs: {}
 
         with self.assertRaises(ValueError) as context:
             service.run("Keep analyzing Reliance.")
@@ -723,6 +726,7 @@ class AgentServiceTestCase(SimpleTestCase):
                 max_rounds=2,
             )
         )
+        service.tool_registry["get_market_data"] = lambda **kwargs: {}
 
         with self.assertRaises(ValueError):
             service.run("Too many tool calls.")

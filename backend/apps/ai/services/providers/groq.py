@@ -1,5 +1,7 @@
 from django.conf import settings
-from groq import Groq
+from groq import APIConnectionError, APIStatusError, APITimeoutError, Groq
+
+from apps.ai.exceptions import LLMError
 
 
 class GroqProvider:
@@ -27,10 +29,13 @@ class GroqProvider:
         messages: list[dict[str, str]],
     ) -> str:
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+            )
+        except (APIConnectionError, APIStatusError, APITimeoutError) as exc:
+            raise LLMError(f"Groq provider request failed: {exc}") from exc
 
         return response.choices[0].message.content
     
@@ -39,11 +44,14 @@ class GroqProvider:
     messages: list[dict],
     tools: list[dict],
     ):
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+        except (APIConnectionError, APIStatusError, APITimeoutError) as exc:
+            raise LLMError(f"Groq provider request failed: {exc}") from exc
 
         return response

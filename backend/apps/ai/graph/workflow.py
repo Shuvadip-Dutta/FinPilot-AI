@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 
 from apps.ai.agents.base import BaseAgent
+from apps.ai.exceptions import AIError
 from apps.ai.graph.router import WorkflowRouter, WorkflowRoute
 from apps.ai.graph.state import AgentState
 
@@ -97,7 +98,7 @@ class ResearchWorkflow:
                 state.results[key] = self.agents[key].run(
                     state.user_message
                 )
-            except (ValueError, TypeError) as exc:
+            except (AIError, ValueError, TypeError) as exc:
                 state.errors.append(f"{key}: {exc}")
 
     def _execute_synthesis(self, state: AgentState) -> None:
@@ -106,5 +107,5 @@ class ResearchWorkflow:
 
         try:
             state.results["synthesis"] = self.synthesis_agent.run(state)
-        except (ValueError, TypeError) as exc:
+        except (AIError, ValueError, TypeError) as exc:
             state.errors.append(f"synthesis: {exc}")

@@ -5,6 +5,7 @@ from apps.ai.rag.embeddings import EmbeddingProvider
 from apps.ai.rag.retriever import Retriever
 from apps.ai.rag.schemas import DocumentChunk, RetrievalResult
 from apps.ai.rag.vector_store import VectorStore
+from apps.ai.exceptions import RAGError
 
 
 class RAGPipeline:
@@ -29,8 +30,14 @@ class RAGPipeline:
         metadata: dict[str, object] | None = None,
     ) -> list[DocumentChunk]:
         chunks = self.chunker.chunk(document_id, text, metadata)
-        embeddings = self.embedding_provider.embed([chunk.text for chunk in chunks])
-        self.vector_store.add(chunks, embeddings)
+
+        try:
+            embeddings = self.embedding_provider.embed(
+                [chunk.text for chunk in chunks]
+            )
+            self.vector_store.add(chunks, embeddings)
+        except (ValueError, TypeError) as exc:
+            raise RAGError(f"Unable to ingest RAG document: {exc}") from exc
 
         return chunks
 
