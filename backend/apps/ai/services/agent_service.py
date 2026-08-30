@@ -1,6 +1,6 @@
 import json
 
-from apps.ai.services.providers.groq import GroqProvider
+from apps.ai.services.llm_service import LLMService
 from apps.ai.services.tool_schemas import RESEARCH_TOOLS
 from apps.ai.services import research_tools
 from dataclasses import asdict, is_dataclass
@@ -14,7 +14,7 @@ class AgentService:
     MAX_TOOL_ROUNDS = 5
 
     def __init__(self):
-        self.llm = GroqProvider()
+        self.llm = LLMService()
 
         self.tool_registry = {
             "get_company_profile": (
@@ -72,11 +72,11 @@ class AgentService:
                 "content": message,
             },
         ]
-    
+            
     def run(
         self,
         message: str,
-    ) -> str:
+    ) -> AgentResult:
         tools_used: list[str] = []
         tool_rounds = 0
 

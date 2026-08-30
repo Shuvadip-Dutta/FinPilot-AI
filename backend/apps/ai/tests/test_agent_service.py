@@ -10,7 +10,7 @@ from apps.ai.services.schemas import AgentResult
 class AgentServiceTestCase(SimpleTestCase):
 
     @patch(
-        "apps.ai.services.agent_service.GroqProvider"
+        "apps.ai.services.agent_service.LLMService"
     )
     def test_direct_response(
         self,
@@ -53,7 +53,7 @@ class AgentServiceTestCase(SimpleTestCase):
         "apps.ai.services.agent_service.research_tools.get_company_profile"
     )
     @patch(
-        "apps.ai.services.agent_service.GroqProvider"
+        "apps.ai.services.agent_service.LLMService"
     )
     def test_single_tool_call(
         self,
@@ -132,7 +132,7 @@ class AgentServiceTestCase(SimpleTestCase):
         "apps.ai.services.agent_service.research_tools.get_market_data"
     )
     @patch(
-        "apps.ai.services.agent_service.GroqProvider"
+        "apps.ai.services.agent_service.LLMService"
     )
     def test_multiple_tool_calls(
         self,
@@ -242,7 +242,7 @@ class AgentServiceTestCase(SimpleTestCase):
         "apps.ai.services.agent_service.research_tools.get_market_data"
     )
     @patch(
-        "apps.ai.services.agent_service.GroqProvider"
+        "apps.ai.services.agent_service.LLMService"
     )
     def test_tool_failure(
         self,
@@ -309,7 +309,7 @@ class AgentServiceTestCase(SimpleTestCase):
         )
         
     @patch(
-    "apps.ai.services.agent_service.GroqProvider"
+    "apps.ai.services.agent_service.LLMService"
     )
     def test_unknown_tool(
         self,
@@ -347,7 +347,7 @@ class AgentServiceTestCase(SimpleTestCase):
         )
         
     @patch(
-    "apps.ai.services.agent_service.GroqProvider"
+    "apps.ai.services.agent_service.LLMService"
     )
     def test_max_tool_rounds(
         self,

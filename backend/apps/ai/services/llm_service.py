@@ -10,5 +10,14 @@ class LLMService:
         self,
         messages: list[dict[str, str]],
     ) -> str:
-
         return self.provider.generate(messages)
+
+    def generate_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+    ):
+        return self.provider.generate_with_tools(
+            messages=messages,
+            tools=tools,
+        )
