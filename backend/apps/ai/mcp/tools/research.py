@@ -1,5 +1,6 @@
 from apps.ai.mcp.server import mcp
 
+from apps.ai.services.rag_tools import search_financial_documents as search_financial_documents_tool
 from apps.ai.services.research_tools import (
     get_company_profile as get_company_profile_tool,
     get_market_data as get_market_data_tool,
@@ -130,4 +131,35 @@ def get_news(
         ticker=ticker,
         market=market,
         limit=limit,
+    )
+
+
+@mcp.tool()
+def search_financial_documents(
+    query: str,
+    ticker: str | None = None,
+    market: str | None = None,
+    document_type: str | None = None,
+    fiscal_year: int | None = None,
+    top_k: int = 5,
+) -> dict:
+    """
+    Search indexed financial documents for the most relevant text chunks.
+
+    Args:
+        query: User search text.
+        ticker: Optional ticker symbol filter.
+        market: Optional market code filter.
+        document_type: Optional document category filter.
+        fiscal_year: Optional fiscal year filter.
+        top_k: Maximum number of relevant chunks to return.
+    """
+
+    return search_financial_documents_tool(
+        query=query,
+        ticker=ticker,
+        market=market,
+        document_type=document_type,
+        fiscal_year=fiscal_year,
+        top_k=top_k,
     )

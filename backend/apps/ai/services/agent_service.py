@@ -4,7 +4,7 @@ from dataclasses import asdict, is_dataclass
 
 from apps.ai.exceptions import ToolExecutionError
 from apps.ai.mcp.access import AgentToolAccess, AgentToolPolicy
-from apps.ai.services import research_tools
+from apps.ai.services import rag_tools, research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.prompts import (
     FINPILOT_SYSTEM_PROMPT,
@@ -37,6 +37,9 @@ class AgentService:
             ),
             "get_news": (
                 research_tools.get_news
+            ),
+            "search_financial_documents": (
+                rag_tools.search_financial_documents
             ),
         }
 

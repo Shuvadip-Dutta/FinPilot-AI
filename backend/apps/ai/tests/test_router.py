@@ -52,3 +52,19 @@ class WorkflowRouterTestCase(SimpleTestCase):
         ]
 
         self.assertEqual(routes, ["market", "market", "market"])
+        
+    def test_risk_query_routes_to_risk(self):
+        self.assertEqual(
+            self.router.route(
+                "Assess the downside risk of this investment."
+            ),
+            "risk",
+        )
+
+    def test_portfolio_query_routes_to_portfolio(self):
+        self.assertEqual(
+            self.router.route(
+                "Analyze my portfolio allocation."
+            ),
+            "portfolio",
+        )

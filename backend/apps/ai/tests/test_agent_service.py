@@ -411,6 +411,108 @@ class AgentServiceTestCase(SimpleTestCase):
             service.max_rounds,
             service.MAX_TOOL_ROUNDS,
         )
+        self.assertIn(
+            "search_financial_documents",
+            service.tool_registry,
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.rag_tools.search_financial_documents"
+    )
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_rag_tool_executes_when_allowed(
+        self,
+        mock_groq_provider,
+        mock_search_financial_documents,
+    ):
+        mock_service = mock_groq_provider.return_value
+
+        tool_call = SimpleNamespace(
+            id="call_rag",
+            function=SimpleNamespace(
+                name="search_financial_documents",
+                arguments='{"query":"revenue growth","ticker":"RELIANCE","market":"IN","document_type":"annual_report","fiscal_year":2024,"top_k":3}',
+            ),
+        )
+
+        first_response = MagicMock()
+        first_response.choices[0].message.tool_calls = [tool_call]
+        first_response.choices[0].message.content = None
+
+        second_response = MagicMock()
+        second_response.choices[0].message.tool_calls = None
+        second_response.choices[0].message.content = "I found matching document snippets."
+
+        mock_service.generate_with_tools.side_effect = [first_response, second_response]
+        mock_search_financial_documents.return_value = {
+            "documents": [
+                {
+                    "text": "Revenue grew strongly.",
+                    "score": 0.91,
+                    "document_id": "doc-1",
+                    "chunk_id": "doc-1:0",
+                    "metadata": {"ticker": "RELIANCE"},
+                }
+            ]
+        }
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"search_financial_documents"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        result = service.run("Find documents about RELIANCE revenue.")
+
+        self.assertEqual(result.response, "I found matching document snippets.")
+        self.assertEqual(result.tools_used, ["search_financial_documents"])
+        mock_search_financial_documents.assert_called_once_with(
+            query="revenue growth",
+            ticker="RELIANCE",
+            market="IN",
+            document_type="annual_report",
+            fiscal_year=2024,
+            top_k=3,
+        )
+
+    @patch(
+        "apps.ai.services.agent_service.LLMService"
+    )
+    def test_disallowed_rag_tool_is_rejected(self, mock_groq_provider):
+        mock_service = mock_groq_provider.return_value
+
+        tool_call = SimpleNamespace(
+            id="call_rag",
+            function=SimpleNamespace(
+                name="search_financial_documents",
+                arguments='{"query":"revenue"}',
+            ),
+        )
+
+        response = MagicMock()
+        response.choices[0].message.tool_calls = [tool_call]
+        response.choices[0].message.content = None
+        mock_service.generate_with_tools.return_value = response
+
+        service = AgentService(
+            policy=AgentToolPolicy(
+                allowed_tools={"get_company_profile"},
+                max_tool_calls=2,
+                max_rounds=2,
+            )
+        )
+
+        with self.assertRaises(ToolExecutionError) as context:
+            service.run("Find revenue documents.")
+
+        self.assertEqual(
+            str(context.exception),
+            "MCP tool not allowed for this agent: search_financial_documents",
+        )
 
     @patch(
         "apps.ai.services.agent_service.research_tools.get_news"

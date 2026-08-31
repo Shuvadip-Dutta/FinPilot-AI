@@ -15,6 +15,8 @@ class AgentState(BaseModel):
         "financial",
         "market",
         "news",
+        "risk",
+        "portfolio",
         "general",
     ] | None = None
 

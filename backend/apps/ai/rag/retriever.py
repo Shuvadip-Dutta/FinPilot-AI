@@ -13,7 +13,13 @@ class Retriever:
         self.embedding_provider = embedding_provider
         self.vector_store = vector_store
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[RetrievalResult]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        filters: dict[str, object] | None = None,
+        score_threshold: float | None = None,
+    ) -> list[RetrievalResult]:
         if not query.strip():
             raise ValueError("query must not be empty.")
 
@@ -29,6 +35,6 @@ class Retriever:
             raise ValueError("Embedding provider must return one query embedding.")
 
         try:
-            return self.vector_store.search(embeddings[0], top_k)
+            return self.vector_store.search(embeddings[0], top_k, filters=filters, score_threshold=score_threshold)
         except (ValueError, TypeError) as exc:
             raise RAGError(f"Unable to search RAG vectors: {exc}") from exc

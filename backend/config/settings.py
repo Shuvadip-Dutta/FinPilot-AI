@@ -174,3 +174,24 @@ LOGGING = {
         },
     },
 }
+
+
+RAG_EMBEDDING_MODEL = os.getenv(
+    "RAG_EMBEDDING_MODEL",
+    "BAAI/bge-small-en-v1.5",
+)
+
+RAG_EMBEDDING_DEVICE = os.getenv(
+    "RAG_EMBEDDING_DEVICE",
+    "cpu",
+)
+
+QDRANT_URL = os.getenv(
+    "QDRANT_URL",
+    "http://localhost:6333",
+)
+
+QDRANT_COLLECTION = os.getenv(
+    "QDRANT_COLLECTION",
+    "finpilot_documents",
+)

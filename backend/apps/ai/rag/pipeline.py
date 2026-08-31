@@ -41,5 +41,16 @@ class RAGPipeline:
 
         return chunks
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[RetrievalResult]:
-        return self.retriever.retrieve(query, top_k)
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        filters: dict[str, object] | None = None,
+        score_threshold: float | None = None,
+    ) -> list[RetrievalResult]:
+        return self.retriever.retrieve(
+            query=query,
+            top_k=top_k,
+            filters=filters,
+            score_threshold=score_threshold,
+        )

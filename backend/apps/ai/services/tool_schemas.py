@@ -205,4 +205,48 @@ RESEARCH_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_financial_documents",
+            "description": (
+                "Search the indexed financial document corpus for relevant snippets "
+                "using metadata filters and semantic similarity."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search text to find relevant document content.",
+                    },
+                    "ticker": {
+                        "type": ["string", "null"],
+                        "description": "Optional stock ticker filter.",
+                    },
+                    "market": {
+                        "type": ["string", "null"],
+                        "description": "Optional market code filter.",
+                    },
+                    "document_type": {
+                        "type": ["string", "null"],
+                        "description": "Optional document category filter, such as annual_report.",
+                    },
+                    "fiscal_year": {
+                        "type": ["integer", "null"],
+                        "description": "Optional fiscal year filter.",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10,
+                        "default": 5,
+                        "description": "Maximum number of relevant document chunks to return.",
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]

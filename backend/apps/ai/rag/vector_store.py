@@ -2,8 +2,10 @@
 
 import math
 from typing import Protocol
-
+from uuid import NAMESPACE_URL, uuid5
 from apps.ai.rag.schemas import DocumentChunk, RetrievalResult
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
 
 
 class VectorStore(Protocol):
@@ -20,6 +22,8 @@ class VectorStore(Protocol):
         self,
         query_embedding: list[float],
         top_k: int,
+        filters: dict[str, object] | None = None,
+        score_threshold: float | None = None,
     ) -> list[RetrievalResult]:
         """Return the highest-scoring chunks for a query embedding."""
 
@@ -49,28 +53,70 @@ class InMemoryVectorStore:
         self,
         query_embedding: list[float],
         top_k: int,
+        filters: dict[str, object] | None = None,
+        score_threshold: float | None = None,
     ) -> list[RetrievalResult]:
         if top_k <= 0:
-            raise ValueError("top_k must be greater than zero.")
+            raise ValueError(
+                "top_k must be greater than zero."
+            )
+
+        if score_threshold is not None and not math.isfinite(
+            score_threshold
+        ):
+            raise ValueError(
+                "score_threshold must be finite."
+            )
 
         if not self._entries:
             return []
 
         self._validate_embedding(query_embedding)
-        ranked_entries = sorted(
-            enumerate(self._entries),
+
+        candidates = []
+
+        for index, (chunk, embedding) in enumerate(
+            self._entries
+        ):
+            if filters:
+                if any(
+                    chunk.metadata.get(key) != value
+                    for key, value in filters.items()
+                ):
+                    continue
+
+            score = self._cosine_similarity(
+                query_embedding,
+                embedding,
+            )
+
+            if (
+                score_threshold is not None
+                and score < score_threshold
+            ):
+                continue
+
+            candidates.append(
+                (
+                    index,
+                    chunk,
+                    score,
+                )
+            )
+
+        candidates.sort(
             key=lambda entry: (
-                -self._cosine_similarity(query_embedding, entry[1][1]),
+                -entry[2],
                 entry[0],
-            ),
+            )
         )
 
         return [
             RetrievalResult(
                 chunk=chunk,
-                score=self._cosine_similarity(query_embedding, embedding),
+                score=score,
             )
-            for _, (chunk, embedding) in ranked_entries[:top_k]
+            for _, chunk, score in candidates[:top_k]
         ]
 
     def _validate_embedding(self, embedding: list[float]) -> None:
@@ -95,3 +141,164 @@ class InMemoryVectorStore:
             return 0.0
 
         return sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True)) / denominator
+
+class QdrantVectorStore:
+    """Persistent Qdrant-backed vector store."""
+
+    def __init__(
+        self,
+        url: str = "http://localhost:6333",
+        collection_name: str = "finpilot_documents",
+        vector_size: int = 384,
+    ):
+        if not url.strip():
+            raise ValueError("Qdrant URL must not be empty.")
+
+        if not collection_name.strip():
+            raise ValueError(
+                "Collection name must not be empty."
+            )
+
+        if vector_size <= 0:
+            raise ValueError(
+                "Vector size must be greater than zero."
+            )
+
+        self.client = QdrantClient(url=url)
+        self.collection_name = collection_name
+        self.vector_size = vector_size
+
+        self._ensure_collection()
+
+    def _ensure_collection(self) -> None:
+        if not self.client.collection_exists(
+            self.collection_name
+        ):
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=models.VectorParams(
+                    size=self.vector_size,
+                    distance=models.Distance.COSINE,
+                ),
+            )
+
+    def add(
+        self,
+        chunks: list[DocumentChunk],
+        embeddings: list[list[float]],
+    ) -> None:
+        if len(chunks) != len(embeddings):
+            raise ValueError(
+                "Each chunk must have exactly one embedding."
+            )
+
+        points = []
+
+        for chunk, embedding in zip(
+            chunks,
+            embeddings,
+            strict=True,
+        ):
+            if len(embedding) != self.vector_size:
+                raise ValueError(
+                    "Embedding dimensions must match "
+                    "the configured vector size."
+                )
+
+            point_id = str(
+                uuid5(
+                    NAMESPACE_URL,
+                    f"{chunk.document_id}:{chunk.chunk_id}",
+                )
+            )
+
+            points.append(
+                models.PointStruct(
+                    id=point_id,
+                    vector=embedding,
+                    payload={
+                        "document_id": chunk.document_id,
+                        "chunk_id": chunk.chunk_id,
+                        "text": chunk.text,
+                        "metadata": chunk.metadata,
+                    },
+                )
+            )
+
+        if points:
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=points,
+            )
+
+    def search(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        filters: dict[str, object] | None = None,
+        score_threshold: float | None = None,
+    ) -> list[RetrievalResult]:
+
+        if top_k <= 0:
+            raise ValueError(
+                "top_k must be greater than zero."
+            )
+
+        if len(query_embedding) != self.vector_size:
+            raise ValueError(
+                "Query embedding dimensions must match "
+                "the configured vector size."
+            )
+
+        query_filter = self._build_filter(
+            filters
+        )
+
+        results = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_embedding,
+            query_filter=query_filter,
+            score_threshold=score_threshold,
+            with_payload=True,
+            limit=top_k,
+        ).points
+
+        return [
+            RetrievalResult(
+                chunk=DocumentChunk(
+                    document_id=result.payload["document_id"],
+                    chunk_id=result.payload["chunk_id"],
+                    text=result.payload["text"],
+                    metadata=result.payload.get(
+                        "metadata",
+                        {},
+                    ),
+                ),
+                score=float(result.score),
+            )
+            for result in results
+        ]
+
+    @staticmethod
+    def _build_filter(
+        filters: dict[str, object] | None,
+    ) -> models.Filter | None:
+
+        if not filters:
+            return None
+
+        conditions = []
+
+        for key, value in filters.items():
+            conditions.append(
+                models.FieldCondition(
+                    key=f"metadata.{key}",
+                    match=models.MatchValue(
+                        value=value,
+                    ),
+                )
+            )
+
+        return models.Filter(
+            must=conditions,
+        )

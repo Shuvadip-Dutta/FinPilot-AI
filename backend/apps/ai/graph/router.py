@@ -11,6 +11,8 @@ WorkflowRoute = Literal[
     "financial",
     "market",
     "news",
+    "risk",
+    "portfolio",
     "general",
 ]
 
@@ -43,6 +45,22 @@ class WorkflowRouter:
         "cash flow",
         "key metrics",
     )
+    RISK_KEYWORDS = (
+        "risk",
+        "risky",
+        "volatility",
+        "downside",
+        "drawdown",
+        "risk assessment",
+    )
+
+    PORTFOLIO_KEYWORDS = (
+        "portfolio",
+        "holdings",
+        "allocation",
+        "portfolio analysis",
+        "portfolio optimization",
+    )
 
     def route(self, message: str) -> WorkflowRoute:
         """Return the workflow route for ``message`` without calling an LLM."""
@@ -56,6 +74,12 @@ class WorkflowRouter:
 
         if self._contains_keyword(normalized_message, self.FINANCIAL_KEYWORDS):
             return "financial"
+        
+        if self._contains_keyword(normalized_message, self.RISK_KEYWORDS):
+            return "risk"
+        
+        if self._contains_keyword(normalized_message, self.PORTFOLIO_KEYWORDS):
+            return "portfolio"
 
         return "general"
 

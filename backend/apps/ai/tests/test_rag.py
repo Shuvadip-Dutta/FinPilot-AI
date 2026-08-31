@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 from django.test import SimpleTestCase
 from pydantic import ValidationError
 
@@ -5,8 +7,9 @@ from apps.ai.rag.chunker import DocumentChunker
 from apps.ai.rag.embeddings import DeterministicEmbeddingProvider
 from apps.ai.rag.pipeline import RAGPipeline
 from apps.ai.rag.retriever import Retriever
-from apps.ai.rag.schemas import DocumentChunk
+from apps.ai.rag.schemas import DocumentChunk, RetrievalResult
 from apps.ai.rag.vector_store import InMemoryVectorStore
+from apps.ai.services.rag_tools import search_financial_documents
 
 
 class RAGFoundationTestCase(SimpleTestCase):
@@ -137,6 +140,119 @@ class RAGFoundationTestCase(SimpleTestCase):
         pipeline = self._pipeline()
 
         self.assertEqual(pipeline.retrieve("revenue"), [])
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_valid_retrieval(self, mock_build_pipeline):
+        pipeline = MagicMock()
+        pipeline.retrieve.return_value = [
+            RetrievalResult(
+                chunk=DocumentChunk(
+                    document_id="doc-1",
+                    chunk_id="doc-1:0",
+                    text="Revenue grew 12% in FY2024.",
+                    metadata={
+                        "ticker": "RELIANCE",
+                        "market": "IN",
+                        "document_type": "annual_report",
+                        "fiscal_year": 2024,
+                    },
+                ),
+                score=0.91,
+            )
+        ]
+        mock_build_pipeline.return_value = pipeline
+
+        result = search_financial_documents(
+            query="revenue growth",
+            ticker="RELIANCE",
+            market="IN",
+            document_type="annual_report",
+            fiscal_year=2024,
+            top_k=3,
+        )
+
+        self.assertEqual(result["documents"][0]["text"], "Revenue grew 12% in FY2024.")
+        self.assertEqual(result["documents"][0]["score"], 0.91)
+        self.assertEqual(result["documents"][0]["document_id"], "doc-1")
+        self.assertEqual(result["documents"][0]["chunk_id"], "doc-1:0")
+        self.assertEqual(
+            result["documents"][0]["metadata"],
+            {
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "document_type": "annual_report",
+                "fiscal_year": 2024,
+            },
+        )
+        pipeline.retrieve.assert_called_once_with(
+            query="revenue growth",
+            top_k=3,
+            filters={
+                "ticker": "RELIANCE",
+                "market": "IN",
+                "document_type": "annual_report",
+                "fiscal_year": 2024,
+            },
+        )
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_applies_ticker_filter(self, mock_build_pipeline):
+        pipeline = MagicMock()
+        pipeline.retrieve.return_value = []
+        mock_build_pipeline.return_value = pipeline
+
+        search_financial_documents(query="revenue", ticker="tcs")
+
+        pipeline.retrieve.assert_called_once_with(
+            query="revenue",
+            top_k=5,
+            filters={"ticker": "TCS"},
+        )
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_applies_document_type_filter(self, mock_build_pipeline):
+        pipeline = MagicMock()
+        pipeline.retrieve.return_value = []
+        mock_build_pipeline.return_value = pipeline
+
+        search_financial_documents(query="revenue", document_type="annual_report")
+
+        pipeline.retrieve.assert_called_once_with(
+            query="revenue",
+            top_k=5,
+            filters={"document_type": "annual_report"},
+        )
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_applies_fiscal_year_filter(self, mock_build_pipeline):
+        pipeline = MagicMock()
+        pipeline.retrieve.return_value = []
+        mock_build_pipeline.return_value = pipeline
+
+        search_financial_documents(query="revenue", fiscal_year=2024)
+
+        pipeline.retrieve.assert_called_once_with(
+            query="revenue",
+            top_k=5,
+            filters={"fiscal_year": 2024},
+        )
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_rejects_invalid_top_k(self, mock_build_pipeline):
+        with self.assertRaises(ValueError):
+            search_financial_documents(query="revenue", top_k=0)
+
+        with self.assertRaises(ValueError):
+            search_financial_documents(query="revenue", top_k=11)
+
+        mock_build_pipeline.assert_not_called()
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_rejects_empty_query(self, mock_build_pipeline):
+        with self.assertRaises(ValueError):
+            search_financial_documents(query="   ")
+
+        mock_build_pipeline.assert_not_called()
 
     @staticmethod
     def _pipeline() -> RAGPipeline:

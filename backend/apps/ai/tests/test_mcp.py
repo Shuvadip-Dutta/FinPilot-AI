@@ -28,6 +28,7 @@ class MCPServerTestCase(SimpleTestCase):
             "get_key_metrics",
             "get_historical_data",
             "get_news",
+            "search_financial_documents",
         }
 
         self.assertEqual(
