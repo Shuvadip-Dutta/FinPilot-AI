@@ -43,6 +43,10 @@ class HuggingFaceEmbeddingProvider:
 
         return self._model
 
+    @property
+    def dimension(self) -> int:
+        return self.model.get_sentence_embedding_dimension()
+
     def embed(
         self,
         texts: list[str],

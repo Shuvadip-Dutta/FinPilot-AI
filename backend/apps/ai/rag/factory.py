@@ -14,16 +14,10 @@ def build_rag_pipeline() -> RAGPipeline:
         device=settings.RAG_EMBEDDING_DEVICE,
     )
 
-    vector_size = (
-        384
-        if "bge-small" in settings.RAG_EMBEDDING_MODEL
-        else 1024
-    )
-
     vector_store = QdrantVectorStore(
         url=settings.QDRANT_URL,
         collection_name=settings.QDRANT_COLLECTION,
-        vector_size=vector_size,
+        vector_size=embedding_provider.dimension,
     )
 
     retriever = Retriever(

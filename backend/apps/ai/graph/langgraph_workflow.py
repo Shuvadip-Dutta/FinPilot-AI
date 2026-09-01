@@ -12,6 +12,9 @@ from apps.ai.exceptions import AIError
 from apps.ai.graph.router import WorkflowRouter, WorkflowRoute
 from apps.ai.graph.state import AgentState
 from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
+from apps.ai.graph.persistence import LangGraphPersistence
+from apps.ai.observability import AIObserver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
 def _merge_graph_state(current: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
@@ -45,6 +48,8 @@ class LangGraphResearchWorkflow:
         risk_agent: BaseAgent | None = None,
         portfolio_intelligence=None,
         portfolio_optimization_agent: BaseAgent | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
+        persistence: LangGraphPersistence | None = None,
     ):
         self.router = router
         self.financial_agent = financial_agent
@@ -54,6 +59,14 @@ class LangGraphResearchWorkflow:
         self.risk_agent = risk_agent
         self.portfolio_intelligence = portfolio_intelligence
         self.portfolio_optimization_agent = portfolio_optimization_agent
+        self.observer = AIObserver()
+
+        self._checkpointer = checkpointer
+        if self._checkpointer is None:
+            self.persistence = LangGraphPersistence()
+            self._checkpointer = self.persistence.start()
+        else:
+            self.persistence = None
         self._graph = self._build_graph()
 
     def run(
@@ -62,19 +75,42 @@ class LangGraphResearchWorkflow:
         ticker: str | None = None,
         market: str | None = None,
         portfolio_input: PortfolioWorkflowInput | None = None,
+        thread_id: str = "default",
     ) -> AgentState:
         """Execute the compiled graph for a user request."""
+        route = self.router.route(user_message)
         initial_state = {
             "user_message": user_message,
             "ticker": ticker,
             "market": market,
             "portfolio_input": portfolio_input,
-            "route": self.router.route(user_message),
+            "thread_id": thread_id,
+            "route": route,
             "results": {},
             "errors": [],
         }
-        result = self._graph.invoke(initial_state)
-        return self._to_agent_state(result)
+        self.observer.graph_started(thread_id=thread_id, route=route)
+        try:
+            result = self._graph.invoke(
+                initial_state,
+                config={"configurable": {"thread_id": thread_id}},
+            )
+            state = self._to_agent_state(result)
+            self.observer.graph_completed(
+                thread_id=thread_id,
+                route=route,
+                result_count=len(state.results),
+                error_count=len(state.errors),
+            )
+            return state
+        except Exception as exc:
+            self.observer.graph_failed(
+                thread_id=thread_id,
+                route=route,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            raise
 
     def _build_graph(self):
         graph = StateGraph(GraphState)
@@ -138,11 +174,30 @@ class LangGraphResearchWorkflow:
         graph.add_edge("portfolio_optimization", "synthesis")
         graph.add_edge("synthesis", END)
 
-        return graph.compile()
+        return graph.compile(
+            checkpointer=self._checkpointer,
+        )
+        
+    def close(self) -> None:
+        if self.persistence is not None:
+            self.persistence.close()
 
     def _route_node(self, state: dict[str, Any]) -> dict[str, Any]:
-        route = self.router.route(state.get("user_message", ""))
-        return {"route": route}
+        thread_id = state.get("thread_id")
+        route = state.get("route")
+        self.observer.node_started(
+            thread_id=thread_id,
+            node="router",
+            route=route,
+        )
+        resolved_route = self.router.route(state.get("user_message", ""))
+        value = {"route": resolved_route}
+        self.observer.node_completed(
+            thread_id=thread_id,
+            node="router",
+            route=resolved_route,
+        )
+        return value
 
     def _route_decision(self, state: dict[str, Any]) -> WorkflowRoute | list[str]:
         route = state.get("route") or self.router.route(state.get("user_message", ""))
@@ -163,6 +218,13 @@ class LangGraphResearchWorkflow:
 
     def _execute_agent_node(self, key: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
         def _node(state: dict[str, Any]) -> dict[str, Any]:
+            thread_id = state.get("thread_id")
+            route = state.get("route")
+            self.observer.node_started(
+                thread_id=thread_id,
+                node=key,
+                route=route,
+            )
             try:
                 agent = {
                     "financial": self.financial_agent,
@@ -170,34 +232,75 @@ class LangGraphResearchWorkflow:
                     "news": self.news_agent,
                 }[key]
                 result = agent.run(state["user_message"])
-                return {"results": {key: result}}
+                payload = {"results": {key: result.model_dump()}}
+                self.observer.node_completed(
+                    thread_id=thread_id,
+                    node=key,
+                    route=route,
+                    result_count=len(payload.get("results", {})),
+                )
+                return payload
             except (AIError, ValueError, TypeError) as exc:
+                message = f"{key}: {exc}"
+                self.observer.node_failed(
+                    thread_id=thread_id,
+                    node=key,
+                    route=route,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                )
                 return {
                     "errors": [
-                        f"{key}: {exc}"
+                        message
                     ]
                 }
 
         return _node
 
     def _execute_synthesis_node(self, state: dict[str, Any]) -> dict[str, Any]:
+        thread_id = state.get("thread_id")
+        route = state.get("route")
+        self.observer.node_started(
+            thread_id=thread_id,
+            node="synthesis",
+            route=route,
+        )
         if self.synthesis_agent is None:
+            self.observer.node_completed(
+                thread_id=thread_id,
+                node="synthesis",
+                route=route,
+            )
             return {}
 
         try:
             final_state = self._to_agent_state(state)
             result = self.synthesis_agent.run(final_state)
-
-            return {
+            payload = {
                 "results": {
                     "synthesis": result,
                 }
             }
+            self.observer.node_completed(
+                thread_id=thread_id,
+                node="synthesis",
+                route=route,
+                result_count=len(payload.get("results", {})),
+            )
+            return payload
 
         except (AIError, ValueError, TypeError) as exc:
+            message = f"synthesis: {exc}"
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="synthesis",
+                route=route,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
             return {
                 "errors": [
-                    f"synthesis: {exc}"
+                    message
                 ]
             }
             
@@ -205,7 +308,19 @@ class LangGraphResearchWorkflow:
         self,
         state: dict[str, Any],
     ) -> dict[str, Any]:
+        thread_id = state.get("thread_id")
+        route = state.get("route")
+        self.observer.node_started(
+            thread_id=thread_id,
+            node="risk",
+            route=route,
+        )
         if self.risk_agent is None:
+            self.observer.node_completed(
+                thread_id=thread_id,
+                node="risk",
+                route=route,
+            )
             return {}
 
         try:
@@ -214,17 +329,31 @@ class LangGraphResearchWorkflow:
             result = self.risk_agent.run(
                 final_state
             )
-
-            return {
+            payload = {
                 "results": {
                     "risk": result,
                 }
             }
+            self.observer.node_completed(
+                thread_id=thread_id,
+                node="risk",
+                route=route,
+                result_count=len(payload.get("results", {})),
+            )
+            return payload
 
         except (AIError, ValueError, TypeError) as exc:
+            message = f"risk: {exc}"
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="risk",
+                route=route,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
             return {
                 "errors": [
-                    f"risk: {exc}"
+                    message
                 ]
             }
             
@@ -232,10 +361,25 @@ class LangGraphResearchWorkflow:
         self,
         state: dict[str, Any],
     ) -> dict[str, Any]:
+        thread_id = state.get("thread_id")
+        route = state.get("route")
+        self.observer.node_started(
+            thread_id=thread_id,
+            node="portfolio",
+            route=route,
+        )
         if self.portfolio_intelligence is None:
+            message = "portfolio: Portfolio intelligence service is not configured."
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="portfolio",
+                route=route,
+                error_type="ConfigurationError",
+                error_message=message,
+            )
             return {
                 "errors": [
-                    "portfolio: Portfolio intelligence service is not configured."
+                    message
                 ]
             }
 
@@ -244,9 +388,17 @@ class LangGraphResearchWorkflow:
         )
 
         if portfolio_input is None:
+            message = "portfolio: Portfolio input is required."
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="portfolio",
+                route=route,
+                error_type="ValueError",
+                error_message=message,
+            )
             return {
                 "errors": [
-                    "portfolio: Portfolio input is required."
+                    message
                 ]
             }
 
@@ -254,17 +406,31 @@ class LangGraphResearchWorkflow:
             result = self.portfolio_intelligence.analyze(
                 portfolio_input.portfolio
             )
-
-            return {
+            payload = {
                 "results": {
                     "portfolio": result,
                 }
             }
+            self.observer.node_completed(
+                thread_id=thread_id,
+                node="portfolio",
+                route=route,
+                result_count=len(payload.get("results", {})),
+            )
+            return payload
 
         except (AIError, ValueError, TypeError) as exc:
+            message = f"portfolio: {exc}"
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="portfolio",
+                route=route,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
             return {
                 "errors": [
-                    f"portfolio: {exc}"
+                    message
                 ]
             }
             
@@ -273,10 +439,25 @@ class LangGraphResearchWorkflow:
         self,
         state: dict[str, Any],
     ) -> dict[str, Any]:
+        thread_id = state.get("thread_id")
+        route = state.get("route")
+        self.observer.node_started(
+            thread_id=thread_id,
+            node="portfolio_optimization",
+            route=route,
+        )
         if self.portfolio_optimization_agent is None:
+            message = "portfolio_optimization: Agent is not configured."
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="portfolio_optimization",
+                route=route,
+                error_type="ConfigurationError",
+                error_message=message,
+            )
             return {
                 "errors": [
-                    "portfolio_optimization: Agent is not configured."
+                    message
                 ]
             }
 
@@ -288,10 +469,17 @@ class LangGraphResearchWorkflow:
             portfolio_input is None
             or portfolio_input.optimization_input is None
         ):
+            message = "portfolio_optimization: Optimization input is required."
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="portfolio_optimization",
+                route=route,
+                error_type="ValueError",
+                error_message=message,
+            )
             return {
                 "errors": [
-                    "portfolio_optimization: "
-                    "Optimization input is required."
+                    message
                 ]
             }
 
@@ -299,17 +487,31 @@ class LangGraphResearchWorkflow:
             result = self.portfolio_optimization_agent.run(
                 portfolio_input.optimization_input
             )
-
-            return {
+            payload = {
                 "results": {
                     "portfolio_optimization": result,
                 }
             }
+            self.observer.node_completed(
+                thread_id=thread_id,
+                node="portfolio_optimization",
+                route=route,
+                result_count=len(payload.get("results", {})),
+            )
+            return payload
 
         except (AIError, ValueError, TypeError) as exc:
+            message = f"portfolio_optimization: {exc}"
+            self.observer.node_failed(
+                thread_id=thread_id,
+                node="portfolio_optimization",
+                route=route,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
             return {
                 "errors": [
-                    f"portfolio_optimization: {exc}"
+                    message
                 ]
             }
             

@@ -8,7 +8,24 @@ from apps.ai.graph.state import AgentState
 from apps.ai.services.schemas import AgentResult
 from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
 from apps.ai.portfolio.optimization import OptimizationInput
-from apps.ai.portfolio.schemas import Holding, Portfolio
+from apps.ai.portfolio.schemas import Holding, Portfolio, PortfolioIntelligence
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+
+def _test_checkpointer():
+    serializer = JsonPlusSerializer(
+        allowed_msgpack_modules=[
+            (
+                "apps.ai.services.schemas",
+                "AgentResult",
+            ),
+        ],
+    )
+
+    return MemorySaver(
+        serde=serializer,
+    )
 
 class LangGraphResearchWorkflowTestCase(SimpleTestCase):
 
@@ -265,6 +282,7 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
             market_agent=self._make_agent(),
             news_agent=self._make_agent(),
             synthesis_agent=self._make_agent(),
+            checkpointer=_test_checkpointer(),
         )
 
         routes = [
@@ -290,7 +308,10 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
         risk_agent=False,
         portfolio_intelligence=False,
         portfolio_optimization_agent=False,
+        checkpointer=None,
     ):
+        if checkpointer is None:
+            checkpointer = _test_checkpointer()
         router = MagicMock()
         router.route.return_value = route
 
@@ -356,6 +377,7 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
                 if portfolio_optimization_agent
                 else None
             ),
+            checkpointer=checkpointer,
         )
 
         if synthesis_agent and risk_agent:
@@ -396,7 +418,8 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
     @staticmethod
     def _build_portfolio_workflow(
         route="portfolio",
-    ):
+    ):  
+        checkpointer=_test_checkpointer()
         router = MagicMock()
         router.route.return_value = route
 
@@ -411,7 +434,7 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
         )
 
         portfolio = MagicMock()
-        portfolio.analyze.return_value = MagicMock(
+        portfolio.analyze.return_value = PortfolioIntelligence(
             invested_value=12000.0,
             current_value=13000.0,
             profit_loss=1000.0,
@@ -440,6 +463,7 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
             risk_agent=risk,
             portfolio_intelligence=portfolio,
             portfolio_optimization_agent=optimization,
+            checkpointer=checkpointer,
         )
 
         return (
@@ -637,4 +661,44 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
         self.assertIn(
             "portfolio_optimization",
             state.results,
-        )    
+        )  
+        
+    def test_thread_id_creates_checkpoint(self):
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = _test_checkpointer()
+
+        workflow, _, _, _ = self._build_workflow(
+            route="market",
+            checkpointer=checkpointer,
+        )
+
+        workflow.run(
+            "What is the RELIANCE price?",
+            thread_id="test-thread-1",
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": "test-thread-1",
+            }
+        }
+
+        checkpoint = checkpointer.get_tuple(config)
+
+        self.assertIsNotNone(checkpoint)
+        
+    def test_thread_id_can_be_passed(self):
+        workflow, _, _, _ = self._build_workflow(
+            route="market",
+        )
+
+        state = workflow.run(
+            "What is the RELIANCE price?",
+            thread_id="test-thread-1",
+        )
+
+        self.assertIsInstance(
+            state,
+            AgentState,
+        )  
