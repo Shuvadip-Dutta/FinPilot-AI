@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-
+from urllib.parse import quote
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -98,6 +98,13 @@ DATABASES = {
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
 }
+LANGGRAPH_POSTGRES_URI = (
+    f"postgresql://{os.getenv('POSTGRES_USER')}:"
+    f"{quote(os.getenv('POSTGRES_PASSWORD', ''), safe='')}"
+    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:"
+    f"{os.getenv('POSTGRES_PORT', '5432')}/"
+    f"{os.getenv('POSTGRES_DB')}"
+)
 
 
 # Password validation

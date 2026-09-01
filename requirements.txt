@@ -8,3 +8,4 @@ mcp[cli]
 langgraph
 sentence-transformers
 qdrant-client
+langgraph-checkpoint-postgres
