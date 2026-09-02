@@ -39,6 +39,24 @@ class AgentStateTestCase(SimpleTestCase):
 
         self.assertEqual(state.route, "market")
 
+    def test_smoke_workflow_state_uses_canonical_user_message(self):
+        state = AgentState(
+            user_message=(
+                "Analyze RELIANCE for financial health, current market position, "
+                "recent news sentiment, and key risks."
+            ),
+            ticker="RELIANCE",
+            market="IN",
+            route="risk",
+            results={},
+            errors=[],
+        )
+
+        self.assertEqual(state.ticker, "RELIANCE")
+        self.assertEqual(state.route, "risk")
+        self.assertEqual(state.results, {})
+        self.assertEqual(state.errors, [])
+
 
 class WorkflowDecisionTestCase(SimpleTestCase):
 

@@ -59,6 +59,7 @@ class FinanceModelEvaluator:
             passed=score == 1.0,
             score=score,
             missing_concepts=missing_concepts,
+            expected_tier=case.expected_tier,
         )
 
     def evaluate(self, cases: list[EvaluationCase]) -> EvaluationReport:
@@ -93,4 +94,5 @@ class FinanceModelEvaluator:
             passed=False,
             score=0.0,
             missing_concepts=case.required_concepts,
+            expected_tier=case.expected_tier,
         )

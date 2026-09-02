@@ -1,4 +1,5 @@
 from apps.research.services.research_service import ResearchService
+from apps.research.services.schemas import ExchangeQuote
 from apps.research.services.symbols import Market
 
 
@@ -22,10 +23,32 @@ def get_market_data(
 
     service = ResearchService()
 
-    return service.get_market_data(
+    result = service.get_market_data(
         ticker=ticker,
         market=Market(market.upper()),
     )
+
+    if not isinstance(result, list) or not all(
+        isinstance(quote, ExchangeQuote) for quote in result
+    ):
+        raise TypeError(
+            "ResearchService.get_market_data returned an unexpected result."
+        )
+
+    return {
+        "ticker": ticker.upper(),
+        "market": market.upper(),
+        "quotes": [
+            {
+                "exchange": quote.exchange,
+                "price": quote.price,
+                "percent_change": quote.percent_change,
+                "year_high": quote.year_high,
+                "year_low": quote.year_low,
+            }
+            for quote in result
+        ],
+    }
 
 
 def get_financials(

@@ -20,6 +20,7 @@ from apps.research.services.schemas import (
     KeyMetricsResearch,
     NewsArticle,
     NewsResearch,
+    ExchangeQuote,
 )
 
 
@@ -73,10 +74,10 @@ class ResearchToolsTestCase(SimpleTestCase):
     ):
         mock_service = mock_research_service.return_value
 
-        mock_service.get_market_data.return_value = {
-            "ticker": "RELIANCE",
-            "last_price": 1287.0,
-        }
+        mock_service.get_market_data.return_value = [
+            ExchangeQuote("BSE", 1307.35, 1.74, 1611.2, 1250.55),
+            ExchangeQuote("NSE", 1309.0, 1.74, 1611.2, 1250.55),
+        ]
 
         result = get_market_data(
             ticker="RELIANCE",
@@ -88,9 +89,25 @@ class ResearchToolsTestCase(SimpleTestCase):
             "RELIANCE",
         )
 
+        self.assertEqual(result["market"], "IN")
         self.assertEqual(
-            result["last_price"],
-            1287.0,
+            result["quotes"],
+            [
+                {
+                    "exchange": "BSE",
+                    "price": 1307.35,
+                    "percent_change": 1.74,
+                    "year_high": 1611.2,
+                    "year_low": 1250.55,
+                },
+                {
+                    "exchange": "NSE",
+                    "price": 1309.0,
+                    "percent_change": 1.74,
+                    "year_high": 1611.2,
+                    "year_low": 1250.55,
+                },
+            ],
         )
 
         args, kwargs = (
@@ -106,6 +123,26 @@ class ResearchToolsTestCase(SimpleTestCase):
             kwargs["market"].value,
             "IN",
         )
+
+    @patch("apps.ai.services.research_tools.ResearchService")
+    def test_get_market_data_empty_quotes_returns_structured_result(
+        self,
+        mock_research_service,
+    ):
+        mock_research_service.return_value.get_market_data.return_value = []
+
+        result = get_market_data("reliance", "IN")
+
+        self.assertEqual(result, {"ticker": "RELIANCE", "market": "IN", "quotes": []})
+
+    @patch("apps.ai.services.research_tools.ResearchService")
+    def test_get_market_data_rejects_unexpected_result(self, mock_research_service):
+        mock_research_service.return_value.get_market_data.return_value = {
+            "last_price": 1287.0,
+        }
+
+        with self.assertRaisesRegex(TypeError, "unexpected result"):
+            get_market_data("RELIANCE", "IN")
         
         
     @patch(

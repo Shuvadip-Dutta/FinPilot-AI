@@ -1,14 +1,18 @@
 """Deterministic agent for current and historical market analysis."""
 
+import json
 import re
 from collections.abc import Callable
 
 from apps.ai.agents.base import BaseAgent
+from apps.ai.exceptions import LLMError
 from apps.ai.services import research_tools
+from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
 
 
 ResearchTool = Callable[..., dict[str, object]]
+LLMCallable = Callable[[list[dict[str, str]]], str]
 
 
 class MarketAnalysisAgent(BaseAgent):
@@ -22,6 +26,7 @@ class MarketAnalysisAgent(BaseAgent):
         market: str = "IN",
         to_date: str | None = None,
         from_date: str | None = None,
+        llm_service: LLMCallable | None = None,
     ):
         self.market_data_tool = (
             market_data_tool or research_tools.get_market_data
@@ -33,6 +38,7 @@ class MarketAnalysisAgent(BaseAgent):
         self.market = market.upper()
         self.to_date = to_date
         self.from_date = from_date
+        self.llm_service = llm_service or LLMService(model="fast")
 
     @property
     def name(self) -> str:
@@ -76,13 +82,40 @@ class MarketAnalysisAgent(BaseAgent):
                 tools_used=tools_used,
             )
 
+        messages = self._build_analysis_messages(
+            message=message,
+            ticker=ticker,
+            market_data=market_data,
+            historical_data=historical_data,
+        )
+
+        try:
+            response = self.llm_service(messages)
+        except LLMError:
+            raise
+
+        if not isinstance(response, str) or not response.strip():
+            return AgentResult(
+                response=(
+                    f"Unable to analyze market data for {ticker}: "
+                    "the fast model returned an empty response."
+                ),
+                tools_used=tools_used,
+            )
+
+        evidence = {
+            "ticker": ticker,
+            "market": self.market,
+        }
+        if self._has_usable_quotes(market_data):
+            evidence["market_data"] = market_data
+        if historical_data is not None:
+            evidence["historical_data"] = historical_data
+
         return AgentResult(
-            response=self._build_summary(
-                ticker=ticker,
-                market_data=market_data,
-                historical_data=historical_data,
-            ),
+            response=response.strip(),
             tools_used=tools_used,
+            data=evidence,
         )
 
     def _resolve_date_range(self, message: str) -> tuple[str | None, str | None]:
@@ -118,13 +151,90 @@ class MarketAnalysisAgent(BaseAgent):
         return None
 
     @staticmethod
+    def _build_analysis_messages(
+        message: str,
+        ticker: str,
+        market_data: dict[str, object],
+        historical_data: dict[str, object] | None,
+    ) -> list[dict[str, str]]:
+        system_prompt = (
+            "You are the market analysis specialist for FinPilot AI. "
+            "Use only the current and historical market information supplied in this prompt. "
+            "Summarize the supplied current market information without inventing values. "
+            "Multiple exchange quotes may exist for the same ticker. Preserve exchange identity, "
+            "report exchange-specific prices when they differ, and do not merge them into one "
+            "universal price or average them unless explicitly requested and mathematically appropriate. "
+            "Describe observable historical movement when historical data exists. "
+            "Identify simple trends or direction only when supported by the data. "
+            "Call out meaningful price ranges or volatility observations when supported. "
+            "Compare relevant supplied values only when they are in the provided data. "
+            "Distinguish factual observations from interpretation. Explicitly state when "
+            "historical or current data is unavailable. Never invent prices, dates, candles, "
+            "volume, or other market values. Never make unsupported predictions or guarantee returns. "
+            "Never provide a buy/sell recommendation merely from the supplied data."
+        )
+
+        context = {
+            "user_question": message,
+            "ticker": ticker,
+            "current_market_data": (
+                market_data
+                if MarketAnalysisAgent._has_usable_quotes(market_data)
+                else "Current market data is unavailable."
+            ),
+            "historical_market_data": (
+                historical_data
+                if isinstance(historical_data, dict)
+                and historical_data
+                and (
+                    not isinstance(historical_data.get("candles"), list)
+                    or bool(historical_data.get("candles"))
+                )
+                else "Historical data unavailable."
+            ),
+        }
+
+        return [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    context,
+                    ensure_ascii=False,
+                    default=str,
+                ),
+            },
+        ]
+
+    @staticmethod
+    def _has_usable_quotes(market_data: object) -> bool:
+        if not isinstance(market_data, dict):
+            return False
+
+        quotes = market_data.get("quotes")
+        return isinstance(quotes, list) and any(
+            isinstance(quote, dict)
+            and quote.get("exchange")
+            and quote.get("price") is not None
+            for quote in quotes
+        )
+
+    @staticmethod
     def _build_summary(
         ticker: str,
         market_data: dict[str, object],
         historical_data: dict[str, object] | None,
     ) -> str:
-        current_price = market_data.get("last_price")
-        response = f"Market analysis for {ticker}: current price {current_price}."
+        quotes = market_data.get("quotes", [])
+        exchange_prices = [
+            f"{quote.get('exchange')}: {quote.get('price')}"
+            for quote in quotes
+            if isinstance(quote, dict)
+        ]
+        response = (
+            f"Market analysis for {ticker}: exchange prices "
+            f"{', '.join(exchange_prices) or 'unavailable'}."
+        )
 
         if historical_data is None:
             return response

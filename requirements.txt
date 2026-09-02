@@ -7,5 +7,7 @@ groq
 mcp[cli]
 langgraph
 sentence-transformers
+transformers
+torch
 qdrant-client
 langgraph-checkpoint-postgres

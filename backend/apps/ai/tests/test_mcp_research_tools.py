@@ -20,6 +20,7 @@ from apps.research.services.schemas import (
     HistoricalMarketData,
     NewsArticle,
     NewsResearch,
+    ExchangeQuote,
 )
 from asgiref.sync import async_to_sync
 
@@ -133,11 +134,10 @@ class MCPResearchToolsTestCase(SimpleTestCase):
             mock_research_service.return_value
         )
 
-        mock_service.get_market_data.return_value = {
-            "ticker": "RELIANCE",
-            "last_price": 1287.0,
-            "volume": 6830228,
-        }
+        mock_service.get_market_data.return_value = [
+            ExchangeQuote("BSE", 1307.35, 1.74, 1611.2, 1250.55),
+            ExchangeQuote("NSE", 1309.0, 1.74, 1611.2, 1250.55),
+        ]
 
         result = get_market_data(
             ticker="RELIANCE",
@@ -149,10 +149,8 @@ class MCPResearchToolsTestCase(SimpleTestCase):
             "RELIANCE",
         )
 
-        self.assertEqual(
-            result["last_price"],
-            1287.0,
-        )
+        self.assertEqual(result["market"], "IN")
+        self.assertEqual(len(result["quotes"]), 2)
 
         mock_service.get_market_data.assert_called_once()
         

@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 
 from apps.ai.agents.base import BaseAgent
+from apps.ai.exceptions import LLMError
 from apps.ai.graph.state import AgentState
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
@@ -13,15 +14,15 @@ LLMGenerate = Callable[[list[dict[str, str]]], str]
 
 
 class FinalSynthesisAgent(BaseAgent):
-    """Combine agent outputs into one coherent user-facing response."""
+    """Combine specialist evidence into a user-facing synthesis."""
+
+    SYNTHESIS_CONTEXT_CHAR_LIMIT = 9000
 
     def __init__(
         self,
         llm_service: LLMGenerate | None = None,
     ):
-        self.llm_service = (
-            llm_service or LLMService().generate
-        )
+        self.llm_service = llm_service or LLMService(model="synthesis").generate
 
     @property
     def name(self) -> str:
@@ -34,32 +35,12 @@ class FinalSynthesisAgent(BaseAgent):
         """Synthesize the available workflow results."""
 
         context = self._build_context(state)
-
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are the final synthesis component of FinPilot AI. "
-                    "Combine the supplied specialist analysis into one "
-                    "clear, accurate response. Do not invent facts. "
-                    "Use only the information provided in the context. "
-                    "Clearly distinguish unavailable information. "
-                    "Do not claim that an action was performed unless "
-                    "the context explicitly says it was."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"User request:\n{state.user_message}\n\n"
-                    f"Research context:\n{context}\n\n"
-                    "Produce a concise but useful final answer."
-                ),
-            },
-        ]
+        messages = self._build_messages(state, context)
 
         try:
             response = self.llm_service(messages)
+        except LLMError:
+            raise
         except (ValueError, TypeError) as exc:
             return AgentResult(
                 response=(
@@ -86,28 +67,254 @@ class FinalSynthesisAgent(BaseAgent):
         )
 
     @staticmethod
+    def _build_messages(
+        state: AgentState,
+        context: dict[str, object],
+    ) -> list[dict[str, str]]:
+        system_prompt = (
+            "You are the final synthesis specialist for FinPilot AI. "
+            "Answer the user's original request directly using the supplied specialist outputs as evidence. "
+            "Synthesize specialist findings rather than merely repeating their raw text. "
+            "Prioritize evidence provided by the specialists, preserve important supplied numerical values exactly, and reconcile conflicting findings when present. "
+            "Structured specialist evidence is authoritative for numerical values and deterministic outputs; use it over prose when they differ. "
+            "Identify uncertainty, disagreement, and important missing information. Distinguish factual observations from interpretation. "
+            "Do not invent financial, market, news, sentiment, portfolio, or risk data. Do not create unsupported quantitative metrics. "
+            "Never invent dates, prices, percentages, allocations, ratios, returns, or other values. "
+            "Never claim an action was executed unless the supplied context explicitly confirms it. "
+            "Avoid guarantees or certainty about future market performance. Avoid unconditional buy/sell recommendations. "
+            "Do not independently retrieve external information or recalculate portfolio optimization metrics. "
+            "If portfolio optimization or risk results are supplied, explain them using the exact values provided and do not replace them with unsupported values. "
+            "Do not describe a company as debt-heavy or highly leveraged unless the structured evidence contains sufficient debt or leverage measurements; otherwise state that leverage cannot be assessed from the supplied data. "
+            "Use only the information provided in the context. Clearly mark missing or unavailable information and do not fabricate it. "
+            "Remain concise but useful."
+        )
+
+        return [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "USER REQUEST": state.user_message,
+                        "SPECIALIST EVIDENCE": context,
+                        "SYNTHESIS INSTRUCTIONS": [
+                            "Answer the user's original request directly.",
+                            "Synthesize specialist outputs rather than restating them verbatim.",
+                            "Use only the evidence supplied by specialists and workflow metadata.",
+                            "Preserve important numerical values exactly as provided.",
+                            "Reconcile inconsistencies and note uncertainty or disagreement.",
+                            "Highlight missing information and workflow errors when relevant.",
+                            "Distinguish facts from interpretation.",
+                            "Do not invent unsupported facts or metrics.",
+                            "Do not claim future performance certainty or provide unconditional recommendations.",
+                        ],
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                ),
+            },
+        ]
+
+    @staticmethod
     def _build_context(
         state: AgentState,
-    ) -> str:
-        context: dict[str, object] = {}
+    ) -> dict[str, object]:
+        sections: dict[str, object] = {}
+        missing_information: list[str] = []
 
-        for key, value in state.results.items():
+        ordered_names = [
+            ("financial", "FINANCIAL ANALYSIS", "Financial analysis was not available."),
+            ("market", "MARKET ANALYSIS", "Market analysis was not available."),
+            ("news", "NEWS INTELLIGENCE", "News intelligence was not available."),
+            ("risk", "RISK ANALYSIS", "Risk analysis was not available."),
+            ("portfolio_optimization", "PORTFOLIO ANALYSIS", "Portfolio analysis was not available."),
+        ]
+
+        for result_key, title, missing_text in ordered_names:
+            value = state.results.get(result_key)
             if isinstance(value, AgentResult):
-                context[key] = {
-                    "response": value.response,
-                    "tools_used": value.tools_used,
+                if value.response and value.response.strip():
+                    sections[title] = {
+                        "response": FinalSynthesisAgent._bounded_response(
+                            value.response,
+                            result_key,
+                        ),
+                        "tools_used": value.tools_used,
+                    }
+                    if value.data is not None:
+                        sections[title]["data"] = FinalSynthesisAgent._reduce_data(
+                            result_key,
+                            value.data,
+                        )
+                else:
+                    sections[title] = {
+                        "response": "No specialist response was produced.",
+                        "tools_used": value.tools_used,
+                    }
+            elif value is not None:
+                sections[title] = {
+                    "response": str(value),
+                    "tools_used": [],
                 }
             else:
-                context[key] = value
+                missing_information.append(missing_text)
 
         if state.errors:
-            context["workflow_errors"] = state.errors
+            sections["WORKFLOW ERRORS / MISSING INFORMATION"] = {
+                "workflow_errors": state.errors,
+                "missing_information": missing_information or ["No additional missing specialist information was recorded."],
+            }
+        elif missing_information:
+            sections["WORKFLOW ERRORS / MISSING INFORMATION"] = {
+                "workflow_errors": [],
+                "missing_information": missing_information,
+            }
 
-        return json.dumps(
-            context,
-            ensure_ascii=False,
-            default=str,
-        )
+        sections["_CONTEXT_METADATA"] = {
+            "missing_information": missing_information,
+        }
+        if FinalSynthesisAgent._serialized_size(sections) <= FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
+            return sections
+
+        # Preserve structured evidence first; reduce only explanatory prose and optional metadata.
+        for title, section in sections.items():
+            if isinstance(section, dict) and "response" in section:
+                section["response"] = FinalSynthesisAgent._bounded_text(
+                    section["response"],
+                    350 if title != "PORTFOLIO ANALYSIS" else 700,
+                )
+        sections["_CONTEXT_METADATA"] = {"missing_information": []}
+        if FinalSynthesisAgent._serialized_size(sections) > FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
+            for title, section in sections.items():
+                if not isinstance(section, dict):
+                    continue
+                if "response" in section:
+                    section["response"] = FinalSynthesisAgent._bounded_text(
+                        section["response"],
+                        150 if title != "PORTFOLIO ANALYSIS" else 300,
+                    )
+                if "data" in section:
+                    section["data"] = FinalSynthesisAgent._minimum_data(section["data"])
+                section.pop("tools_used", None)
+        if FinalSynthesisAgent._serialized_size(sections) > FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
+            sections = {
+                title: section
+                for title, section in sections.items()
+                if title in {
+                    "FINANCIAL ANALYSIS", "MARKET ANALYSIS", "NEWS INTELLIGENCE",
+                    "RISK ANALYSIS", "PORTFOLIO ANALYSIS",
+                }
+            }
+        return sections
+
+    @staticmethod
+    def _serialized_size(value: object) -> int:
+        return len(json.dumps(value, ensure_ascii=False, default=str))
+
+    @staticmethod
+    def _bounded_text(value: object, limit: int) -> str:
+        text = str(value or "").strip()
+        if len(text) <= limit:
+            return text
+        boundary = text.rfind(" ", 0, limit + 1)
+        return text[: boundary if boundary > 0 else limit].rstrip() + "..."
+
+    @classmethod
+    def _bounded_response(cls, response: str, result_key: str) -> str:
+        limits = {
+            "financial": 600,
+            "market": 500,
+            "news": 600,
+            "risk": 700,
+            "portfolio_optimization": 1200,
+        }
+        return cls._bounded_text(response, limits.get(result_key, 500))
+
+    @staticmethod
+    def _reduce_data(result_key: str, data: dict[str, object]) -> dict[str, object]:
+        if result_key == "financial":
+            return FinalSynthesisAgent._reduce_financial_data(data)
+        if result_key == "market":
+            return FinalSynthesisAgent._reduce_market_data(data)
+        if result_key == "news":
+            return FinalSynthesisAgent._reduce_news_data(data)
+        return data
+
+    @staticmethod
+    def _reduce_financial_data(data: dict[str, object]) -> dict[str, object]:
+        reduced = {key: data[key] for key in ("ticker", "market", "context_reduction_applied", "omitted_information") if key in data}
+        for key in ("financial_statement_data", "financials"):
+            records = data.get(key)
+            if isinstance(records, list):
+                reduced[key] = [
+                    {
+                        field: record[field]
+                        for field in ("statement_type", "fiscal_year", "end_date", "period_type", "metrics")
+                        if field in record
+                    }
+                    for record in records[-3:]
+                    if isinstance(record, dict)
+                ]
+        for key in ("key_metrics_data", "key_metrics"):
+            metrics = data.get(key)
+            if isinstance(metrics, list):
+                reduced[key] = [metric for metric in metrics[:16] if isinstance(metric, dict)]
+        return reduced
+
+    @staticmethod
+    def _reduce_market_data(data: dict[str, object]) -> dict[str, object]:
+        reduced = {key: data[key] for key in ("ticker", "market") if key in data}
+        for key in ("market_data", "current_market_data"):
+            value = data.get(key)
+            if isinstance(value, dict) and isinstance(value.get("quotes"), list):
+                reduced[key] = {
+                    "quotes": [quote for quote in value["quotes"] if isinstance(quote, dict)]
+                }
+        for key in ("historical_data", "historical_market_data"):
+            value = data.get(key)
+            if isinstance(value, dict) and isinstance(value.get("candles"), list):
+                reduced[key] = {"candles": value["candles"][-10:]}
+        return reduced
+
+    @staticmethod
+    def _reduce_news_data(data: dict[str, object]) -> dict[str, object]:
+        reduced = {key: data[key] for key in ("ticker", "market", "aggregated_sentiment") if key in data}
+        for key in ("articles", "article_level_sentiment"):
+            articles = data.get(key)
+            if isinstance(articles, list):
+                reduced[key] = [
+                    {
+                        field: article[field]
+                        for field in ("title", "source", "relevance_type", "sentiment")
+                        if field in article
+                    }
+                    for article in articles[:5]
+                    if isinstance(article, dict)
+                ]
+        return reduced
+
+    @staticmethod
+    def _minimum_data(data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        minimum = {
+            key: data[key]
+            for key in ("ticker", "market", "aggregated_sentiment")
+            if key in data
+        }
+        for key in ("market_data", "current_market_data"):
+            value = data.get(key)
+            if isinstance(value, dict) and isinstance(value.get("quotes"), list):
+                minimum[key] = {"quotes": value["quotes"]}
+        for key in ("financial_statement_data", "financials", "key_metrics_data", "key_metrics"):
+            value = data.get(key)
+            if isinstance(value, list) and value:
+                minimum[key] = value[:1]
+        for key in ("articles", "article_level_sentiment"):
+            value = data.get(key)
+            if isinstance(value, list):
+                minimum[key] = value[:2]
+        return minimum
 
     @staticmethod
     def _collect_tools_used(

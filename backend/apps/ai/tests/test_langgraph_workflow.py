@@ -36,6 +36,23 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
 
         self.assertIsInstance(state, AgentState)
 
+    def test_to_agent_state_maps_canonical_user_message(self):
+        workflow, _, _, _ = self._build_workflow(route="risk")
+
+        state = workflow._to_agent_state({
+            "user_message": "Assess RELIANCE risk.",
+            "ticker": "RELIANCE",
+            "market": "IN",
+            "route": "risk",
+            "results": {},
+            "errors": [],
+        })
+
+        self.assertEqual(state.user_message, "Assess RELIANCE risk.")
+        self.assertEqual(state.route, "risk")
+        self.assertEqual(state.results, {})
+        self.assertEqual(state.errors, [])
+
     def test_financial_route_executes_only_financial_node(self):
         workflow, financial, market, news = self._build_workflow(route="financial")
 

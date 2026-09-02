@@ -38,7 +38,50 @@ UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
 )
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL")
+
+# Legacy setting kept for backward compatibility.
+GROQ_MODEL = os.getenv(
+    "GROQ_MODEL",
+    os.getenv("REASONING_MODEL", "qwen/qwen3.6-27b"),
+)
+
+REASONING_MODEL = os.getenv(
+    "REASONING_MODEL",
+    GROQ_MODEL,
+)
+REASONING_MAX_COMPLETION_TOKENS = int(
+    os.getenv(
+        "REASONING_MAX_COMPLETION_TOKENS",
+        "4096",
+    )
+)
+FAST_MODEL = os.getenv(
+    "FAST_MODEL",
+    os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+)
+EVALUATION_MODEL = os.getenv(
+    "EVALUATION_MODEL",
+    GROQ_MODEL,
+)
+SYNTHESIS_MODEL = os.getenv(
+    "SYNTHESIS_MODEL",
+    "openai/gpt-oss-20b",
+)
+
+FINANCIAL_SENTIMENT_MODEL = os.getenv(
+    "FINANCIAL_SENTIMENT_MODEL",
+    "ProsusAI/finbert",
+)
+FINANCIAL_SENTIMENT_DEVICE = os.getenv(
+    "FINANCIAL_SENTIMENT_DEVICE",
+    "cpu",
+)
+FINANCIAL_ANALYSIS_CONTEXT_CHAR_LIMIT = int(
+    os.getenv(
+        "FINANCIAL_ANALYSIS_CONTEXT_CHAR_LIMIT",
+        "18000",
+    )
+)
 
 # Application definition
 

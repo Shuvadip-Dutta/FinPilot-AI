@@ -1,10 +1,15 @@
 from django.test import SimpleTestCase
 from pydantic import ValidationError
 
-from apps.ai.evaluation.dataset import EVALUATION_DATASET
+from apps.ai.evaluation.dataset import (
+    ARCHITECTURE_TIER_MAP,
+    EVALUATION_DATASET,
+    validate_category_tier_mapping,
+)
 from apps.ai.evaluation.evaluator import FinanceModelEvaluator
 from apps.ai.evaluation.report import EvaluationReportGenerator
 from apps.ai.evaluation.schemas import EvaluationCase, EvaluationResult
+from apps.ai.services.llm_service import ModelTier
 
 
 class FinanceModelEvaluatorTestCase(SimpleTestCase):
@@ -37,6 +42,38 @@ class FinanceModelEvaluatorTestCase(SimpleTestCase):
             {case.category for case in EVALUATION_DATASET},
             {"finance", "market", "news", "risk", "portfolio"},
         )
+
+    def test_every_benchmark_case_has_expected_tier_metadata(self):
+        self.assertTrue(EVALUATION_DATASET)
+
+        for case in EVALUATION_DATASET:
+            self.assertIsNotNone(case.expected_tier)
+            self.assertIsInstance(case.expected_tier, ModelTier)
+            self.assertEqual(
+                case.expected_tier,
+                ARCHITECTURE_TIER_MAP[case.category],
+            )
+
+    def test_expected_tier_mapping_matches_current_architecture(self):
+        self.assertEqual(ARCHITECTURE_TIER_MAP["finance"], ModelTier.REASONING)
+        self.assertEqual(ARCHITECTURE_TIER_MAP["market"], ModelTier.FAST)
+        self.assertEqual(ARCHITECTURE_TIER_MAP["news"], ModelTier.FAST)
+        self.assertEqual(ARCHITECTURE_TIER_MAP["risk"], ModelTier.REASONING)
+        self.assertEqual(ARCHITECTURE_TIER_MAP["portfolio"], ModelTier.REASONING)
+        self.assertTrue(validate_category_tier_mapping())
+
+    def test_no_real_llm_call_is_required_for_benchmark_unit_tests(self):
+        calls = []
+
+        def model(messages):
+            calls.append(messages)
+            return "Revenue, profit, and cash flow are key aspects of financial analysis."
+
+        evaluator = FinanceModelEvaluator(model=model)
+        result = evaluator.evaluate_case(EVALUATION_DATASET[0])
+
+        self.assertTrue(result.passed)
+        self.assertEqual(len(calls), 1)
 
     def test_successful_full_score_evaluation(self):
         evaluator = FinanceModelEvaluator(

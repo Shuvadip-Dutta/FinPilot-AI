@@ -2,7 +2,10 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from apps.ai.graph.router import WorkflowRoute
+from apps.ai.services.llm_service import ModelTier
 
 
 EvaluationCategory = Literal[
@@ -22,6 +25,9 @@ class EvaluationCase(BaseModel):
     question: str
     reference_answer: str
     required_concepts: list[str]
+    expected_tier: ModelTier | None = None
+    expected_route: WorkflowRoute | None = None
+    expected_agents: list[str] = Field(default_factory=list)
 
 
 class EvaluationResult(BaseModel):
@@ -34,6 +40,7 @@ class EvaluationResult(BaseModel):
     passed: bool
     score: float
     missing_concepts: list[str]
+    expected_tier: ModelTier | None = None
 
 
 class EvaluationReport(BaseModel):

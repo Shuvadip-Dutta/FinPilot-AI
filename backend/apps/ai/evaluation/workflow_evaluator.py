@@ -67,6 +67,7 @@ class MultiAgentWorkflowEvaluator:
                     passed=False,
                     score=0.0,
                     missing_concepts=case.required_concepts,
+                    expected_tier=case.expected_tier,
                 ),
                 route=route,
                 errors=errors,
@@ -85,6 +86,7 @@ class MultiAgentWorkflowEvaluator:
                     passed=False,
                     score=0.0,
                     missing_concepts=case.required_concepts,
+                    expected_tier=case.expected_tier,
                 ),
                 route=route,
                 errors=errors,
@@ -94,6 +96,7 @@ class MultiAgentWorkflowEvaluator:
 
         evaluation = self._evaluate_response(case, response)
         evaluation.question = case.question
+        evaluation.expected_tier = case.expected_tier
         return WorkflowEvaluationResult(
             evaluation=evaluation,
             route=route,
@@ -154,6 +157,7 @@ class MultiAgentWorkflowEvaluator:
                 passed=False,
                 score=0.0,
                 missing_concepts=case.required_concepts,
+                expected_tier=case.expected_tier,
             )
 
         normalized_response = self._normalize(model_response)
@@ -177,6 +181,7 @@ class MultiAgentWorkflowEvaluator:
             passed=score == 1.0,
             score=score,
             missing_concepts=missing_concepts,
+            expected_tier=case.expected_tier,
         )
 
     @staticmethod

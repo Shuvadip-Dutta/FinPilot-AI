@@ -1,10 +1,54 @@
+from __future__ import annotations
+
+from enum import Enum
+
+from django.conf import settings
+
 from apps.ai.services.providers.groq import GroqProvider
+
+
+class ModelTier(str, Enum):
+    REASONING = "reasoning"
+    FAST = "fast"
+    EVALUATION = "evaluation"
+    SYNTHESIS = "synthesis"
+    DEFAULT = "default"
 
 
 class LLMService:
 
-    def __init__(self):
-        self.provider = GroqProvider()
+    _MODEL_TIER_MAP = {
+        ModelTier.REASONING.value: "REASONING_MODEL",
+        ModelTier.FAST.value: "FAST_MODEL",
+        ModelTier.EVALUATION.value: "EVALUATION_MODEL",
+        ModelTier.SYNTHESIS.value: "SYNTHESIS_MODEL",
+        ModelTier.DEFAULT.value: "REASONING_MODEL",
+    }
+
+    def __init__(self, model: str | ModelTier | None = None):
+        self.model = self._resolve_model(model)
+        self.provider = GroqProvider(model=self.model)
+
+    def __call__(self, messages: list[dict[str, str]]) -> str:
+        return self.generate(messages)
+
+    @classmethod
+    def _resolve_model(cls, model: str | ModelTier | None) -> str | None:
+        if model is None:
+            return getattr(settings, "REASONING_MODEL", None) or getattr(
+                settings,
+                "GROQ_MODEL",
+                None,
+            )
+
+        normalized = str(model).strip().lower()
+        if normalized in cls._MODEL_TIER_MAP:
+            return (
+                getattr(settings, cls._MODEL_TIER_MAP[normalized], None)
+                or getattr(settings, "GROQ_MODEL", None)
+            )
+
+        return model
 
     def generate(
         self,
