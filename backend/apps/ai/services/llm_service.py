@@ -8,6 +8,11 @@ from apps.ai.services.providers.groq import GroqProvider
 
 
 class ModelTier(str, Enum):
+    FINANCIAL = "financial"
+    MARKET = "market"
+    NEWS = "news"
+    RISK = "risk"
+    PORTFOLIO = "portfolio"
     REASONING = "reasoning"
     FAST = "fast"
     EVALUATION = "evaluation"
@@ -18,6 +23,11 @@ class ModelTier(str, Enum):
 class LLMService:
 
     _MODEL_TIER_MAP = {
+        ModelTier.FINANCIAL.value: "FINANCIAL_MODEL",
+        ModelTier.MARKET.value: "MARKET_MODEL",
+        ModelTier.NEWS.value: "NEWS_MODEL",
+        ModelTier.RISK.value: "RISK_MODEL",
+        ModelTier.PORTFOLIO.value: "PORTFOLIO_MODEL",
         ModelTier.REASONING.value: "REASONING_MODEL",
         ModelTier.FAST.value: "FAST_MODEL",
         ModelTier.EVALUATION.value: "EVALUATION_MODEL",

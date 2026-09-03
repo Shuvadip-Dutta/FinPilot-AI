@@ -39,33 +39,29 @@ UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# Frozen benchmark per-agent model assignments (quota-aware)
+FINANCIAL_MODEL = os.getenv("FINANCIAL_MODEL", "qwen/qwen3.6-27b")
+MARKET_MODEL = os.getenv("MARKET_MODEL", "qwen/qwen3.6-27b")
+NEWS_MODEL = os.getenv("NEWS_MODEL", "qwen/qwen3.8-27b")
+RISK_MODEL = os.getenv("RISK_MODEL", "qwen/qwen3.8-27b")
+PORTFOLIO_MODEL = os.getenv("PORTFOLIO_MODEL", "qwen/qwen3.8-27b")
+SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL", "qwen/qwen3.8-27b")
+
+# Model tier defaults
+REASONING_MODEL = os.getenv("REASONING_MODEL", "qwen/qwen3.6-27b")
+FAST_MODEL = os.getenv("FAST_MODEL", "qwen/qwen3.8-27b")
+EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", "qwen/qwen3.6-27b")
+
 # Legacy setting kept for backward compatibility.
 GROQ_MODEL = os.getenv(
     "GROQ_MODEL",
-    os.getenv("REASONING_MODEL", "qwen/qwen3.6-27b"),
-)
-
-REASONING_MODEL = os.getenv(
-    "REASONING_MODEL",
-    GROQ_MODEL,
+    REASONING_MODEL,
 )
 REASONING_MAX_COMPLETION_TOKENS = int(
     os.getenv(
         "REASONING_MAX_COMPLETION_TOKENS",
         "4096",
     )
-)
-FAST_MODEL = os.getenv(
-    "FAST_MODEL",
-    os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
-)
-EVALUATION_MODEL = os.getenv(
-    "EVALUATION_MODEL",
-    GROQ_MODEL,
-)
-SYNTHESIS_MODEL = os.getenv(
-    "SYNTHESIS_MODEL",
-    "openai/gpt-oss-20b",
 )
 
 FINANCIAL_SENTIMENT_MODEL = os.getenv(

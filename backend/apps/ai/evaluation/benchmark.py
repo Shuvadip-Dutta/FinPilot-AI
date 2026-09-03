@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,14 @@ from apps.ai.exceptions import LLMError
 from apps.ai.services.llm_service import LLMService, ModelTier
 
 
+class ModelIdentifier(str, Enum):
+    """Supported explicit model identifiers for benchmark runs."""
+
+    QWEN_3_6_27B = "qwen/qwen3.6-27b"
+    QWEN_3_8_27B = "qwen/qwen3.8-27b"
+    GPT_OSS_20B = "openai/gpt-oss-20b"
+
+
 class ModelBenchmarkResult(BaseModel):
     """Observed result for one case evaluated under a selected model tier."""
 
@@ -21,11 +30,13 @@ class ModelBenchmarkResult(BaseModel):
     category: str
     expected_tier: ModelTier | None = None
     tested_tier: ModelTier
+    model_identifier: str | None = None
     score: float
     passed: bool
     response: str
     latency_ms: float
     error: str | None = None
+    has_think_leakage: bool = False
 
 
 class ModelBenchmarkReport(BaseModel):
@@ -56,36 +67,49 @@ class ModelBenchmarkRunner:
         self,
         case: EvaluationCase,
         tested_tier: ModelTier | str,
+        model_identifier: ModelIdentifier | str | None = None,
     ) -> ModelBenchmarkResult:
         tier = self._coerce_tier(tested_tier)
         start = self.clock()
 
         try:
-            service = self.llm_service_factory(tier)
+            service = self.llm_service_factory(model_identifier or tier)
             evaluator = self.evaluator_factory(service.generate)
             result = evaluator.evaluate_case(case)
             response = result.response
             passed = result.passed
             score = result.score
+            has_think_leakage = getattr(result, "has_think_leakage", False)
             error = None
         except (LLMError, ValueError, TypeError) as exc:
             response = f"[Benchmark failure: {exc}]"
             passed = False
             score = 0.0
+            has_think_leakage = False
             error = str(exc)
 
         latency_ms = max(0.0, (self.clock() - start) * 1000)
+        resolved_model = getattr(service, "model", None) if "service" in locals() else None
+        if not isinstance(resolved_model, str):
+            resolved_model = None
+        requested_model = (
+            model_identifier.value
+            if isinstance(model_identifier, ModelIdentifier)
+            else model_identifier
+        )
 
         return ModelBenchmarkResult(
             case_id=case.case_id,
             category=case.category,
             expected_tier=case.expected_tier,
             tested_tier=tier,
+            model_identifier=resolved_model or requested_model,
             score=score,
             passed=passed,
             response=response,
             latency_ms=latency_ms,
             error=error,
+            has_think_leakage=has_think_leakage,
         )
 
     def evaluate_tier(

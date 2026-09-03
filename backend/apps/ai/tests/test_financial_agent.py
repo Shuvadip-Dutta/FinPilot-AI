@@ -62,7 +62,7 @@ class FinancialAnalysisAgentTestCase(SimpleTestCase):
             ticker="RELIANCE",
         )
 
-        mock_llm_service.assert_called_once_with(model="reasoning")
+        mock_llm_service.assert_called_once_with(model="financial")
 
     def test_research_tool_failure_is_returned_in_result(self):
         def failing_financials_tool(**kwargs):

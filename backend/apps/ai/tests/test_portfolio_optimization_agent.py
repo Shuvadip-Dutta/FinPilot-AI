@@ -65,7 +65,7 @@ class PortfolioOptimizationAgentTestCase(SimpleTestCase):
         self.assertEqual(result.response, "The allocation balances risk and return.")
         self.assertEqual(result.tools_used, ["portfolio_optimization"])
         self.assertEqual(calls, [self._input()])
-        mock_llm_service.assert_called_once_with(model="reasoning")
+        mock_llm_service.assert_called_once_with(model="portfolio")
 
         messages = mock_llm_service.return_value.call_args[0][0]
         self.assertEqual(messages[0]["role"], "system")

@@ -44,7 +44,7 @@ class RiskAnalysisAgentTestCase(SimpleTestCase):
         self.assertIsInstance(result, AgentResult)
         self.assertEqual(result.response, "Risk is moderate and balanced.")
         self.assertEqual(result.tools_used, [])
-        mock_llm_service.assert_called_once_with(model="reasoning")
+        mock_llm_service.assert_called_once_with(model="risk")
 
         messages = mock_llm_service.return_value.call_args[0][0]
         self.assertEqual(messages[0]["role"], "system")
@@ -78,7 +78,7 @@ class RiskAnalysisAgentTestCase(SimpleTestCase):
 
         self.assertEqual(result.response, "Risk is moderate due to market weakness.")
         self.assertEqual(result.tools_used, [])
-        mock_llm_service.assert_called_once_with(model="reasoning")
+        mock_llm_service.assert_called_once_with(model="risk")
 
         messages = mock_llm_service.return_value.call_args[0][0]
         context = json.loads(messages[1]["content"])
@@ -102,7 +102,7 @@ class RiskAnalysisAgentTestCase(SimpleTestCase):
             "Risk analysis for RELIANCE: Financial research data is unavailable. Current market data is unavailable. News intelligence is unavailable.",
         )
         self.assertEqual(result.tools_used, [])
-        mock_llm_service.assert_not_called()
+        mock_llm_service.return_value.assert_not_called()
 
     @patch("apps.ai.agents.risk.LLMService")
     def test_missing_financial_result_is_explicitly_flagged(self, mock_llm_service):

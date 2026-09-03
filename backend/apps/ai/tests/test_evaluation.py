@@ -40,7 +40,7 @@ class FinanceModelEvaluatorTestCase(SimpleTestCase):
         self.assertTrue(EVALUATION_DATASET)
         self.assertEqual(
             {case.category for case in EVALUATION_DATASET},
-            {"finance", "market", "news", "risk", "portfolio"},
+            {"finance", "market", "news", "risk", "portfolio", "synthesis"},
         )
 
     def test_every_benchmark_case_has_expected_tier_metadata(self):
@@ -60,6 +60,7 @@ class FinanceModelEvaluatorTestCase(SimpleTestCase):
         self.assertEqual(ARCHITECTURE_TIER_MAP["news"], ModelTier.FAST)
         self.assertEqual(ARCHITECTURE_TIER_MAP["risk"], ModelTier.REASONING)
         self.assertEqual(ARCHITECTURE_TIER_MAP["portfolio"], ModelTier.REASONING)
+        self.assertEqual(ARCHITECTURE_TIER_MAP["synthesis"], ModelTier.REASONING)
         self.assertTrue(validate_category_tier_mapping())
 
     def test_no_real_llm_call_is_required_for_benchmark_unit_tests(self):
@@ -67,7 +68,7 @@ class FinanceModelEvaluatorTestCase(SimpleTestCase):
 
         def model(messages):
             calls.append(messages)
-            return "Revenue, profit, and cash flow are key aspects of financial analysis."
+            return "TechCorp generated $500M in revenue with net income of $100M and solid cash flow."
 
         evaluator = FinanceModelEvaluator(model=model)
         result = evaluator.evaluate_case(EVALUATION_DATASET[0])
@@ -178,3 +179,92 @@ class FinanceModelEvaluatorTestCase(SimpleTestCase):
             calls,
             [[{"role": "user", "content": self.case.question}]],
         )
+
+    def test_concept_aliases_matching(self):
+        case = EvaluationCase(
+            case_id="test-aliases",
+            category="finance",
+            question="Analyze revenue",
+            reference_answer="Revenue was $500 million",
+            required_concepts=[["$500m", "$500M", "$500 million"]],
+        )
+        evaluator = FinanceModelEvaluator(
+            model=lambda msgs: "The company reported $500 million in revenue."
+        )
+        result = evaluator.evaluate_case(case)
+        self.assertTrue(result.passed)
+        self.assertEqual(result.score, 1.0)
+        self.assertEqual(result.missing_concepts, [])
+
+    def test_numeric_alias_handling(self):
+        case = EVALUATION_DATASET[1]  # finance-numerical-reasoning
+        evaluator = FinanceModelEvaluator(
+            model=lambda msgs: "Alpha Inc has a gross margin of 40 percent, debt-to-equity ratio of 0.5, gross margin, and D/E."
+        )
+        result = evaluator.evaluate_case(case)
+        self.assertTrue(result.passed)
+
+    def test_short_number_false_positive_prevention(self):
+        case = EVALUATION_DATASET[1]  # finance-numerical-reasoning
+        evaluator = FinanceModelEvaluator(
+            model=lambda msgs: "Refer to Section 0.5 of the prospectus for gross margin 40% and debt-to-equity information."
+        )
+        result = evaluator.evaluate_case(case)
+        self.assertFalse(result.passed)
+        self.assertIn("0.5 debt-to-equity", result.missing_concepts)
+
+    def test_case_5_numerical_grounding(self):
+        case = EVALUATION_DATASET[4]  # finance-overall-conclusion
+        evaluator_qualitative_only = FinanceModelEvaluator(
+            model=lambda msgs: "Delta Corp displays strong liquidity, solid solvency, and an attractive profit margin."
+        )
+        result_qual = evaluator_qualitative_only.evaluate_case(case)
+        self.assertFalse(result_qual.passed)
+        self.assertIn("$1.2 billion", result_qual.missing_concepts)
+
+        evaluator_full = FinanceModelEvaluator(
+            model=lambda msgs: "Delta Corp generated $1.2B revenue with $450M cash, strong liquidity, solid solvency, and 15% profit margin."
+        )
+        result_full = evaluator_full.evaluate_case(case)
+        self.assertTrue(result_full.passed)
+
+    def test_think_leakage_detection_and_stripping(self):
+        case = EVALUATION_DATASET[0]  # finance-statement-interpretation
+        raw_response = (
+            "<think>\nLet's calculate $500M revenue...\n</think>\n"
+            "TechCorp generated $500M in revenue with net income of $100M and solid cash flow."
+        )
+        evaluator = FinanceModelEvaluator(model=lambda msgs: raw_response)
+        result = evaluator.evaluate_case(case)
+
+        self.assertTrue(result.has_think_leakage)
+        self.assertTrue(result.passed)
+        self.assertEqual(result.response, raw_response.strip())
+
+        case_strict = EvaluationCase(
+            case_id="test-think-isolation",
+            category="finance",
+            question="Question",
+            reference_answer="Answer",
+            required_concepts=["secret_concept"],
+        )
+        think_only_response = "<think>secret_concept is discussed here</think>Public summary without it."
+        result_think_only = FinanceModelEvaluator(model=lambda msgs: think_only_response).evaluate_case(case_strict)
+        self.assertTrue(result_think_only.has_think_leakage)
+        self.assertFalse(result_think_only.passed)
+
+    def test_backward_compatibility(self):
+        legacy_case = EvaluationCase(
+            case_id="legacy-case",
+            category="finance",
+            question="Legacy question?",
+            reference_answer="Legacy answer",
+            required_concepts=["legacy concept one", "legacy concept two"],
+        )
+        evaluator = FinanceModelEvaluator(
+            model=lambda msgs: "This response contains legacy concept one and legacy concept two."
+        )
+        result = evaluator.evaluate_case(legacy_case)
+        self.assertTrue(result.passed)
+        self.assertEqual(result.score, 1.0)
+        self.assertFalse(result.has_think_leakage)

@@ -32,7 +32,7 @@ class NewsIntelligenceAgent(BaseAgent):
         self.market = market.upper()
         self.limit = limit
         self.sentiment_classifier = sentiment_classifier
-        self.llm_service = llm_service or LLMService(model="fast")
+        self.llm_service = llm_service or LLMService(model="news")
 
     @property
     def name(self) -> str:

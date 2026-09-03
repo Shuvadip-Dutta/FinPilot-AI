@@ -24,7 +24,7 @@ class RiskAnalysisAgent(BaseAgent):
         self,
         llm_service: LLMCallable | None = None,
     ):
-        self.llm_service = llm_service
+        self.llm_service = llm_service or LLMService(model="risk")
 
     @property
     def name(self) -> str:
@@ -54,7 +54,7 @@ class RiskAnalysisAgent(BaseAgent):
             return AgentResult(response=response, tools_used=[])
 
         if self.llm_service is None:
-            self.llm_service = LLMService(model="reasoning")
+            self.llm_service = LLMService(model="risk")
 
         messages = self._build_risk_messages(
             state=state,

@@ -32,7 +32,7 @@ class PortfolioOptimizationAgent(BaseAgent):
             or PortfolioOptimizationEngine()
         )
         self.optimizer = optimizer or self.optimization_engine.optimize
-        self.llm_service = llm_service
+        self.llm_service = llm_service or LLMService(model="portfolio")
 
     @property
     def name(self) -> str:
@@ -65,7 +65,7 @@ class PortfolioOptimizationAgent(BaseAgent):
             )
 
         if self.llm_service is None:
-            self.llm_service = LLMService(model="reasoning")
+            self.llm_service = LLMService(model="portfolio")
 
         messages = self._build_explanation_messages(
             optimization_input=optimization_input,

@@ -2,7 +2,11 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from apps.ai.evaluation.benchmark import ModelBenchmarkResult, ModelBenchmarkRunner
+from apps.ai.evaluation.benchmark import (
+    ModelBenchmarkResult,
+    ModelBenchmarkRunner,
+    ModelIdentifier,
+)
 from apps.ai.evaluation.dataset import EVALUATION_DATASET
 from apps.ai.evaluation.schemas import EvaluationCase
 from apps.ai.services.llm_service import LLMService, ModelTier
@@ -41,6 +45,57 @@ class ModelBenchmarkTestCase(SimpleTestCase):
         self.assertEqual(fast.tested_tier, ModelTier.FAST)
         self.assertEqual(reasoning.tested_tier, ModelTier.REASONING)
         self.assertEqual(calls, [ModelTier.FAST, ModelTier.REASONING])
+
+    def test_explicit_model_identifier_is_passed_and_preserved(self):
+        seen = []
+
+        def factory(model):
+            seen.append(model)
+            return type(
+                "FakeService",
+                (),
+                {
+                    "model": model.value,
+                    "generate": lambda self, messages: "Revenue, profit, and cash flow.",
+                },
+            )()
+
+        runner = ModelBenchmarkRunner(llm_service_factory=factory)
+        result = runner.evaluate_case(
+            EVALUATION_DATASET[0],
+            ModelTier.REASONING,
+            model_identifier=ModelIdentifier.QWEN_3_6_27B,
+        )
+
+        self.assertEqual(seen, [ModelIdentifier.QWEN_3_6_27B])
+        self.assertEqual(result.model_identifier, "qwen/qwen3.6-27b")
+
+    def test_phase_8_model_identifiers_align_to_same_case(self):
+        def factory(model):
+            return type(
+                "FakeService",
+                (),
+                {
+                    "model": model.value,
+                    "generate": lambda self, messages: "Revenue, profit, and cash flow.",
+                },
+            )()
+
+        runner = ModelBenchmarkRunner(llm_service_factory=factory)
+        results = [
+            runner.evaluate_case(
+                EVALUATION_DATASET[0],
+                ModelTier.REASONING,
+                model_identifier=model,
+            )
+            for model in ModelIdentifier
+        ]
+
+        self.assertEqual([result.case_id for result in results], [EVALUATION_DATASET[0].case_id] * 3)
+        self.assertEqual(
+            [result.model_identifier for result in results],
+            [model.value for model in ModelIdentifier],
+        )
 
     def test_same_case_can_be_compared_across_tiers(self):
         case = EVALUATION_DATASET[0]

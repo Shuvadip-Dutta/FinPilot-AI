@@ -27,7 +27,7 @@ class WorkflowEvaluationSummary(BaseModel):
     missing_agents: list[str] = Field(default_factory=list)
     unexpected_agents: list[str] = Field(default_factory=list)
     evaluation_score: float = 0.0
-    required_concepts_missing: list[str] = Field(default_factory=list)
+    required_concepts_missing: list[str | list[str]] = Field(default_factory=list)
     workflow_errors: list[str] = Field(default_factory=list)
     tools_used: list[str] = Field(default_factory=list)
     latency_ms: float = 0.0

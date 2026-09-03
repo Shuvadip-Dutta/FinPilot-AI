@@ -38,7 +38,7 @@ class MarketAnalysisAgent(BaseAgent):
         self.market = market.upper()
         self.to_date = to_date
         self.from_date = from_date
-        self.llm_service = llm_service or LLMService(model="fast")
+        self.llm_service = llm_service or LLMService(model="market")
 
     @property
     def name(self) -> str:

@@ -349,7 +349,7 @@ class FinancialAnalysisAgent(BaseAgent):
         self.max_context_chars = int(
             getattr(settings, "FINANCIAL_ANALYSIS_CONTEXT_CHAR_LIMIT", 18000)
         )
-        self.llm_service = llm_service or LLMService(model="reasoning")
+        self.llm_service = llm_service or LLMService(model="financial")
 
     @property
     def name(self) -> str:

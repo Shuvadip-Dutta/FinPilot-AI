@@ -91,7 +91,7 @@ class NewsIntelligenceAgentTestCase(SimpleTestCase):
             ticker="RELIANCE",
             sentiment_classifier=lambda text: {"label": "positive", "confidence": 0.8},
         )
-        mock_llm_service.assert_called_once_with(model="fast")
+        mock_llm_service.assert_called_once_with(model="news")
 
     def test_no_news_returns_clear_message(self):
         agent = NewsIntelligenceAgent(

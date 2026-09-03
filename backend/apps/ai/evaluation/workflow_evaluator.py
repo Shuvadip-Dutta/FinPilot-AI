@@ -161,11 +161,14 @@ class MultiAgentWorkflowEvaluator:
             )
 
         normalized_response = self._normalize(model_response)
-        missing_concepts = [
-            concept
-            for concept in case.required_concepts
-            if self._normalize(concept) not in normalized_response
-        ]
+        missing_concepts = []
+        for concept in case.required_concepts:
+            if isinstance(concept, list):
+                if not any(self._normalize(alias) in normalized_response for alias in concept):
+                    missing_concepts.append(concept)
+            else:
+                if self._normalize(concept) not in normalized_response:
+                    missing_concepts.append(concept)
         total_concepts = len(case.required_concepts)
         score = (
             (total_concepts - len(missing_concepts)) / total_concepts

@@ -14,6 +14,7 @@ EvaluationCategory = Literal[
     "news",
     "risk",
     "portfolio",
+    "synthesis",
 ]
 
 
@@ -24,7 +25,7 @@ class EvaluationCase(BaseModel):
     category: EvaluationCategory
     question: str
     reference_answer: str
-    required_concepts: list[str]
+    required_concepts: list[str | list[str]]
     expected_tier: ModelTier | None = None
     expected_route: WorkflowRoute | None = None
     expected_agents: list[str] = Field(default_factory=list)
@@ -39,8 +40,9 @@ class EvaluationResult(BaseModel):
     response: str
     passed: bool
     score: float
-    missing_concepts: list[str]
+    missing_concepts: list[str | list[str]]
     expected_tier: ModelTier | None = None
+    has_think_leakage: bool = False
 
 
 class EvaluationReport(BaseModel):

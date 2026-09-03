@@ -111,7 +111,7 @@ class MarketAnalysisAgentTestCase(SimpleTestCase):
             ticker="RELIANCE",
         )
 
-        mock_llm_service.assert_called_once_with(model="fast")
+        mock_llm_service.assert_called_once_with(model="market")
 
     def test_historical_market_analysis_calls_both_tools(self):
         market_data_tool = MagicMock(return_value={"last_price": 1287.0})
