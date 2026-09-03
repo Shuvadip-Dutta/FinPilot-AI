@@ -1,0 +1,149 @@
+Model: qwen/qwen3.6-27b
+Case: market-price-daily-change
+Category: market
+Score: 1.0
+Passed: True
+Latency: 3974.20 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: market-volume-trading-activity
+Category: market
+Score: 1.0
+Passed: True
+Latency: 2287.96 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: market-52week-range-positioning
+Category: market
+Score: 0.75
+Passed: False
+Latency: 3990.54 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: market-exchange-comparison
+Category: market
+Score: 0.75
+Passed: False
+Latency: 4504.05 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: market-missing-data-cautious
+Category: market
+Score: 0.5
+Passed: False
+Latency: 4260.98 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: market-price-daily-change
+Category: market
+Score: 1.0
+Passed: True
+Latency: 1431.86 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: market-volume-trading-activity
+Category: market
+Score: 0.5
+Passed: False
+Latency: 1510.60 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: market-52week-range-positioning
+Category: market
+Score: 0.75
+Passed: False
+Latency: 1715.37 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: market-exchange-comparison
+Category: market
+Score: 0.75
+Passed: False
+Latency: 1875.23 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: market-missing-data-cautious
+Category: market
+Score: 1.0
+Passed: True
+Latency: 2676.08 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: market-price-daily-change
+Category: market
+Score: 0.75
+Passed: False
+Latency: 812.23 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: market-volume-trading-activity
+Category: market
+Score: 0.5
+Passed: False
+Latency: 1115.83 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: market-52week-range-positioning
+Category: market
+Score: 1.0
+Passed: True
+Latency: 1174.95 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: market-exchange-comparison
+Category: market
+Score: 0.25
+Passed: False
+Latency: 1473.22 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: market-missing-data-cautious
+Category: market
+Score: 0.75
+Passed: False
+Latency: 2186.66 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------

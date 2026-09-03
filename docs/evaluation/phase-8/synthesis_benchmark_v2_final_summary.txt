@@ -1,0 +1,149 @@
+Model: qwen/qwen3.6-27b
+Case: synthesis-finance-market-cross-agent
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 4715.50 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: synthesis-risk-portfolio-rebalancing
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 4250.42 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: synthesis-news-market-sentiment-impact
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 4763.04 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: synthesis-missing-data-conflicting-evidence
+Category: synthesis
+Score: 0.6666666666666666
+Passed: False
+Latency: 3095.92 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: synthesis-full-investment-recommendation
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 3741.30 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: synthesis-finance-market-cross-agent
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 7838.94 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: synthesis-risk-portfolio-rebalancing
+Category: synthesis
+Score: 0.8333333333333334
+Passed: False
+Latency: 5665.54 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: synthesis-news-market-sentiment-impact
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 2774.59 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: synthesis-missing-data-conflicting-evidence
+Category: synthesis
+Score: 0.6666666666666666
+Passed: False
+Latency: 2158.01 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: synthesis-full-investment-recommendation
+Category: synthesis
+Score: 1.0
+Passed: True
+Latency: 1499.69 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: synthesis-finance-market-cross-agent
+Category: synthesis
+Score: 0.6666666666666666
+Passed: False
+Latency: 2117.30 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: synthesis-risk-portfolio-rebalancing
+Category: synthesis
+Score: 0.5
+Passed: False
+Latency: 1652.52 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: synthesis-news-market-sentiment-impact
+Category: synthesis
+Score: 0.8333333333333334
+Passed: False
+Latency: 1451.22 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: synthesis-missing-data-conflicting-evidence
+Category: synthesis
+Score: 0.5
+Passed: False
+Latency: 1003.39 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: synthesis-full-investment-recommendation
+Category: synthesis
+Score: 0.7
+Passed: False
+Latency: 2971.78 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------

@@ -1,0 +1,149 @@
+Model: qwen/qwen3.6-27b
+Case: finance-statement-interpretation
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 4775.07 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: finance-numerical-reasoning
+Category: finance
+Score: 0.75
+Passed: False
+Latency: 1789.16 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: finance-missing-data-leverage
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 4264.50 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: finance-evidence-grounded
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 1990.47 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: finance-overall-conclusion
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 4473.48 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: finance-statement-interpretation
+Category: finance
+Score: 0.6666666666666666
+Passed: False
+Latency: 2644.42 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: finance-numerical-reasoning
+Category: finance
+Score: 0.75
+Passed: False
+Latency: 1107.71 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: finance-missing-data-leverage
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 1953.17 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: finance-evidence-grounded
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 489.55 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: finance-overall-conclusion
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 2590.62 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: finance-statement-interpretation
+Category: finance
+Score: 0.6666666666666666
+Passed: False
+Latency: 1634.11 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: finance-numerical-reasoning
+Category: finance
+Score: 0.25
+Passed: False
+Latency: 2170.17 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: finance-missing-data-leverage
+Category: finance
+Score: 1.0
+Passed: True
+Latency: 2216.63 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: finance-evidence-grounded
+Category: finance
+Score: 0.6666666666666666
+Passed: False
+Latency: 1030.00 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: finance-overall-conclusion
+Category: finance
+Score: 0.6
+Passed: False
+Latency: 1793.50 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------

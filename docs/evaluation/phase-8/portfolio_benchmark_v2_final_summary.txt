@@ -1,0 +1,149 @@
+Model: qwen/qwen3.6-27b
+Case: portfolio-allocation-rebalancing
+Category: portfolio
+Score: 0.5
+Passed: False
+Latency: 4782.54 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: portfolio-optimization-fidelity
+Category: portfolio
+Score: 0.0
+Passed: False
+Latency: 4348.55 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: portfolio-risk-return-sharpe
+Category: portfolio
+Score: 0.75
+Passed: False
+Latency: 3843.20 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: portfolio-constraints-missing-data
+Category: portfolio
+Score: 1.0
+Passed: True
+Latency: 3357.59 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.6-27b
+Case: portfolio-overall-synthesis
+Category: portfolio
+Score: 0.4
+Passed: False
+Latency: 4255.22 ms
+Think leakage: True
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: portfolio-allocation-rebalancing
+Category: portfolio
+Score: 0.5
+Passed: False
+Latency: 1911.15 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: portfolio-optimization-fidelity
+Category: portfolio
+Score: 0.75
+Passed: False
+Latency: 4704.99 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: portfolio-risk-return-sharpe
+Category: portfolio
+Score: 1.0
+Passed: True
+Latency: 2279.34 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: portfolio-constraints-missing-data
+Category: portfolio
+Score: 1.0
+Passed: True
+Latency: 1588.75 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: qwen/qwen3.8-27b
+Case: portfolio-overall-synthesis
+Category: portfolio
+Score: 1.0
+Passed: True
+Latency: 4337.75 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: portfolio-allocation-rebalancing
+Category: portfolio
+Score: 0.25
+Passed: False
+Latency: 2753.78 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: portfolio-optimization-fidelity
+Category: portfolio
+Score: 0.25
+Passed: False
+Latency: 3070.83 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: portfolio-risk-return-sharpe
+Category: portfolio
+Score: 0.25
+Passed: False
+Latency: 1183.89 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: portfolio-constraints-missing-data
+Category: portfolio
+Score: 0.75
+Passed: False
+Latency: 1255.59 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
+
+Model: openai/gpt-oss-20b
+Case: portfolio-overall-synthesis
+Category: portfolio
+Score: 1.0
+Passed: True
+Latency: 2121.31 ms
+Think leakage: False
+Error: None
+------------------------------------------------------------
