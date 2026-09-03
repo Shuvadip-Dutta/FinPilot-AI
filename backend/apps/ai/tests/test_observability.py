@@ -1,12 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
 from apps.ai.observability import AIObserver
 
 
-class AIObserverTestCase(SimpleTestCase):
+class AIObserverTestCase(TestCase):
 
     @patch("apps.ai.observability.logger")
     def test_graph_started_logs_expected_safe_metadata(self, mock_logger):
@@ -192,7 +192,7 @@ class AIObserverTestCase(SimpleTestCase):
         self.assertNotIn("letmein", payload["error_message"])
 
 
-class LangGraphObservabilityIntegrationTestCase(SimpleTestCase):
+class LangGraphObservabilityIntegrationTestCase(TestCase):
 
     @staticmethod
     def _make_agent(response="result"):

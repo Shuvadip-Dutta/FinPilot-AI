@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Annotated, Any, TypedDict
 
@@ -14,6 +15,7 @@ from apps.ai.graph.state import AgentState
 from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
 from apps.ai.graph.persistence import LangGraphPersistence
 from apps.ai.observability import AIObserver
+from apps.research.services.session_service import ResearchSessionService
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
@@ -78,7 +80,19 @@ class LangGraphResearchWorkflow:
         thread_id: str = "default",
     ) -> AgentState:
         """Execute the compiled graph for a user request."""
+        start_time = time.perf_counter()
         route = self.router.route(user_message)
+
+        session = ResearchSessionService.create_session(
+            user_message=user_message,
+            ticker=ticker,
+            market=market,
+            route=route,
+            thread_id=thread_id,
+        )
+        session.status = "RUNNING"
+        session.save(update_fields=["status"])
+
         initial_state = {
             "user_message": user_message,
             "ticker": ticker,
@@ -102,6 +116,15 @@ class LangGraphResearchWorkflow:
                 result_count=len(state.results),
                 error_count=len(state.errors),
             )
+
+            latency_ms = (time.perf_counter() - start_time) * 1000.0
+            ResearchSessionService.save_workflow_result(
+                session.id,
+                state,
+                latency_ms=latency_ms,
+                status="COMPLETED",
+            )
+
             return state
         except Exception as exc:
             self.observer.graph_failed(
@@ -110,6 +133,8 @@ class LangGraphResearchWorkflow:
                 error_type=type(exc).__name__,
                 error_message=str(exc),
             )
+            session.status = "FAILED"
+            session.save(update_fields=["status"])
             raise
 
     def _build_graph(self):

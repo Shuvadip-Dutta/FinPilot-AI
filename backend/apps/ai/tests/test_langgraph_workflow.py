@@ -1,6 +1,6 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
 from apps.ai.graph.router import WorkflowRouter
@@ -9,6 +9,7 @@ from apps.ai.services.schemas import AgentResult
 from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
 from apps.ai.portfolio.optimization import OptimizationInput
 from apps.ai.portfolio.schemas import Holding, Portfolio, PortfolioIntelligence
+from apps.research.models import ResearchEvidence, ResearchSession
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
@@ -27,7 +28,7 @@ def _test_checkpointer():
         serde=serializer,
     )
 
-class LangGraphResearchWorkflowTestCase(SimpleTestCase):
+class LangGraphResearchWorkflowTestCase(TestCase):
 
     def test_langgraph_workflow_returns_agent_state(self):
         workflow, _, _, _ = self._build_workflow(route="general")
@@ -718,4 +719,66 @@ class LangGraphResearchWorkflowTestCase(SimpleTestCase):
         self.assertIsInstance(
             state,
             AgentState,
-        )  
+        )
+
+    def test_workflow_persists_research_session_and_evidence(self):
+        workflow, _, _, _, synthesis = self._build_workflow(
+            route="general",
+            synthesis_agent=True,
+        )
+
+        state = workflow.run(
+            "Give me an overview of Reliance.",
+            ticker="RELIANCE",
+            market="INDIA",
+            thread_id="test-session-persist",
+        )
+
+        self.assertIsInstance(state, AgentState)
+
+        session = ResearchSession.objects.get(thread_id="test-session-persist")
+        self.assertEqual(session.user_message, "Give me an overview of Reliance.")
+        self.assertEqual(session.ticker, "RELIANCE")
+        self.assertEqual(session.market, "INDIA")
+        self.assertEqual(session.route, "general")
+        self.assertEqual(session.status, "COMPLETED")
+        self.assertIsNotNone(session.latency_ms)
+        self.assertGreater(session.latency_ms, 0.0)
+        self.assertEqual(session.final_synthesis, "Combined result")
+
+        evidence = ResearchEvidence.objects.filter(session=session)
+        self.assertGreaterEqual(evidence.count(), 3)
+        agent_names = set(evidence.values_list("agent_name", flat=True))
+        self.assertIn("financial", agent_names)
+        self.assertIn("market", agent_names)
+        self.assertIn("news", agent_names)
+        self.assertIn("synthesis", agent_names)
+
+    def test_workflow_failure_updates_session_status_to_failed(self):
+        workflow, _, market, _ = self._build_workflow(route="market")
+        market.run.side_effect = RuntimeError("Market node failure")
+
+        with self.assertRaises(RuntimeError):
+            workflow.run(
+                "What is the RELIANCE price?",
+                thread_id="failed-session-thread",
+            )
+
+        session = ResearchSession.objects.get(thread_id="failed-session-thread")
+        self.assertEqual(session.status, "FAILED")
+
+    def test_persistence_failure_marks_session_as_failed(self):
+        workflow, _, _, _ = self._build_workflow(route="market")
+
+        with patch(
+            "apps.ai.graph.langgraph_workflow.ResearchSessionService.save_workflow_result",
+            side_effect=RuntimeError("Database failure during persistence"),
+        ):
+            with self.assertRaises(RuntimeError):
+                workflow.run(
+                    "What is the RELIANCE price?",
+                    thread_id="persist-fail-thread",
+                )
+
+        session = ResearchSession.objects.get(thread_id="persist-fail-thread")
+        self.assertEqual(session.status, "FAILED")
