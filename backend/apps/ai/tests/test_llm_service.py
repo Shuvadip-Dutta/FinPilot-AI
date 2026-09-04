@@ -43,7 +43,7 @@ class LLMServiceTestCase(SimpleTestCase):
                     "content": "Tell me about Reliance.",
                 }
             ],
-            max_completion_tokens=4096,
+            max_completion_tokens=1000,
         )
 
     @patch("apps.ai.services.llm_service.GroqProvider")
@@ -67,7 +67,7 @@ class LLMServiceTestCase(SimpleTestCase):
         self.assertEqual(res, "Response")
         mock_provider.generate.assert_called_once_with(
             messages=[{"role": "user", "content": "Hello"}],
-            max_completion_tokens=4096,
+            max_completion_tokens=1000,
         )
         self.assertEqual(budget_manager.last_usage, mock_provider.last_usage)
 
@@ -97,7 +97,7 @@ class LLMServiceTestCase(SimpleTestCase):
 
         self.assertEqual(result, mock_response)
         mock_provider.generate_with_tools.assert_called_once_with(
-            messages=messages, tools=tools, max_completion_tokens=4096
+            messages=messages, tools=tools, max_completion_tokens=1000
         )
         self.assertEqual(
             budget_manager.last_usage,
@@ -130,11 +130,11 @@ class LLMServiceTestCase(SimpleTestCase):
     ):
         mock_provider = mock_groq_provider.return_value
         small_budget = TokenBudgetManager(
-            max_request_tokens=5000, safety_reserve_tokens=1000
+            max_request_tokens=2000, safety_reserve_tokens=500
         )
         service = LLMService(token_budget_manager=small_budget)
 
-        large_messages = [{"role": "user", "content": "X" * 10000}]
+        large_messages = [{"role": "user", "content": "X" * 3000}]
 
         with self.assertRaises(TokenBudgetExceededError):
             service.generate(large_messages)
@@ -147,11 +147,11 @@ class LLMServiceTestCase(SimpleTestCase):
     ):
         mock_provider = mock_groq_provider.return_value
         small_budget = TokenBudgetManager(
-            max_request_tokens=5000, safety_reserve_tokens=1000
+            max_request_tokens=2000, safety_reserve_tokens=500
         )
         service = LLMService(token_budget_manager=small_budget)
 
-        large_messages = [{"role": "user", "content": "X" * 10000}]
+        large_messages = [{"role": "user", "content": "X" * 3000}]
         tools = [{"type": "function", "function": {"name": "test_tool"}}]
 
         with self.assertRaises(TokenBudgetExceededError):
@@ -176,7 +176,7 @@ class LLMServiceTestCase(SimpleTestCase):
         self, mock_groq_provider
     ):
         tight_budget = TokenBudgetManager(
-            max_request_tokens=4000, safety_reserve_tokens=0
+            max_request_tokens=800, safety_reserve_tokens=0
         )
         service = LLMService(token_budget_manager=tight_budget)
 
@@ -366,4 +366,81 @@ class LLMServiceTestCase(SimpleTestCase):
 
         self.assertEqual(
             s2.token_budget_manager.last_usage, mock_provider.last_usage
+        )
+
+    @patch("apps.ai.services.llm_service.GroqProvider")
+    def test_generate_accepts_and_forwards_max_completion_tokens(
+        self, mock_groq_provider
+    ):
+        mock_provider = mock_groq_provider.return_value
+        mock_provider.generate.return_value = "Response"
+        mock_provider.last_usage = None
+
+        mock_manager = MagicMock()
+        service = LLMService(token_budget_manager=mock_manager)
+
+        messages = [{"role": "user", "content": "Hello"}]
+        result = service.generate(messages, max_completion_tokens=512)
+
+        self.assertEqual(result, "Response")
+        mock_manager.validate_request_budget.assert_called_once_with(
+            messages=messages,
+            max_output_tokens=512,
+            tools=None,
+        )
+        mock_provider.generate.assert_called_once_with(
+            messages=messages,
+            max_completion_tokens=512,
+        )
+
+    @patch("apps.ai.services.llm_service.GroqProvider")
+    def test_output_token_ceiling_enforced(self, mock_groq_provider):
+        mock_provider = mock_groq_provider.return_value
+        mock_provider.generate.return_value = "Response"
+        mock_provider.last_usage = None
+
+        mock_manager = MagicMock()
+        service = LLMService(token_budget_manager=mock_manager)
+        messages = [{"role": "user", "content": "Hello"}]
+
+        # 1. Default generation (no explicit argument) is capped at 1000
+        service.generate(messages)
+        mock_manager.validate_request_budget.assert_called_with(
+            messages=messages,
+            max_output_tokens=1000,
+            tools=None,
+        )
+        mock_provider.generate.assert_called_with(
+            messages=messages,
+            max_completion_tokens=1000,
+        )
+
+        mock_manager.reset_mock()
+        mock_provider.reset_mock()
+
+        # 2. Explicit 4096 is capped to 1000
+        service.generate(messages, max_completion_tokens=4096)
+        mock_manager.validate_request_budget.assert_called_with(
+            messages=messages,
+            max_output_tokens=1000,
+            tools=None,
+        )
+        mock_provider.generate.assert_called_with(
+            messages=messages,
+            max_completion_tokens=1000,
+        )
+
+        mock_manager.reset_mock()
+        mock_provider.reset_mock()
+
+        # 3. Explicit 512 remains 512
+        service.generate(messages, max_completion_tokens=512)
+        mock_manager.validate_request_budget.assert_called_with(
+            messages=messages,
+            max_output_tokens=512,
+            tools=None,
+        )
+        mock_provider.generate.assert_called_with(
+            messages=messages,
+            max_completion_tokens=512,
         )

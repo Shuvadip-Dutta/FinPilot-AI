@@ -46,8 +46,10 @@ class GroqProvider:
     def _reasoning_request_kwargs(self) -> dict[str, object]:
         return {
             "reasoning_format": "hidden",
-            "max_completion_tokens": int(
-                getattr(settings, "REASONING_MAX_COMPLETION_TOKENS", 4096)
+            "max_completion_tokens": getattr(
+                settings,
+                "REASONING_MAX_COMPLETION_TOKENS",
+                4096,
             ),
         }
 

@@ -84,6 +84,10 @@ def _parse_int(val: str | None, default: int) -> int:
 
 
 # Groq token budget and quota limits
+GROQ_MAX_OUTPUT_TOKENS = _parse_int(
+    os.getenv("GROQ_MAX_OUTPUT_TOKENS"),
+    1000,
+)
 GROQ_TPM_LIMIT = _parse_opt_int(os.getenv("GROQ_TPM_LIMIT"))
 GROQ_TPD_LIMIT = _parse_opt_int(os.getenv("GROQ_TPD_LIMIT"))
 GROQ_MAX_REQUEST_TOKENS = _parse_int(

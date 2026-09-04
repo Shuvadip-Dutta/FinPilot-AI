@@ -75,14 +75,22 @@ class LLMService:
 
         return model
 
-    def _get_max_output_tokens(self, is_tool_call: bool = False) -> int:
-        if is_tool_call:
-            return int(
-                getattr(settings, "TOOL_CALL_MAX_COMPLETION_TOKENS", 4096)
-            )
+    def _get_provider_output_ceiling(self) -> int:
         return int(
-            getattr(settings, "REASONING_MAX_COMPLETION_TOKENS", 4096)
+            getattr(settings, "GROQ_MAX_OUTPUT_TOKENS", 1000)
         )
+
+    def _get_max_output_tokens(self, is_tool_call: bool = False) -> int:
+        ceiling = self._get_provider_output_ceiling()
+        if is_tool_call:
+            configured = int(
+                getattr(settings, "TOOL_CALL_MAX_COMPLETION_TOKENS", 512)
+            )
+        else:
+            configured = int(
+                getattr(settings, "REASONING_MAX_COMPLETION_TOKENS", 4096)
+            )
+        return min(configured, ceiling)
 
     def _record_provider_usage(self, response: Any = None) -> None:
         usage = getattr(self.provider, "last_usage", None)
@@ -116,8 +124,14 @@ class LLMService:
     def generate(
         self,
         messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
     ) -> str:
-        max_output_tokens = self._get_max_output_tokens(is_tool_call=False)
+        ceiling = self._get_provider_output_ceiling()
+        if max_completion_tokens is not None:
+            max_output_tokens = min(int(max_completion_tokens), ceiling)
+        else:
+            max_output_tokens = self._get_max_output_tokens(is_tool_call=False)
+
         self.token_budget_manager.validate_request_budget(
             messages=messages,
             max_output_tokens=max_output_tokens,
