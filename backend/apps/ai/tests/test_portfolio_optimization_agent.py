@@ -12,9 +12,15 @@ from apps.ai.portfolio.optimization import (
     OptimizationResult,
 )
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    LLMUsage,
+    TokenBudgetManager,
+)
 
 
 class PortfolioOptimizationAgentTestCase(SimpleTestCase):
+
 
     @staticmethod
     def _input() -> OptimizationInput:
@@ -169,7 +175,9 @@ class PortfolioOptimizationAgentTestCase(SimpleTestCase):
         self.assertEqual(context["OPTIMIZATION INPUT"]["tickers"], ["AAA", "BBB", "CCC"])
         self.assertEqual(context["OPTIMIZATION RESULT"]["optimized_weights"], {"AAA": 0.45, "BBB": 0.35, "CCC": 0.2})
 
-    def test_result_contract_is_agent_result(self):
+    @patch("apps.ai.agents.portfolio_optimization.LLMService")
+    def test_result_contract_is_agent_result(self, mock_llm_service):
+        mock_llm_service.return_value = MagicMock(return_value="Explanation")
         agent = PortfolioOptimizationAgent(
             optimizer=lambda input_data: self._success_result(),
         )
@@ -177,7 +185,9 @@ class PortfolioOptimizationAgentTestCase(SimpleTestCase):
         result = agent.run(self._input())
         self.assertIsInstance(result, AgentResult)
 
-    def test_agent_does_not_recalculate_optimizer_metrics(self):
+    @patch("apps.ai.agents.portfolio_optimization.LLMService")
+    def test_agent_does_not_recalculate_optimizer_metrics(self, mock_llm_service):
+        mock_llm_service.return_value = MagicMock(return_value="Explanation")
         optimizer = MagicMock(return_value=self._success_result())
         agent = PortfolioOptimizationAgent(optimizer=optimizer)
         agent.run(self._input())
@@ -195,7 +205,9 @@ class PortfolioOptimizationAgentTestCase(SimpleTestCase):
         self.assertIn("At least two assets are required", result.response)
         self.assertEqual(result.tools_used, [])
 
-    def test_no_real_external_dependency(self):
+    @patch("apps.ai.agents.portfolio_optimization.LLMService")
+    def test_no_real_external_dependency(self, mock_llm_service):
+        mock_llm_service.return_value = MagicMock(return_value="Explanation")
         called = []
 
         def optimizer(input_data):
@@ -207,3 +219,125 @@ class PortfolioOptimizationAgentTestCase(SimpleTestCase):
 
         self.assertTrue(called)
         self.assertIsInstance(result, AgentResult)
+
+    def test_constrained_tier_uses_512_token_limit_and_preserves_metrics(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=3750,
+                completion_tokens=3750,
+                total_tokens=7500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CONSTRAINED)
+
+        llm_service = MagicMock(return_value="Constrained allocation explanation.")
+        llm_service.token_budget_manager = manager
+
+        agent = PortfolioOptimizationAgent(
+            optimizer=lambda input_data: self._success_result(),
+            llm_service=llm_service,
+        )
+
+        result = agent.run(self._input())
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Constrained allocation explanation.")
+        self.assertEqual(result.tools_used, ["portfolio_optimization"])
+        self.assertEqual(result.data["optimized_weights"], {"AAA": 0.7, "BBB": 0.3})
+        self.assertEqual(result.data["expected_return"], 0.12)
+        self.assertEqual(result.data["volatility"], 0.18)
+        self.assertEqual(result.data["sharpe_ratio"], 0.556)
+        llm_service.assert_called_once()
+
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 512)
+
+        messages = llm_service.call_args[0][0]
+        context = json.loads(messages[1]["content"])
+        self.assertIn("historical_data_summary", context["OPTIMIZATION INPUT"])
+
+    def test_critical_tier_uses_256_token_limit_and_trims_context(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=4750,
+                completion_tokens=4750,
+                total_tokens=9500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CRITICAL)
+
+        llm_service = MagicMock(return_value="Critical allocation explanation.")
+        llm_service.token_budget_manager = manager
+
+        agent = PortfolioOptimizationAgent(
+            optimizer=lambda input_data: self._success_result(),
+            llm_service=llm_service,
+        )
+
+        result = agent.run(self._input())
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Critical allocation explanation.")
+        self.assertEqual(result.tools_used, ["portfolio_optimization"])
+        self.assertEqual(result.data["optimized_weights"], {"AAA": 0.7, "BBB": 0.3})
+        self.assertEqual(result.data["sharpe_ratio"], 0.556)
+        llm_service.assert_called_once()
+
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 256)
+
+        messages = llm_service.call_args[0][0]
+        context = json.loads(messages[1]["content"])
+        self.assertNotIn("historical_data_summary", context["OPTIMIZATION INPUT"])
+
+    def test_exhausted_tier_bypasses_llm_and_returns_deterministic_fallback(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=5000,
+                completion_tokens=5000,
+                total_tokens=10000,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.EXHAUSTED)
+
+        llm_service = MagicMock(return_value="Should not be called.")
+        llm_service.token_budget_manager = manager
+
+        agent = PortfolioOptimizationAgent(
+            optimizer=lambda input_data: self._success_result(),
+            llm_service=llm_service,
+        )
+
+        result = agent.run(self._input())
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("Portfolio optimization completed.", result.response)
+        self.assertIn("Recommended allocation: AAA: 70.00%, BBB: 30.00%", result.response)
+        self.assertIn("Expected annual return: 12.00%", result.response)
+        self.assertIn("Annual volatility: 18.00%", result.response)
+        self.assertIn("Sharpe ratio: 0.556", result.response)
+        self.assertEqual(result.tools_used, ["portfolio_optimization"])
+        self.assertEqual(result.data["optimized_weights"], {"AAA": 0.7, "BBB": 0.3})
+        self.assertEqual(result.data["expected_return"], 0.12)
+        self.assertEqual(result.data["volatility"], 0.18)
+        self.assertEqual(result.data["sharpe_ratio"], 0.556)
+        llm_service.assert_not_called()
+

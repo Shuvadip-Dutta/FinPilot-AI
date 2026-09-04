@@ -8,6 +8,10 @@ from apps.ai.exceptions import LLMError
 from apps.ai.graph.state import AgentState
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    get_default_token_budget_manager,
+)
 
 
 LLMGenerate = Callable[[list[dict[str, str]]], str]
@@ -33,12 +37,44 @@ class FinalSynthesisAgent(BaseAgent):
         state: AgentState,
     ) -> AgentResult:
         """Synthesize the available workflow results."""
+        tier = self._get_degradation_tier()
+        tools_used = self._collect_specialist_tools_used(state)
 
-        context = self._build_context(state)
+        if tier == DegradationTier.EXHAUSTED:
+            evidence = self._collect_structured_evidence(state)
+            missing_info = evidence.get("missing_information", [])
+
+            available_keys = [
+                key.replace("_optimization", "").replace("_", " ").title()
+                for key, val in state.results.items()
+                if isinstance(val, AgentResult) and val.response and val.response.strip()
+            ]
+            available_str = (
+                f"Available specialist results: {', '.join(available_keys)}."
+                if available_keys
+                else "No specialist results available."
+            )
+            missing_str = (
+                f" Missing: {' '.join(missing_info)}"
+                if missing_info
+                else ""
+            )
+
+            return AgentResult(
+                response=(
+                    f"Final synthesis for {state.ticker or 'the requested company'} could not be completed: "
+                    f"the LLM budget is exhausted. {available_str}{missing_str}"
+                ),
+                tools_used=tools_used,
+                data=evidence,
+            )
+
+        context = self._build_context(state, tier=tier)
         messages = self._build_messages(state, context)
+        max_tokens = self._get_max_completion_tokens_for_tier(tier)
 
         try:
-            response = self.llm_service(messages)
+            response = self._call_llm(messages, max_completion_tokens=max_tokens)
         except LLMError:
             raise
         except (ValueError, TypeError) as exc:
@@ -47,7 +83,8 @@ class FinalSynthesisAgent(BaseAgent):
                     "Unable to generate the final synthesis: "
                     f"{exc}"
                 ),
-                tools_used=[],
+                tools_used=tools_used,
+                data=self._collect_structured_evidence(state),
             )
 
         if not isinstance(response, str) or not response.strip():
@@ -56,15 +93,97 @@ class FinalSynthesisAgent(BaseAgent):
                     "Unable to generate the final synthesis: "
                     "the language model returned an empty response."
                 ),
-                tools_used=[],
+                tools_used=tools_used,
+                data=self._collect_structured_evidence(state),
             )
 
-        tools_used = self._collect_tools_used(state)
+        all_tools = list(tools_used)
+        if "llm_synthesis" not in all_tools:
+            all_tools.append("llm_synthesis")
 
         return AgentResult(
             response=response.strip(),
-            tools_used=tools_used,
+            tools_used=all_tools,
+            data=self._collect_structured_evidence(state),
         )
+
+    def _get_degradation_tier(self) -> DegradationTier:
+        manager = getattr(self.llm_service, "token_budget_manager", None)
+        if manager is None and hasattr(self.llm_service, "__self__"):
+            manager = getattr(
+                self.llm_service.__self__, "token_budget_manager", None
+            )
+
+        if manager is not None and hasattr(manager, "get_degradation_tier"):
+            res = manager.get_degradation_tier()
+            if isinstance(res, DegradationTier):
+                return res
+
+        return get_default_token_budget_manager().get_degradation_tier()
+
+    @staticmethod
+    def _get_max_completion_tokens_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 2000
+        if tier == DegradationTier.CRITICAL:
+            return 1000
+        return None
+
+    def _call_llm(
+        self,
+        messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
+    ) -> str:
+        if max_completion_tokens is not None:
+            try:
+                return self.llm_service(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+            except TypeError:
+                pass
+
+        return self.llm_service(messages)
+
+    @staticmethod
+    def _collect_specialist_tools_used(state: AgentState) -> list[str]:
+        tools: list[str] = []
+        for value in state.results.values():
+            if not isinstance(value, AgentResult):
+                continue
+            for tool in value.tools_used:
+                if tool not in tools:
+                    tools.append(tool)
+        return tools
+
+    @staticmethod
+    def _collect_structured_evidence(state: AgentState) -> dict[str, object]:
+        evidence: dict[str, object] = {}
+        missing_information: list[str] = []
+
+        ordered_names = [
+            ("financial", "Financial analysis was not available."),
+            ("market", "Market analysis was not available."),
+            ("news", "News intelligence was not available."),
+            ("risk", "Risk analysis was not available."),
+            ("portfolio_optimization", "Portfolio analysis was not available."),
+        ]
+
+        for result_key, missing_text in ordered_names:
+            val = state.results.get(result_key)
+            if isinstance(val, AgentResult):
+                if val.data is not None:
+                    evidence[result_key] = val.data
+                if not val.response or not val.response.strip():
+                    missing_information.append(missing_text)
+            elif val is not None:
+                evidence[result_key] = str(val)
+            else:
+                missing_information.append(missing_text)
+
+        evidence["missing_information"] = missing_information
+        if state.errors:
+            evidence["workflow_errors"] = state.errors
+        return evidence
 
     @staticmethod
     def _build_messages(
@@ -118,6 +237,7 @@ class FinalSynthesisAgent(BaseAgent):
     @staticmethod
     def _build_context(
         state: AgentState,
+        tier: DegradationTier = DegradationTier.NORMAL,
     ) -> dict[str, object]:
         sections: dict[str, object] = {}
         missing_information: list[str] = []
@@ -173,6 +293,32 @@ class FinalSynthesisAgent(BaseAgent):
         sections["_CONTEXT_METADATA"] = {
             "missing_information": missing_information,
         }
+
+        if tier == DegradationTier.CRITICAL:
+            for title, section in sections.items():
+                if isinstance(section, dict) and "response" in section:
+                    section["response"] = FinalSynthesisAgent._bounded_text(
+                        section["response"],
+                        150 if title != "PORTFOLIO ANALYSIS" else 300,
+                    )
+                if isinstance(section, dict) and "data" in section:
+                    section["data"] = FinalSynthesisAgent._minimum_data(section["data"])
+                if isinstance(section, dict):
+                    section.pop("tools_used", None)
+            sections["_CONTEXT_METADATA"] = {"missing_information": missing_information}
+            return sections
+
+        if tier == DegradationTier.CONSTRAINED:
+            for title, section in sections.items():
+                if isinstance(section, dict) and "response" in section:
+                    section["response"] = FinalSynthesisAgent._bounded_text(
+                        section["response"],
+                        350 if title != "PORTFOLIO ANALYSIS" else 700,
+                    )
+            sections["_CONTEXT_METADATA"] = {"missing_information": missing_information}
+            if FinalSynthesisAgent._serialized_size(sections) <= FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
+                return sections
+
         if FinalSynthesisAgent._serialized_size(sections) <= FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
             return sections
 
@@ -333,4 +479,4 @@ class FinalSynthesisAgent(BaseAgent):
         if "llm_synthesis" not in tools:
             tools.append("llm_synthesis")
 
-        return tools
+        return tools

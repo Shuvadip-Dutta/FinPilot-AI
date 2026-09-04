@@ -10,6 +10,10 @@ from apps.ai.exceptions import LLMError
 from apps.ai.graph.state import AgentState
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    get_default_token_budget_manager,
+)
 
 LLMCallable = Callable[[list[dict[str, str]]], str]
 
@@ -56,16 +60,38 @@ class RiskAnalysisAgent(BaseAgent):
         if self.llm_service is None:
             self.llm_service = LLMService(model="risk")
 
+        tier = self._get_degradation_tier()
+
+        evidence = {
+            "financial": financial_result.data if financial_result else None,
+            "market": market_result.data if market_result else None,
+            "news": news_result.data if news_result else None,
+            "missing_information": missing_information,
+        }
+
+        if tier == DegradationTier.EXHAUSTED:
+            return AgentResult(
+                response=(
+                    f"Risk analysis for {state.ticker or 'the requested company'} could not be completed: "
+                    "the LLM budget is exhausted."
+                ),
+                tools_used=[],
+                data=evidence,
+            )
+
         messages = self._build_risk_messages(
             state=state,
             financial_result=financial_result,
             market_result=market_result,
             news_result=news_result,
             missing_information=missing_information,
+            tier=tier,
         )
 
+        max_tokens = self._get_max_completion_tokens_for_tier(tier)
+
         try:
-            response = self.llm_service(messages)
+            response = self._call_llm(messages, max_completion_tokens=max_tokens)
         except LLMError:
             raise
 
@@ -76,9 +102,55 @@ class RiskAnalysisAgent(BaseAgent):
                     "the reasoning model returned an empty response."
                 ),
                 tools_used=[],
+                data=evidence,
             )
 
-        return AgentResult(response=response.strip(), tools_used=[])
+        return AgentResult(response=response.strip(), tools_used=[], data=evidence)
+
+    def _get_degradation_tier(self) -> DegradationTier:
+        manager = getattr(self.llm_service, "token_budget_manager", None)
+        if manager is None and hasattr(self.llm_service, "__self__"):
+            manager = getattr(
+                self.llm_service.__self__, "token_budget_manager", None
+            )
+
+        if manager is not None and hasattr(manager, "get_degradation_tier"):
+            res = manager.get_degradation_tier()
+            if isinstance(res, DegradationTier):
+                return res
+
+        return get_default_token_budget_manager().get_degradation_tier()
+
+    @staticmethod
+    def _get_max_completion_tokens_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 1000
+        if tier == DegradationTier.CRITICAL:
+            return 512
+        return None
+
+    def _call_llm(
+        self,
+        messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
+    ) -> str:
+        try:
+            if isinstance(self.llm_service, LLMService):
+                return self.llm_service.generate(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+        except TypeError:
+            pass
+
+        if max_completion_tokens is not None:
+            try:
+                return self.llm_service(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+            except TypeError:
+                pass
+
+        return self.llm_service(messages)
 
     @staticmethod
     def _coerce_result(value: object) -> AgentResult | None:
@@ -98,6 +170,7 @@ class RiskAnalysisAgent(BaseAgent):
         market_result: AgentResult | None,
         news_result: AgentResult | None,
         missing_information: list[str],
+        tier: DegradationTier = DegradationTier.NORMAL,
     ) -> list[dict[str, str]]:
         system_prompt = (
             "You are the risk interpretation specialist for FinPilot AI. "
@@ -120,6 +193,7 @@ class RiskAnalysisAgent(BaseAgent):
             market_result,
             news_result,
             missing_information,
+            tier=tier,
         )
 
         serialized_context = json.dumps(
@@ -143,6 +217,7 @@ class RiskAnalysisAgent(BaseAgent):
         market_result: AgentResult | None,
         news_result: AgentResult | None,
         missing_information: list[str],
+        tier: DegradationTier = DegradationTier.NORMAL,
     ) -> dict[str, object]:
         financial_data = (
             self._reduce_financial_evidence(financial_result.data)
@@ -181,7 +256,16 @@ class RiskAnalysisAgent(BaseAgent):
                 "INSTRUCTION": "Provide a focused risk interpretation based only on the supplied specialist outputs; do not invent unsupported quantitative risk metrics.",
             }
 
-        for prose_limit in (self.SPECIALIST_PROSE_CHAR_LIMIT, 350, 150):
+        if tier == DegradationTier.CRITICAL:
+            compact_context = make_context(0)
+            compact_context["FINANCIAL STRUCTURED EVIDENCE"] = self._compact_financial_evidence(financial_data)
+            compact_context["MARKET STRUCTURED EVIDENCE"] = self._compact_market_evidence(market_data)
+            compact_context["NEWS STRUCTURED EVIDENCE"] = self._compact_news_evidence(news_data)
+            return compact_context
+
+        prose_limits = (350, 150) if tier == DegradationTier.CONSTRAINED else (self.SPECIALIST_PROSE_CHAR_LIMIT, 350, 150)
+
+        for prose_limit in prose_limits:
             candidate = make_context(prose_limit)
             if self._serialized_size(candidate) <= self.RISK_CONTEXT_CHAR_LIMIT:
                 return candidate
@@ -382,4 +466,4 @@ class RiskAnalysisAgent(BaseAgent):
     ) -> object:
         if result is None:
             return unavailable_message
-        return result.response
+        return result.response

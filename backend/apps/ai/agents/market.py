@@ -9,6 +9,10 @@ from apps.ai.exceptions import LLMError
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    get_default_token_budget_manager,
+)
 
 
 ResearchTool = Callable[..., dict[str, object]]
@@ -82,15 +86,42 @@ class MarketAnalysisAgent(BaseAgent):
                 tools_used=tools_used,
             )
 
+        tier = self._get_degradation_tier()
+
+        evidence = {
+            "ticker": ticker,
+            "market": self.market,
+        }
+        if self._has_usable_quotes(market_data):
+            evidence["market_data"] = market_data
+        if historical_data is not None:
+            evidence["historical_data"] = historical_data
+
+        if tier == DegradationTier.EXHAUSTED:
+            summary = self._build_summary(ticker, market_data, historical_data)
+            return AgentResult(
+                response=summary,
+                tools_used=tools_used,
+                data=evidence,
+            )
+
+        effective_historical_data = self._apply_historical_degradation(
+            historical_data, tier
+        )
+
         messages = self._build_analysis_messages(
             message=message,
             ticker=ticker,
             market_data=market_data,
-            historical_data=historical_data,
+            historical_data=effective_historical_data,
         )
 
+        max_completion_tokens = self._get_max_completion_tokens_for_tier(tier)
+
         try:
-            response = self.llm_service(messages)
+            response = self._call_llm(
+                messages, max_completion_tokens=max_completion_tokens
+            )
         except LLMError:
             raise
 
@@ -103,20 +134,78 @@ class MarketAnalysisAgent(BaseAgent):
                 tools_used=tools_used,
             )
 
-        evidence = {
-            "ticker": ticker,
-            "market": self.market,
-        }
-        if self._has_usable_quotes(market_data):
-            evidence["market_data"] = market_data
-        if historical_data is not None:
-            evidence["historical_data"] = historical_data
-
         return AgentResult(
             response=response.strip(),
             tools_used=tools_used,
             data=evidence,
         )
+
+    def _get_degradation_tier(self) -> DegradationTier:
+        manager = getattr(self.llm_service, "token_budget_manager", None)
+        if manager is None and hasattr(self.llm_service, "__self__"):
+            manager = getattr(
+                self.llm_service.__self__, "token_budget_manager", None
+            )
+
+        if manager is not None and hasattr(manager, "get_degradation_tier"):
+            return manager.get_degradation_tier()
+
+        return get_default_token_budget_manager().get_degradation_tier()
+
+    @staticmethod
+    def _apply_historical_degradation(
+        historical_data: dict[str, object] | None,
+        tier: DegradationTier,
+    ) -> dict[str, object] | None:
+        if not isinstance(historical_data, dict) or not historical_data:
+            return historical_data
+
+        candles = historical_data.get("candles")
+        if not isinstance(candles, list) or not candles:
+            return historical_data
+
+        if tier == DegradationTier.CONSTRAINED:
+            limit = 15
+        elif tier == DegradationTier.CRITICAL:
+            limit = 5
+        else:
+            return historical_data
+
+        if len(candles) <= limit:
+            return historical_data
+
+        return {
+            **historical_data,
+            "candles": candles[-limit:],
+        }
+
+    @staticmethod
+    def _get_max_completion_tokens_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 512
+        if tier == DegradationTier.CRITICAL:
+            return 256
+        return None
+
+    def _call_llm(
+        self,
+        messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
+    ) -> str:
+        if isinstance(self.llm_service, LLMService):
+            return self.llm_service.generate(
+                messages, max_completion_tokens=max_completion_tokens
+            )
+
+        if max_completion_tokens is not None:
+            try:
+                return self.llm_service(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+            except TypeError:
+                pass
+
+        return self.llm_service(messages)
 
     def _resolve_date_range(self, message: str) -> tuple[str | None, str | None]:
         if self.to_date:

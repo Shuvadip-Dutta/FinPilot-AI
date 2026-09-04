@@ -3,15 +3,13 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase, override_settings
 
 from apps.ai.services.providers.groq import GroqProvider
+from apps.ai.services.token_budget import LLMUsage
 
 
 class GroqProviderTestCase(SimpleTestCase):
 
-    @patch(
-        "apps.ai.services.providers.groq.Groq"
-    )
+    @patch("apps.ai.services.providers.groq.Groq")
     def test_generate(self, mock_groq):
-
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
 
@@ -19,10 +17,11 @@ class GroqProviderTestCase(SimpleTestCase):
         mock_response.choices[0].message.content = (
             "Reliance Industries is a major Indian company."
         )
+        mock_response.usage.prompt_tokens = 15
+        mock_response.usage.completion_tokens = 25
+        mock_response.usage.total_tokens = 40
 
-        mock_client.chat.completions.create.return_value = (
-            mock_response
-        )
+        mock_client.chat.completions.create.return_value = mock_response
 
         provider = GroqProvider(model="qwen/qwen3.6-27b")
 
@@ -40,7 +39,9 @@ class GroqProviderTestCase(SimpleTestCase):
             "Reliance Industries is a major Indian company.",
         )
         self.assertEqual(
-            mock_client.chat.completions.create.call_args.kwargs["reasoning_format"],
+            mock_client.chat.completions.create.call_args.kwargs[
+                "reasoning_format"
+            ],
             "hidden",
         )
         self.assertEqual(
@@ -49,15 +50,26 @@ class GroqProviderTestCase(SimpleTestCase):
             ],
             4096,
         )
+        self.assertEqual(
+            provider.last_usage,
+            LLMUsage(
+                prompt_tokens=15,
+                completion_tokens=25,
+                total_tokens=40,
+                model="qwen/qwen3.6-27b",
+            ),
+        )
 
     @override_settings(REASONING_MAX_COMPLETION_TOKENS=4096)
     @patch("apps.ai.services.providers.groq.Groq")
-    def test_reasoning_generation_uses_configured_completion_limit(self, mock_groq):
+    def test_reasoning_generation_uses_configured_completion_limit(
+        self, mock_groq
+    ):
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
-        mock_client.chat.completions.create.return_value.choices[0].message.content = (
-            "Configured answer"
-        )
+        mock_client.chat.completions.create.return_value.choices[
+            0
+        ].message.content = "Configured answer"
 
         with override_settings(REASONING_MODEL="configured-reasoning-model"):
             provider = GroqProvider(model="configured-reasoning-model")
@@ -67,9 +79,40 @@ class GroqProviderTestCase(SimpleTestCase):
         self.assertEqual(request_kwargs["reasoning_format"], "hidden")
         self.assertEqual(request_kwargs["max_completion_tokens"], 4096)
 
-    @patch(
-        "apps.ai.services.providers.groq.Groq"
-    )
+    @patch("apps.ai.services.providers.groq.Groq")
+    def test_generate_forwards_explicit_max_completion_tokens(self, mock_groq):
+        mock_client = MagicMock()
+        mock_groq.return_value = mock_client
+        mock_client.chat.completions.create.return_value.choices[
+            0
+        ].message.content = "Answer"
+
+        provider = GroqProvider(model="llama-3.1-8b-instant")
+        provider.generate(
+            [{"role": "user", "content": "Query"}],
+            max_completion_tokens=2048,
+        )
+
+        request_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        self.assertEqual(request_kwargs["max_completion_tokens"], 2048)
+
+    @patch("apps.ai.services.providers.groq.Groq")
+    def test_generate_handles_missing_usage(self, mock_groq):
+        mock_client = MagicMock()
+        mock_groq.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "Answer without usage"
+        mock_response.usage = None
+        mock_client.chat.completions.create.return_value = mock_response
+
+        provider = GroqProvider(model="qwen/qwen3.6-27b")
+        result = provider.generate([{"role": "user", "content": "Hi"}])
+
+        self.assertEqual(result, "Answer without usage")
+        self.assertIsNone(provider.last_usage)
+
+    @patch("apps.ai.services.providers.groq.Groq")
     def test_fast_generation_keeps_normal_request_shape(self, mock_groq):
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
@@ -79,18 +122,24 @@ class GroqProviderTestCase(SimpleTestCase):
         mock_client.chat.completions.create.return_value = mock_response
 
         provider = GroqProvider(model="llama-3.1-8b-instant")
-        result = provider.generate([
-            {"role": "user", "content": "Quick answer."}
-        ])
+        result = provider.generate(
+            [{"role": "user", "content": "Quick answer."}]
+        )
 
         self.assertEqual(result, "Fast answer")
-        self.assertNotIn("reasoning_format", mock_client.chat.completions.create.call_args.kwargs)
-        self.assertNotIn("max_completion_tokens", mock_client.chat.completions.create.call_args.kwargs)
+        self.assertNotIn(
+            "reasoning_format",
+            mock_client.chat.completions.create.call_args.kwargs,
+        )
+        self.assertNotIn(
+            "max_completion_tokens",
+            mock_client.chat.completions.create.call_args.kwargs,
+        )
 
-    @patch(
-        "apps.ai.services.providers.groq.Groq"
-    )
-    def test_generate_with_tools_uses_tool_call_request_without_reasoning_format(self, mock_groq):
+    @patch("apps.ai.services.providers.groq.Groq")
+    def test_generate_with_tools_uses_tool_call_request_without_reasoning_format(
+        self, mock_groq
+    ):
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
 
@@ -115,15 +164,59 @@ class GroqProviderTestCase(SimpleTestCase):
         )
 
         self.assertIs(result, mock_response)
-        self.assertEqual(mock_client.chat.completions.create.call_args.kwargs["tool_choice"], "auto")
-        self.assertNotIn("reasoning_format", mock_client.chat.completions.create.call_args.kwargs)
+        self.assertEqual(
+            mock_client.chat.completions.create.call_args.kwargs[
+                "tool_choice"
+            ],
+            "auto",
+        )
+        self.assertNotIn(
+            "reasoning_format",
+            mock_client.chat.completions.create.call_args.kwargs,
+        )
+
+    @patch("apps.ai.services.providers.groq.Groq")
+    def test_generate_with_tools_forwards_max_completion_tokens_and_captures_usage(
+        self, mock_groq
+    ):
+        mock_client = MagicMock()
+        mock_groq.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.usage.prompt_tokens = 50
+        mock_response.usage.completion_tokens = 100
+        mock_response.usage.total_tokens = 150
+        mock_client.chat.completions.create.return_value = mock_response
+
+        provider = GroqProvider(model="qwen/qwen3.6-27b")
+        result = provider.generate_with_tools(
+            messages=[{"role": "user", "content": "Test"}],
+            tools=[],
+            max_completion_tokens=1024,
+        )
+
+        self.assertIs(result, mock_response)
+        self.assertEqual(
+            mock_client.chat.completions.create.call_args.kwargs[
+                "max_completion_tokens"
+            ],
+            1024,
+        )
+        self.assertEqual(
+            provider.last_usage,
+            LLMUsage(
+                prompt_tokens=50,
+                completion_tokens=100,
+                total_tokens=150,
+                model="qwen/qwen3.6-27b",
+            ),
+        )
 
     @override_settings(
         GROQ_API_KEY=None,
         GROQ_MODEL="qwen/qwen3.6-27b",
     )
     def test_missing_api_key(self):
-
         with self.assertRaises(ValueError) as context:
             GroqProvider(model="qwen/qwen3.6-27b")
 
@@ -140,7 +233,6 @@ class GroqProviderTestCase(SimpleTestCase):
         EVALUATION_MODEL=None,
     )
     def test_missing_model(self):
-
         with self.assertRaises(ValueError) as context:
             GroqProvider()
 
@@ -164,56 +256,3 @@ class GroqProviderTestCase(SimpleTestCase):
         with patch("apps.ai.services.providers.groq.Groq"):
             provider = GroqProvider()
             self.assertEqual(provider.model, "reasoning-model")
-
-    @patch(
-        "apps.ai.services.providers.groq.Groq"
-    )
-    def test_generate_with_tools(self, mock_groq):
-
-        mock_client = MagicMock()
-        mock_groq.return_value = mock_client
-
-        mock_response = MagicMock()
-
-        mock_tool_call = MagicMock()
-        mock_tool_call.function.name = "get_company_profile"
-        mock_tool_call.function.arguments = (
-            '{"ticker":"RELIANCE","market":"IN"}'
-        )
-
-        mock_response.choices[0].message.tool_calls = [
-            mock_tool_call
-        ]
-        mock_response.choices[0].message.content = None
-
-        mock_client.chat.completions.create.return_value = (
-            mock_response
-        )
-
-        provider = GroqProvider(model="qwen/qwen3.6-27b")
-
-        result = provider.generate_with_tools(
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Analyze Reliance.",
-                }
-            ],
-            tools=[
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "get_company_profile",
-                        "description": "Get company profile.",
-                        "parameters": {},
-                    },
-                }
-            ],
-        )
-
-        self.assertIs(
-            result,
-            mock_response,
-        )
-
-        mock_client.chat.completions.create.assert_called_once()

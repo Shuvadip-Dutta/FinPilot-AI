@@ -12,6 +12,10 @@ from apps.ai.portfolio.optimization import (
 )
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    get_default_token_budget_manager,
+)
 
 
 class PortfolioOptimizationAgent(BaseAgent):
@@ -67,13 +71,39 @@ class PortfolioOptimizationAgent(BaseAgent):
         if self.llm_service is None:
             self.llm_service = LLMService(model="portfolio")
 
+        tier = self._get_degradation_tier()
+
+        evidence = {
+            "tickers": optimization_input.tickers,
+            "optimized_weights": result.optimized_weights,
+            "expected_return": result.expected_return,
+            "volatility": result.volatility,
+            "sharpe_ratio": result.sharpe_ratio,
+            "total_weight": result.total_weight,
+            "success": result.success,
+            "message": result.message,
+            "min_weight": optimization_input.min_weight,
+            "max_weight": optimization_input.max_weight,
+        }
+
+        if tier == DegradationTier.EXHAUSTED:
+            summary = self._build_response(result)
+            return AgentResult(
+                response=summary,
+                tools_used=["portfolio_optimization"],
+                data=evidence,
+            )
+
         messages = self._build_explanation_messages(
             optimization_input=optimization_input,
             result=result,
+            tier=tier,
         )
 
+        max_tokens = self._get_max_completion_tokens_for_tier(tier)
+
         try:
-            response = self.llm_service(messages)
+            response = self._call_llm(messages, max_completion_tokens=max_tokens)
         except LLMError:
             raise
 
@@ -84,17 +114,65 @@ class PortfolioOptimizationAgent(BaseAgent):
                     "the reasoning model returned an empty response."
                 ),
                 tools_used=["portfolio_optimization"],
+                data=evidence,
             )
 
         return AgentResult(
             response=response.strip(),
             tools_used=["portfolio_optimization"],
+            data=evidence,
         )
+
+    def _get_degradation_tier(self) -> DegradationTier:
+        manager = getattr(self.llm_service, "token_budget_manager", None)
+        if manager is None and hasattr(self.llm_service, "__self__"):
+            manager = getattr(
+                self.llm_service.__self__, "token_budget_manager", None
+            )
+
+        if manager is not None and hasattr(manager, "get_degradation_tier"):
+            res = manager.get_degradation_tier()
+            if isinstance(res, DegradationTier):
+                return res
+
+        return get_default_token_budget_manager().get_degradation_tier()
+
+    @staticmethod
+    def _get_max_completion_tokens_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 512
+        if tier == DegradationTier.CRITICAL:
+            return 256
+        return None
+
+    def _call_llm(
+        self,
+        messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
+    ) -> str:
+        try:
+            if isinstance(self.llm_service, LLMService):
+                return self.llm_service.generate(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+        except TypeError:
+            pass
+
+        if max_completion_tokens is not None:
+            try:
+                return self.llm_service(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+            except TypeError:
+                pass
+
+        return self.llm_service(messages)
 
     def _build_explanation_messages(
         self,
         optimization_input: OptimizationInput,
         result: OptimizationResult,
+        tier: DegradationTier = DegradationTier.NORMAL,
     ) -> list[dict[str, str]]:
         system_prompt = (
             "You are the portfolio optimization explanation specialist for FinPilot AI. "
@@ -107,23 +185,27 @@ class PortfolioOptimizationAgent(BaseAgent):
             "Do not guarantee future returns. Do not provide an unconditional buy/sell recommendation. Distinguish objective optimizer output from explanatory interpretation."
         )
 
+        input_data: dict[str, object] = {
+            "tickers": optimization_input.tickers,
+            "risk_free_rate": optimization_input.risk_free_rate,
+            "min_weight": optimization_input.min_weight,
+            "max_weight": optimization_input.max_weight,
+        }
+
+        if tier != DegradationTier.CRITICAL:
+            input_data["historical_data_summary"] = {
+                ticker: {
+                    "observations": len(prices),
+                    "first_price": prices[0],
+                    "last_price": prices[-1],
+                    "min_price": min(prices),
+                    "max_price": max(prices),
+                }
+                for ticker, prices in optimization_input.historical_prices.items()
+            }
+
         context = {
-            "OPTIMIZATION INPUT": {
-                "tickers": optimization_input.tickers,
-                "risk_free_rate": optimization_input.risk_free_rate,
-                "min_weight": optimization_input.min_weight,
-                "max_weight": optimization_input.max_weight,
-                "historical_data_summary": {
-                    ticker: {
-                        "observations": len(prices),
-                        "first_price": prices[0],
-                        "last_price": prices[-1],
-                        "min_price": min(prices),
-                        "max_price": max(prices),
-                    }
-                    for ticker, prices in optimization_input.historical_prices.items()
-                },
-            },
+            "OPTIMIZATION INPUT": input_data,
             "OPTIMIZATION RESULT": {
                 "success": result.success,
                 "message": result.message,
@@ -201,4 +283,4 @@ class PortfolioOptimizationAgent(BaseAgent):
             f"Expected annual return: {expected_return}. "
             f"Annual volatility: {volatility}. "
             f"Sharpe ratio: {sharpe}."
-        )
+        )

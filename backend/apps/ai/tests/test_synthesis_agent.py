@@ -6,6 +6,11 @@ from apps.ai.agents.synthesis import FinalSynthesisAgent
 from apps.ai.exceptions import LLMError
 from apps.ai.graph.state import AgentState
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    LLMUsage,
+    TokenBudgetManager,
+)
 
 
 class FinalSynthesisAgentTestCase(SimpleTestCase):
@@ -340,3 +345,124 @@ class FinalSynthesisAgentTestCase(SimpleTestCase):
         self.assertNotIn("x" * 10000, content)
         self.assertNotIn("long " * 1000, content)
         self.assertEqual(content.count('"price": 1309.0'), 1)
+
+    def test_constrained_degradation_caps_tokens_and_reduces_context(self):
+        llm = MagicMock()
+        llm.generate.return_value = "Constrained synthesis response."
+        manager = TokenBudgetManager(tpd_limit=10000)
+        manager.record_actual_usage(
+            LLMUsage(prompt_tokens=7500, completion_tokens=0, total_tokens=7500, model="synthesis")
+        )
+        llm.token_budget_manager = manager
+        llm.generate.token_budget_manager = manager
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CONSTRAINED)
+
+        with patch("apps.ai.agents.synthesis.LLMService", return_value=llm):
+            agent = FinalSynthesisAgent()
+            state = AgentState(
+                user_message="Analyze TCS.",
+                ticker="TCS",
+                results={
+                    "financial": AgentResult(
+                        response="Financial detailed explanation " * 50,
+                        tools_used=["get_financials"],
+                        data={"ticker": "TCS", "key_metrics": [{"pe_ratio": 25.5}]},
+                    ),
+                    "market": AgentResult(
+                        response="Market analysis " * 50,
+                        tools_used=["get_market_data"],
+                        data={"ticker": "TCS", "current_market_data": {"quotes": [{"exchange": "NSE", "price": 4000}]}},
+                    ),
+                },
+            )
+            result = agent.run(state)
+
+        llm.generate.assert_called_once()
+        _, kwargs = llm.generate.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 2000)
+        self.assertEqual(result.response, "Constrained synthesis response.")
+        self.assertIn("llm_synthesis", result.tools_used)
+
+    def test_critical_degradation_caps_tokens_and_uses_minimal_context(self):
+        llm = MagicMock()
+        llm.generate.return_value = "Critical synthesis response."
+        manager = TokenBudgetManager(tpd_limit=10000)
+        manager.record_actual_usage(
+            LLMUsage(prompt_tokens=9200, completion_tokens=0, total_tokens=9200, model="synthesis")
+        )
+        llm.token_budget_manager = manager
+        llm.generate.token_budget_manager = manager
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CRITICAL)
+
+        with patch("apps.ai.agents.synthesis.LLMService", return_value=llm):
+            agent = FinalSynthesisAgent()
+            state = AgentState(
+                user_message="Analyze TCS.",
+                ticker="TCS",
+                results={
+                    "financial": AgentResult(
+                        response="Financial detailed explanation " * 50,
+                        tools_used=["get_financials"],
+                        data={"ticker": "TCS", "key_metrics": [{"pe_ratio": 25.5}]},
+                    ),
+                    "news": AgentResult(
+                        response="News detailed prose " * 50,
+                        tools_used=["get_news"],
+                        data={"ticker": "TCS", "aggregated_sentiment": {"positive": 5, "negative": 1}},
+                    ),
+                },
+            )
+            result = agent.run(state)
+
+        llm.generate.assert_called_once()
+        _, kwargs = llm.generate.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 1000)
+        self.assertEqual(result.response, "Critical synthesis response.")
+
+    def test_exhausted_degradation_makes_zero_llm_calls_and_returns_agent_result(self):
+        llm = MagicMock()
+        manager = TokenBudgetManager(tpd_limit=10000)
+        manager.record_actual_usage(
+            LLMUsage(prompt_tokens=10000, completion_tokens=0, total_tokens=10000, model="synthesis")
+        )
+        llm.token_budget_manager = manager
+        llm.generate.token_budget_manager = manager
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.EXHAUSTED)
+
+        with patch("apps.ai.agents.synthesis.LLMService", return_value=llm):
+            agent = FinalSynthesisAgent()
+            state = AgentState(
+                user_message="Analyze TCS.",
+                ticker="TCS",
+                market="IN",
+                results={
+                    "financial": AgentResult(
+                        response="Financial response",
+                        tools_used=["get_financials"],
+                        data={"ticker": "TCS", "revenue": 1000},
+                    ),
+                    "market": AgentResult(
+                        response="Market response",
+                        tools_used=["get_market_data"],
+                        data={"ticker": "TCS", "price": 4000},
+                    ),
+                },
+                errors=["risk: risk analysis unavailable"],
+            )
+            result = agent.run(state)
+
+        llm.generate.assert_not_called()
+        self.assertIn("could not be completed", result.response)
+        self.assertIn("budget is exhausted", result.response)
+        self.assertIn("Available specialist results: Financial, Market", result.response)
+        self.assertIn("Missing:", result.response)
+        self.assertIn("Risk analysis was not available.", result.response)
+        self.assertNotIn("Buy", result.response)
+        self.assertNotIn("Sell", result.response)
+        self.assertIn("financial", result.data)
+        self.assertIn("market", result.data)
+        self.assertEqual(result.data["financial"], {"ticker": "TCS", "revenue": 1000})
+        self.assertEqual(result.data["market"], {"ticker": "TCS", "price": 4000})
+        self.assertEqual(result.tools_used, ["get_financials", "get_market_data"])
+
+

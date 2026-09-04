@@ -12,6 +12,10 @@ from apps.ai.exceptions import LLMError, ToolExecutionError
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    get_default_token_budget_manager,
+)
 
 
 ResearchTool = Callable[[str, str], dict[str, object]]
@@ -62,6 +66,7 @@ class FinancialAnalysisContextBuilder:
         ticker: str,
         financials: dict[str, object],
         key_metrics: dict[str, object],
+        tier: DegradationTier = DegradationTier.NORMAL,
     ) -> dict[str, object]:
         base_context = {
             "user_question": message,
@@ -69,6 +74,29 @@ class FinancialAnalysisContextBuilder:
             "financial_statement_data": self._prepare_financial_statement_data(financials),
             "key_metrics_data": self._prepare_key_metrics_data(key_metrics),
         }
+
+        if tier == DegradationTier.CONSTRAINED:
+            reduced_context = self._apply_structural_reduction(base_context)
+            return {
+                **reduced_context,
+                "context_reduction_applied": True,
+                "omitted_information": (
+                    "Older financial periods were omitted to keep the prompt within "
+                    "the constrained quota budget while preserving recent, relevant "
+                    "statement data and key metrics."
+                ),
+            }
+
+        if tier == DegradationTier.CRITICAL:
+            minimal_context = self._apply_minimal_reduction(base_context)
+            return {
+                **minimal_context,
+                "context_reduction_applied": True,
+                "omitted_information": (
+                    "Older financial periods and non-essential fields were omitted to "
+                    "keep the context within the critical quota budget."
+                ),
+            }
 
         if self._approximate_size(base_context) <= self.max_chars:
             return base_context
@@ -389,16 +417,38 @@ class FinancialAnalysisAgent(BaseAgent):
                 tools_used=tools_used,
             )
 
+        tier = self._get_degradation_tier()
+        context_builder = FinancialAnalysisContextBuilder(max_chars=self.max_context_chars)
+
+        if tier == DegradationTier.EXHAUSTED:
+            evidence = context_builder.prepare(
+                message=message,
+                ticker=ticker,
+                financials=financials,
+                key_metrics=key_metrics,
+            )
+            return AgentResult(
+                response=(
+                    f"Financial analysis for {ticker} could not be completed: "
+                    "the LLM budget is exhausted."
+                ),
+                tools_used=tools_used,
+                data=evidence,
+            )
+
         messages = self._build_analysis_messages(
             message=message,
             ticker=ticker,
             financials=financials,
             key_metrics=key_metrics,
+            tier=tier,
         )
         self._enforce_context_budget(messages)
 
+        max_tokens = self._get_max_completion_tokens_for_tier(tier)
+
         try:
-            response = self.llm_service(messages)
+            response = self._call_llm(messages, max_completion_tokens=max_tokens)
         except LLMError:
             raise
 
@@ -416,6 +466,51 @@ class FinancialAnalysisAgent(BaseAgent):
             tools_used=tools_used,
             data=json.loads(messages[1]["content"]),
         )
+
+    def _get_degradation_tier(self) -> DegradationTier:
+        manager = getattr(self.llm_service, "token_budget_manager", None)
+        if manager is None and hasattr(self.llm_service, "__self__"):
+            manager = getattr(
+                self.llm_service.__self__, "token_budget_manager", None
+            )
+
+        if manager is not None and hasattr(manager, "get_degradation_tier"):
+            res = manager.get_degradation_tier()
+            if isinstance(res, DegradationTier):
+                return res
+
+        return get_default_token_budget_manager().get_degradation_tier()
+
+    @staticmethod
+    def _get_max_completion_tokens_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 2000
+        if tier == DegradationTier.CRITICAL:
+            return 1000
+        return None
+
+    def _call_llm(
+        self,
+        messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
+    ) -> str:
+        try:
+            if isinstance(self.llm_service, LLMService):
+                return self.llm_service.generate(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+        except TypeError:
+            pass
+
+        if max_completion_tokens is not None:
+            try:
+                return self.llm_service(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+            except TypeError:
+                pass
+
+        return self.llm_service(messages)
 
     @staticmethod
     def _extract_ticker(message: str) -> str | None:
@@ -454,6 +549,7 @@ class FinancialAnalysisAgent(BaseAgent):
         ticker: str,
         financials: dict[str, object],
         key_metrics: dict[str, object],
+        tier: DegradationTier = DegradationTier.NORMAL,
     ) -> list[dict[str, str]]:
         system_prompt = (
             "You are the financial analysis specialist for FinPilot AI. "
@@ -473,6 +569,7 @@ class FinancialAnalysisAgent(BaseAgent):
             ticker=ticker,
             financials=financials,
             key_metrics=key_metrics,
+            tier=tier,
         )
 
         payload = json.dumps(
@@ -493,3 +590,4 @@ class FinancialAnalysisAgent(BaseAgent):
                 "content": payload,
             },
         ]
+

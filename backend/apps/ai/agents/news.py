@@ -9,6 +9,10 @@ from apps.ai.exceptions import LLMError
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult, AggregatedSentiment, SentimentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    get_default_token_budget_manager,
+)
 
 
 NewsTool = Callable[..., dict[str, object]]
@@ -79,16 +83,52 @@ class NewsIntelligenceAgent(BaseAgent):
 
         analyzed_articles = self._analyze_articles(articles)
         aggregated_sentiment = self._aggregate_sentiment(analyzed_articles)
+
+        tier = self._get_degradation_tier()
+
+        if tier == DegradationTier.EXHAUSTED:
+            summary = self._build_summary(ticker, news_data)
+            return AgentResult(
+                response=(
+                    f"{summary}\n\n"
+                    f"Authoritative sentiment: "
+                    f"positive={aggregated_sentiment['positive']}, "
+                    f"neutral={aggregated_sentiment['neutral']}, "
+                    f"negative={aggregated_sentiment['negative']}, "
+                    f"unavailable={aggregated_sentiment['unavailable']}, "
+                    f"average_confidence={aggregated_sentiment['average_confidence']}."
+                ),
+                tools_used=["get_news"],
+                data={
+                    "ticker": ticker,
+                    "market": self.market,
+                    "articles": analyzed_articles,
+                    "aggregated_sentiment": aggregated_sentiment,
+                },
+            )
+
+        article_limit = self._get_article_limit_for_tier(tier)
+        articles_for_prompt = (
+            articles[:article_limit] if article_limit is not None else articles
+        )
+        analyzed_for_prompt = (
+            analyzed_articles[:article_limit]
+            if article_limit is not None
+            else analyzed_articles
+        )
+
         messages = self._build_analysis_messages(
             message=message,
             ticker=ticker,
-            articles=articles,
-            analyzed_articles=analyzed_articles,
+            articles=articles_for_prompt,
+            analyzed_articles=analyzed_for_prompt,
             aggregated_sentiment=aggregated_sentiment,
         )
 
+        max_tokens = self._get_max_completion_tokens_for_tier(tier)
+
         try:
-            response = self.llm_service(messages)
+            response = self._call_llm(messages, max_completion_tokens=max_tokens)
         except LLMError:
             raise
 
@@ -119,6 +159,56 @@ class NewsIntelligenceAgent(BaseAgent):
                 "aggregated_sentiment": aggregated_sentiment,
             },
         )
+
+    def _get_degradation_tier(self) -> DegradationTier:
+        manager = getattr(self.llm_service, "token_budget_manager", None)
+        if manager is None and hasattr(self.llm_service, "__self__"):
+            manager = getattr(
+                self.llm_service.__self__, "token_budget_manager", None
+            )
+
+        if manager is not None and hasattr(manager, "get_degradation_tier"):
+            res = manager.get_degradation_tier()
+            if isinstance(res, DegradationTier):
+                return res
+
+        return get_default_token_budget_manager().get_degradation_tier()
+
+    @staticmethod
+    def _get_article_limit_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 5
+        if tier == DegradationTier.CRITICAL:
+            return 3
+        return None
+
+    @staticmethod
+    def _get_max_completion_tokens_for_tier(tier: DegradationTier) -> int | None:
+        if tier == DegradationTier.CONSTRAINED:
+            return 512
+        if tier == DegradationTier.CRITICAL:
+            return 256
+        return None
+
+    def _call_llm(
+        self,
+        messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
+    ) -> str:
+        if isinstance(self.llm_service, LLMService):
+            return self.llm_service.generate(
+                messages, max_completion_tokens=max_completion_tokens
+            )
+
+        if max_completion_tokens is not None:
+            try:
+                return self.llm_service(
+                    messages, max_completion_tokens=max_completion_tokens
+                )
+            except TypeError:
+                pass
+
+        return self.llm_service(messages)
 
     @staticmethod
     def _extract_ticker(message: str) -> str | None:
@@ -346,4 +436,4 @@ class NewsIntelligenceAgent(BaseAgent):
             f"{relevance_counts['DIRECT']} direct, "
             f"{relevance_counts['RELATED']} related, "
             f"{relevance_counts['MARKET_CONTEXT']} market context."
-        )
+        )

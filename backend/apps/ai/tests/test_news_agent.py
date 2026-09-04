@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -5,6 +6,11 @@ from django.test import SimpleTestCase
 from apps.ai.agents.news import NewsIntelligenceAgent
 from apps.ai.exceptions import LLMError
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    LLMUsage,
+    TokenBudgetManager,
+)
 
 
 class NewsIntelligenceAgentTestCase(SimpleTestCase):
@@ -283,3 +289,161 @@ class NewsIntelligenceAgentTestCase(SimpleTestCase):
         self.assertIn("positive=2", result.response)
         self.assertIn("neutral=0", result.response)
         self.assertIn("negative=0", result.response)
+
+    def test_constrained_tier_reduces_article_context_and_caps_output(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=3750,
+                completion_tokens=3750,
+                total_tokens=7500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CONSTRAINED)
+
+        articles = [
+            {
+                "title": f"Article {i}",
+                "summary": f"Summary {i}",
+                "source": "news.com",
+                "relevance_type": "DIRECT",
+            }
+            for i in range(10)
+        ]
+        news_tool = MagicMock(return_value={"ticker": "RELIANCE", "articles": articles})
+        sentiment_classifier = MagicMock(return_value={"label": "positive", "confidence": 0.8})
+        llm_service = MagicMock(return_value="Constrained news analysis.")
+        llm_service.token_budget_manager = manager
+
+        agent = NewsIntelligenceAgent(
+            news_tool=news_tool,
+            ticker="RELIANCE",
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show Reliance news.")
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("Constrained news analysis.", result.response)
+        self.assertIn("Authoritative sentiment: positive=10", result.response)
+        self.assertEqual(result.tools_used, ["get_news"])
+        self.assertEqual(sentiment_classifier.call_count, 10)
+        llm_service.assert_called_once()
+
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 512)
+
+        messages = llm_service.call_args[0][0]
+        prompt_json = json.loads(messages[1]["content"])
+        self.assertEqual(len(prompt_json["article_titles"]), 5)
+        self.assertEqual(len(prompt_json["article_level_sentiment"]), 5)
+        self.assertEqual(prompt_json["aggregated_sentiment"]["positive"], 10)
+        self.assertEqual(len(result.data["articles"]), 10)
+
+    def test_critical_tier_reduces_article_context_further_and_caps_output(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=4750,
+                completion_tokens=4750,
+                total_tokens=9500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CRITICAL)
+
+        articles = [
+            {
+                "title": f"Article {i}",
+                "summary": f"Summary {i}",
+                "source": "news.com",
+                "relevance_type": "DIRECT",
+            }
+            for i in range(10)
+        ]
+        news_tool = MagicMock(return_value={"ticker": "RELIANCE", "articles": articles})
+        sentiment_classifier = MagicMock(return_value={"label": "positive", "confidence": 0.8})
+        llm_service = MagicMock(return_value="Critical news analysis.")
+        llm_service.token_budget_manager = manager
+
+        agent = NewsIntelligenceAgent(
+            news_tool=news_tool,
+            ticker="RELIANCE",
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show Reliance news.")
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("Critical news analysis.", result.response)
+        self.assertIn("Authoritative sentiment: positive=10", result.response)
+        llm_service.assert_called_once()
+
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 256)
+
+        messages = llm_service.call_args[0][0]
+        prompt_json = json.loads(messages[1]["content"])
+        self.assertEqual(len(prompt_json["article_titles"]), 3)
+        self.assertEqual(len(prompt_json["article_level_sentiment"]), 3)
+        self.assertEqual(prompt_json["aggregated_sentiment"]["positive"], 10)
+        self.assertEqual(len(result.data["articles"]), 10)
+
+    def test_exhausted_tier_bypasses_llm_and_returns_deterministic_summary(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=5000,
+                completion_tokens=5000,
+                total_tokens=10000,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.EXHAUSTED)
+
+        articles = [
+            {
+                "title": f"Article {i}",
+                "summary": f"Summary {i}",
+                "source": "news.com",
+                "relevance_type": "DIRECT",
+            }
+            for i in range(5)
+        ]
+        news_tool = MagicMock(return_value={"ticker": "RELIANCE", "articles": articles})
+        sentiment_classifier = MagicMock(return_value={"label": "positive", "confidence": 0.8})
+        llm_service = MagicMock(return_value="Should not be called.")
+        llm_service.token_budget_manager = manager
+
+        agent = NewsIntelligenceAgent(
+            news_tool=news_tool,
+            ticker="RELIANCE",
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show Reliance news.")
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("News analysis for RELIANCE: 5 recent article(s)", result.response)
+        self.assertIn("Authoritative sentiment: positive=5", result.response)
+        self.assertEqual(result.tools_used, ["get_news"])
+        self.assertEqual(result.data["aggregated_sentiment"]["positive"], 5)
+        self.assertEqual(len(result.data["articles"]), 5)
+        llm_service.assert_not_called()
+

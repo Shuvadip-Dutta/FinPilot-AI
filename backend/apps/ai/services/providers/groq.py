@@ -1,7 +1,10 @@
+from typing import Any
+
 from django.conf import settings
 from groq import APIConnectionError, APIStatusError, APITimeoutError, Groq
 
 from apps.ai.exceptions import LLMError
+from apps.ai.services.token_budget import LLMUsage
 
 
 class GroqProvider:
@@ -29,6 +32,7 @@ class GroqProvider:
         self.client = Groq(
             api_key=settings.GROQ_API_KEY,
         )
+        self.last_usage: LLMUsage | None = None
 
     def _is_reasoning_model(self) -> bool:
         normalized = str(self.model).lower()
@@ -47,21 +51,49 @@ class GroqProvider:
             ),
         }
 
+    def _extract_usage(self, response: Any) -> LLMUsage | None:
+        usage_obj = getattr(response, "usage", None)
+        if usage_obj is None:
+            return None
+
+        prompt_tokens = getattr(usage_obj, "prompt_tokens", None)
+        completion_tokens = getattr(usage_obj, "completion_tokens", None)
+        total_tokens = getattr(usage_obj, "total_tokens", None)
+
+        if prompt_tokens is None or completion_tokens is None or total_tokens is None:
+            return None
+
+        try:
+            return LLMUsage(
+                prompt_tokens=int(prompt_tokens),
+                completion_tokens=int(completion_tokens),
+                total_tokens=int(total_tokens),
+                model=str(self.model),
+            )
+        except Exception:
+            return None
+
     def generate(
         self,
         messages: list[dict[str, str]],
+        max_completion_tokens: int | None = None,
     ) -> str:
-        request_kwargs = {
+        request_kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
         }
         if self._is_reasoning_model():
             request_kwargs.update(self._reasoning_request_kwargs())
 
+        if max_completion_tokens is not None:
+            request_kwargs["max_completion_tokens"] = int(max_completion_tokens)
+
         try:
             response = self.client.chat.completions.create(**request_kwargs)
         except (APIConnectionError, APIStatusError, APITimeoutError) as exc:
             raise LLMError(f"Groq provider request failed: {exc}") from exc
+
+        self.last_usage = self._extract_usage(response)
 
         content = response.choices[0].message.content
         if content is None:
@@ -72,17 +104,21 @@ class GroqProvider:
         self,
         messages: list[dict],
         tools: list[dict],
+        max_completion_tokens: int | None = None,
     ):
-        request_kwargs = {
+        request_kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
         }
+        if max_completion_tokens is not None:
+            request_kwargs["max_completion_tokens"] = int(max_completion_tokens)
 
         try:
             response = self.client.chat.completions.create(**request_kwargs)
         except (APIConnectionError, APIStatusError, APITimeoutError) as exc:
             raise LLMError(f"Groq provider request failed: {exc}") from exc
 
+        self.last_usage = self._extract_usage(response)
         return response

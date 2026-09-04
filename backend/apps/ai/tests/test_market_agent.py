@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -5,6 +6,11 @@ from django.test import SimpleTestCase
 from apps.ai.agents.market import MarketAnalysisAgent
 from apps.ai.exceptions import LLMError
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    LLMUsage,
+    TokenBudgetManager,
+)
 
 
 def normalized_market_data():
@@ -294,3 +300,146 @@ class MarketAnalysisAgentTestCase(SimpleTestCase):
             [{"ticker": "TCS", "market": "IN"}],
         )
         llm_service.assert_called_once()
+
+    def test_constrained_tier_reduces_historical_candles_and_caps_output(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=3750,
+                completion_tokens=3750,
+                total_tokens=7500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CONSTRAINED)
+
+        market_data = normalized_market_data()
+        candles = [
+            {"timestamp": f"2026-08-{i:02d}", "close": 1000 + i}
+            for i in range(1, 31)
+        ]
+        historical_data_tool = MagicMock(return_value={"candles": candles})
+        llm_service = MagicMock(return_value="Constrained analysis.")
+        llm_service.token_budget_manager = manager
+
+        agent = MarketAnalysisAgent(
+            market_data_tool=MagicMock(return_value=market_data),
+            historical_data_tool=historical_data_tool,
+            ticker="RELIANCE",
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show market data from 2026-08-01 to 2026-08-30.")
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Constrained analysis.")
+        llm_service.assert_called_once()
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 512)
+
+        messages = llm_service.call_args[0][0]
+        prompt_content = messages[1]["content"]
+        self.assertIn("historical_market_data", prompt_content)
+        prompt_json = json.loads(prompt_content)
+        self.assertEqual(
+            len(prompt_json["historical_market_data"]["candles"]), 15
+        )
+        self.assertEqual(len(result.data["historical_data"]["candles"]), 30)
+        self.assertEqual(len(result.data["market_data"]["quotes"]), 2)
+
+    def test_critical_tier_reduces_historical_candles_further_and_caps_output(
+        self,
+    ):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=4750,
+                completion_tokens=4750,
+                total_tokens=9500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CRITICAL)
+
+        market_data = normalized_market_data()
+        candles = [
+            {"timestamp": f"2026-08-{i:02d}", "close": 1000 + i}
+            for i in range(1, 31)
+        ]
+        historical_data_tool = MagicMock(return_value={"candles": candles})
+        llm_service = MagicMock(return_value="Critical analysis.")
+        llm_service.token_budget_manager = manager
+
+        agent = MarketAnalysisAgent(
+            market_data_tool=MagicMock(return_value=market_data),
+            historical_data_tool=historical_data_tool,
+            ticker="RELIANCE",
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show market data from 2026-08-01 to 2026-08-30.")
+
+        self.assertEqual(result.response, "Critical analysis.")
+        llm_service.assert_called_once()
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 256)
+
+        messages = llm_service.call_args[0][0]
+        prompt_json = json.loads(messages[1]["content"])
+        self.assertEqual(
+            len(prompt_json["historical_market_data"]["candles"]), 5
+        )
+        self.assertEqual(len(result.data["historical_data"]["candles"]), 30)
+
+    def test_exhausted_tier_bypasses_llm_and_returns_deterministic_summary(
+        self,
+    ):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=5000,
+                completion_tokens=5000,
+                total_tokens=10000,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.EXHAUSTED)
+
+        market_data = normalized_market_data()
+        candles = [{"timestamp": "2026-08-01", "close": 1250.0}]
+        historical_data_tool = MagicMock(return_value={"candles": candles})
+        llm_service = MagicMock(return_value="Should not be called.")
+        llm_service.token_budget_manager = manager
+
+        agent = MarketAnalysisAgent(
+            market_data_tool=MagicMock(return_value=market_data),
+            historical_data_tool=historical_data_tool,
+            ticker="RELIANCE",
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show market data from 2026-08-01 to 2026-08-30.")
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("BSE: 1307.35", result.response)
+        self.assertIn("NSE: 1309.0", result.response)
+        self.assertIn("Historical data: 1 candle(s)", result.response)
+        self.assertEqual(
+            result.tools_used, ["get_market_data", "get_historical_data"]
+        )
+        self.assertEqual(
+            result.data["market_data"]["quotes"][0]["price"], 1307.35
+        )
+        llm_service.assert_not_called()

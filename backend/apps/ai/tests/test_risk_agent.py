@@ -7,6 +7,12 @@ from apps.ai.agents.risk import RiskAnalysisAgent
 from apps.ai.exceptions import LLMError
 from apps.ai.graph.state import AgentState
 from apps.ai.services.schemas import AgentResult
+from apps.ai.services.token_budget import (
+    DegradationTier,
+    LLMUsage,
+    TokenBudgetManager,
+)
+
 
 
 class RiskAnalysisAgentTestCase(SimpleTestCase):
@@ -440,3 +446,130 @@ class RiskAnalysisAgentTestCase(SimpleTestCase):
 
         self.assertEqual(first, second)
         self.assertLessEqual(agent._serialized_size(first), agent.RISK_CONTEXT_CHAR_LIMIT)
+
+    def test_constrained_tier_uses_compact_context_and_1000_token_limit(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=3750,
+                completion_tokens=3750,
+                total_tokens=7500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CONSTRAINED)
+
+        llm_service = MagicMock(return_value="Constrained risk assessment.")
+        llm_service.token_budget_manager = manager
+
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+        state = AgentState(
+            user_message="Assess Reliance risk.",
+            ticker="RELIANCE",
+            market="IN",
+            results={
+                "financial": AgentResult(response="Financial prose." * 50, tools_used=[]),
+                "market": AgentResult(response="Market prose." * 50, tools_used=[]),
+                "news": AgentResult(response="News prose." * 50, tools_used=[]),
+            },
+        )
+
+        result = agent.run(state)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Constrained risk assessment.")
+        self.assertEqual(result.tools_used, [])
+        llm_service.assert_called_once()
+
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 1000)
+
+    def test_critical_tier_uses_minimal_context_and_512_token_limit(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=4750,
+                completion_tokens=4750,
+                total_tokens=9500,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.CRITICAL)
+
+        llm_service = MagicMock(return_value="Critical risk assessment.")
+        llm_service.token_budget_manager = manager
+
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+        state = AgentState(
+            user_message="Assess Reliance risk.",
+            ticker="RELIANCE",
+            market="IN",
+            results={
+                "financial": AgentResult(response="Financial prose.", tools_used=[], data={"revenue": 100}),
+                "market": AgentResult(response="Market prose.", tools_used=[]),
+                "news": AgentResult(response="News prose.", tools_used=[]),
+            },
+        )
+
+        result = agent.run(state)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Critical risk assessment.")
+        llm_service.assert_called_once()
+
+        _, kwargs = llm_service.call_args
+        self.assertEqual(kwargs.get("max_completion_tokens"), 512)
+
+        messages = llm_service.call_args[0][0]
+        context = json.loads(messages[1]["content"])
+        self.assertEqual(context["FINANCIAL RESEARCH"], "")
+
+    def test_exhausted_tier_bypasses_llm_and_returns_valid_agent_result(self):
+        manager = TokenBudgetManager(
+            max_request_tokens=100000,
+            safety_reserve_tokens=0,
+            tpm_limit=10000,
+        )
+        manager.record_actual_usage(
+            LLMUsage(
+                prompt_tokens=5000,
+                completion_tokens=5000,
+                total_tokens=10000,
+                model="test",
+            )
+        )
+        self.assertEqual(manager.get_degradation_tier(), DegradationTier.EXHAUSTED)
+
+        llm_service = MagicMock(return_value="Should not be called.")
+        llm_service.token_budget_manager = manager
+
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+        state = AgentState(
+            user_message="Assess Reliance risk.",
+            ticker="RELIANCE",
+            market="IN",
+            results={
+                "financial": AgentResult(response="Financial prose.", tools_used=[], data={"revenue": 100}),
+            },
+        )
+
+        result = agent.run(state)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(
+            result.response,
+            "Risk analysis for RELIANCE could not be completed: the LLM budget is exhausted.",
+        )
+        self.assertEqual(result.tools_used, [])
+        self.assertIn("financial", result.data)
+        self.assertIn("missing_information", result.data)
+        llm_service.assert_not_called()
+

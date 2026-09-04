@@ -64,6 +64,41 @@ REASONING_MAX_COMPLETION_TOKENS = int(
     )
 )
 
+
+def _parse_opt_int(val: str | None) -> int | None:
+    if val is None or not str(val).strip():
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_int(val: str | None, default: int) -> int:
+    if val is None or not str(val).strip():
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+# Groq token budget and quota limits
+GROQ_TPM_LIMIT = _parse_opt_int(os.getenv("GROQ_TPM_LIMIT"))
+GROQ_TPD_LIMIT = _parse_opt_int(os.getenv("GROQ_TPD_LIMIT"))
+GROQ_MAX_REQUEST_TOKENS = _parse_int(
+    os.getenv("GROQ_MAX_REQUEST_TOKENS"),
+    32768,
+)
+GROQ_SAFETY_RESERVE_TOKENS = _parse_int(
+    os.getenv("GROQ_SAFETY_RESERVE_TOKENS"),
+    1024,
+)
+TOOL_CALL_MAX_COMPLETION_TOKENS = _parse_int(
+    os.getenv("TOOL_CALL_MAX_COMPLETION_TOKENS"),
+    4096,
+)
+
 FINANCIAL_SENTIMENT_MODEL = os.getenv(
     "FINANCIAL_SENTIMENT_MODEL",
     "ProsusAI/finbert",
