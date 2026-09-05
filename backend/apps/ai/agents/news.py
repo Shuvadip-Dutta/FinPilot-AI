@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 from apps.ai.agents.base import BaseAgent
 from apps.ai.exceptions import LLMError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+from apps.ai.graph.state import AgentState
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult, AggregatedSentiment, SentimentResult
@@ -13,6 +15,7 @@ from apps.ai.services.token_budget import (
     DegradationTier,
     get_default_token_budget_manager,
 )
+from apps.research.services.schemas import NewsArticle, NewsResearch
 
 
 NewsTool = Callable[..., dict[str, object]]
@@ -42,9 +45,30 @@ class NewsIntelligenceAgent(BaseAgent):
     def name(self) -> str:
         return "news"
 
-    def run(self, message: str) -> AgentResult:
+    def run(self, message: str | AgentState | ResearchContext) -> AgentResult:
         """Return a synthesized summary of recent company news."""
-        ticker = self.ticker or self._extract_ticker(message)
+        research_context: ResearchContext | None = None
+
+        if isinstance(message, ResearchContext):
+            research_context = message
+            user_message = f"Analyze news for {research_context.ticker}"
+            ticker = research_context.ticker
+            market = research_context.market
+        elif isinstance(message, AgentState):
+            user_message = message.user_message
+            ticker = (
+                self.ticker
+                or (message.ticker.upper() if message.ticker else None)
+                or self._extract_ticker(user_message)
+            )
+            market = (
+                (message.market.upper() if message.market else None)
+                or self.market
+            )
+        else:
+            user_message = message
+            ticker = self.ticker or self._extract_ticker(message)
+            market = self.market
 
         if ticker is None:
             return AgentResult(
@@ -54,23 +78,38 @@ class NewsIntelligenceAgent(BaseAgent):
                 tools_used=[],
             )
 
-        try:
-            news_data = self.news_tool(
-                ticker=ticker,
-                market=self.market,
-                limit=self.limit,
-            )
-        except (ValueError, TypeError) as exc:
-            return AgentResult(
-                response=(
-                    f"Unable to retrieve news analysis for {ticker}: {exc}"
-                ),
-                tools_used=[],
-            )
+        tools_used: list[str] = []
+        news_data: dict[str, object] | None = None
+        articles: list[dict | NewsArticle] = []
 
-        articles = news_data.get("articles", [])
-        if not isinstance(articles, list):
-            articles = []
+        if research_context is not None:
+            articles = research_context.news.articles if research_context.news else []
+        else:
+            try:
+                news_data = self.news_tool(
+                    ticker=ticker,
+                    market=market,
+                    limit=self.limit,
+                )
+                tools_used.append("get_news")
+            except (ValueError, TypeError) as exc:
+                return AgentResult(
+                    response=(
+                        f"Unable to retrieve news analysis for {ticker}: {exc}"
+                    ),
+                    tools_used=tools_used,
+                )
+
+            if isinstance(news_data, dict):
+                raw_articles = news_data.get("articles", [])
+                if isinstance(raw_articles, list):
+                    articles = raw_articles
+
+            research_context = self.build_canonical_context(
+                ticker=ticker,
+                market=market,
+                news_data_raw=news_data,
+            )
 
         if not articles:
             return AgentResult(
@@ -78,7 +117,8 @@ class NewsIntelligenceAgent(BaseAgent):
                     f"News analysis for {ticker}: "
                     "no recent news articles found."
                 ),
-                tools_used=["get_news"],
+                tools_used=[] if isinstance(message, ResearchContext) else (tools_used or ["get_news"]),
+                data={"ticker": ticker, "market": market, "articles": []},
             )
 
         analyzed_articles = self._analyze_articles(articles)
@@ -86,8 +126,21 @@ class NewsIntelligenceAgent(BaseAgent):
 
         tier = self._get_degradation_tier()
 
+        data_payload: dict[str, object] = {
+            "ticker": ticker,
+            "market": market,
+            "articles": analyzed_articles,
+            "aggregated_sentiment": aggregated_sentiment,
+        }
+
+        if research_context and research_context.provenance:
+            data_payload["provenance"] = {
+                section: prov.model_dump()
+                for section, prov in research_context.provenance.items()
+            }
+
         if tier == DegradationTier.EXHAUSTED:
-            summary = self._build_summary(ticker, news_data)
+            summary = self._build_summary(ticker, news_data or {"articles": articles})
             return AgentResult(
                 response=(
                     f"{summary}\n\n"
@@ -98,13 +151,8 @@ class NewsIntelligenceAgent(BaseAgent):
                     f"unavailable={aggregated_sentiment['unavailable']}, "
                     f"average_confidence={aggregated_sentiment['average_confidence']}."
                 ),
-                tools_used=["get_news"],
-                data={
-                    "ticker": ticker,
-                    "market": self.market,
-                    "articles": analyzed_articles,
-                    "aggregated_sentiment": aggregated_sentiment,
-                },
+                tools_used=tools_used or ["get_news"],
+                data=data_payload,
             )
 
         article_limit = self._get_article_limit_for_tier(tier)
@@ -118,7 +166,7 @@ class NewsIntelligenceAgent(BaseAgent):
         )
 
         messages = self._build_analysis_messages(
-            message=message,
+            message=user_message,
             ticker=ticker,
             articles=articles_for_prompt,
             analyzed_articles=analyzed_for_prompt,
@@ -138,7 +186,7 @@ class NewsIntelligenceAgent(BaseAgent):
                     f"Unable to analyze news for {ticker}: "
                     "the fast model returned an empty response."
                 ),
-                tools_used=["get_news"],
+                tools_used=tools_used or ["get_news"],
             )
 
         return AgentResult(
@@ -151,14 +199,73 @@ class NewsIntelligenceAgent(BaseAgent):
                 f"unavailable={aggregated_sentiment['unavailable']}, "
                 f"average_confidence={aggregated_sentiment['average_confidence']}."
             ),
-            tools_used=["get_news"],
-            data={
-                "ticker": ticker,
-                "market": self.market,
-                "articles": analyzed_articles,
-                "aggregated_sentiment": aggregated_sentiment,
-            },
+            tools_used=tools_used or ["get_news"],
+            data=data_payload,
         )
+
+    def build_canonical_context(
+        self,
+        ticker: str,
+        market: str = "IN",
+        news_data_raw: object = None,
+    ) -> ResearchContext:
+        """Construct a canonical ResearchContext from raw news data outputs."""
+        provenance_dict: dict[str, ProviderProvenance] = {}
+        parsed_news: NewsResearch | None = None
+
+        if isinstance(news_data_raw, dict):
+            prov = self._extract_provider_provenance(news_data_raw)
+            if prov:
+                provenance_dict["news"] = prov
+
+            raw_articles = news_data_raw.get("articles") or []
+            article_objects: list[NewsArticle] = []
+            if isinstance(raw_articles, list):
+                for a in raw_articles:
+                    if isinstance(a, NewsArticle):
+                        article_objects.append(a)
+                    elif isinstance(a, dict):
+                        article_objects.append(
+                            NewsArticle(
+                                title=str(a.get("title") or ""),
+                                summary=a.get("summary"),
+                                url=str(a.get("url") or ""),
+                                source=str(a.get("source") or "Publisher"), # Publisher name
+                                published_at=a.get("published_at"),
+                                image_url=a.get("image_url"),
+                                relevance_score=a.get("relevance_score"),
+                                target_match_score=a.get("target_match_score"),
+                                relevance_type=a.get("relevance_type"),
+                            )
+                        )
+            parsed_news = NewsResearch(ticker=ticker, articles=article_objects)
+
+        return ResearchContext(
+            ticker=ticker,
+            market=market,
+            news=parsed_news,
+            provenance=provenance_dict,
+        )
+
+    def _extract_provider_provenance(self, raw_dict: dict) -> ProviderProvenance | None:
+        if not isinstance(raw_dict, dict):
+            return None
+        prov_dict = raw_dict.get("provenance") if isinstance(raw_dict.get("provenance"), dict) else raw_dict
+        if not isinstance(prov_dict, dict):
+            return None
+        if "source" in prov_dict or "primary_provider" in prov_dict or "fallback_used" in prov_dict:
+            status_val = str(prov_dict.get("data_status") or "complete")
+            if hasattr(status_val, "value"):
+                status_val = status_val.value
+            return ProviderProvenance(
+                primary_provider=str(prov_dict.get("primary_provider") or "news_aggregator"),
+                source=str(prov_dict.get("source") or prov_dict.get("provider_used") or "news_aggregator"),
+                fallback_used=bool(prov_dict.get("fallback_used", False)),
+                data_status=status_val if status_val in ("complete", "partial", "empty", "failed") else "complete",
+                fallback_reason=str(prov_dict.get("fallback_reason")) if prov_dict.get("fallback_reason") else None,
+            )
+        return None
+
 
     def _get_degradation_tier(self) -> DegradationTier:
         manager = getattr(self.llm_service, "token_budget_manager", None)
@@ -234,9 +341,15 @@ class NewsIntelligenceAgent(BaseAgent):
 
         return None
 
+    @staticmethod
+    def _get_article_field(article: object, field_name: str, default: object = None) -> object:
+        if isinstance(article, dict):
+            return article.get(field_name, default)
+        return getattr(article, field_name, default)
+
     def _analyze_articles(
         self,
-        articles: list[dict[str, object]],
+        articles: list[object],
     ) -> list[dict[str, object]]:
         if self.sentiment_classifier is None:
             from apps.ai.services.sentiment import FinancialSentimentClassifier
@@ -245,19 +358,19 @@ class NewsIntelligenceAgent(BaseAgent):
 
         analyzed: list[dict[str, object]] = []
         for article in articles:
-            if not isinstance(article, dict):
-                continue
+            title = self._get_article_field(article, "title")
+            summary = self._get_article_field(article, "summary")
+            source = self._get_article_field(article, "source")
+            relevance_type = self._get_article_field(article, "relevance_type")
 
-            title = article.get("title")
-            summary = article.get("summary")
             combined_text = self._coalesce_article_text(title, summary)
             if not combined_text:
                 analyzed.append(
                     {
                         "title": title,
                         "summary": summary,
-                        "source": article.get("source"),
-                        "relevance_type": article.get("relevance_type"),
+                        "source": source,
+                        "relevance_type": relevance_type,
                         "sentiment": {"label": "unavailable", "confidence": 0.0},
                     }
                 )
@@ -269,8 +382,8 @@ class NewsIntelligenceAgent(BaseAgent):
                 {
                     "title": title,
                     "summary": summary,
-                    "source": article.get("source"),
-                    "relevance_type": article.get("relevance_type"),
+                    "source": source,
+                    "relevance_type": relevance_type,
                     "sentiment": normalized,
                 }
             )
@@ -341,7 +454,7 @@ class NewsIntelligenceAgent(BaseAgent):
     def _build_analysis_messages(
         message: str,
         ticker: str,
-        articles: list[dict[str, object]],
+        articles: list[object],
         analyzed_articles: list[dict[str, object]],
         aggregated_sentiment: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
@@ -367,10 +480,10 @@ class NewsIntelligenceAgent(BaseAgent):
             "ticker": ticker,
             "article_titles": [
                 {
-                    "title": article.get("title"),
-                    "summary": article.get("summary"),
-                    "source": article.get("source"),
-                    "relevance_type": article.get("relevance_type"),
+                    "title": NewsIntelligenceAgent._get_article_field(article, "title"),
+                    "summary": NewsIntelligenceAgent._get_article_field(article, "summary"),
+                    "source": NewsIntelligenceAgent._get_article_field(article, "source"),
+                    "relevance_type": NewsIntelligenceAgent._get_article_field(article, "relevance_type"),
                 }
                 for article in articles
             ],
@@ -417,12 +530,10 @@ class NewsIntelligenceAgent(BaseAgent):
         }
 
         for article in articles:
-            if not isinstance(article, dict):
-                continue
-            source = article.get("source")
+            source = NewsIntelligenceAgent._get_article_field(article, "source")
             if isinstance(source, str) and source:
                 sources.add(source)
-            relevance_type = article.get("relevance_type")
+            relevance_type = NewsIntelligenceAgent._get_article_field(article, "relevance_type")
             if relevance_type in relevance_counts:
                 relevance_counts[relevance_type] += 1
 

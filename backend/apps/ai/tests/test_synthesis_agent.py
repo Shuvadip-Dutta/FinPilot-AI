@@ -465,4 +465,184 @@ class FinalSynthesisAgentTestCase(SimpleTestCase):
         self.assertEqual(result.data["market"], {"ticker": "TCS", "price": 4000})
         self.assertEqual(result.tools_used, ["get_financials", "get_market_data"])
 
+    def test_synthesis_consumes_canonical_research_context(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+
+        llm_service = MagicMock(return_value="Synthesis across context.")
+        agent = FinalSynthesisAgent(llm_service=llm_service)
+
+        state = AgentState(
+            user_message="Overview for LT",
+            ticker="LT",
+            market="IN",
+            results={
+                "financial": AgentResult(
+                    response="Financial info",
+                    tools_used=["get_financials"],
+                    data={
+                        "ticker": "LT",
+                        "provenance": {
+                            "financials": {
+                                "primary_provider": "upstox",
+                                "source": "upstox",
+                                "fallback_used": False,
+                                "data_status": "complete",
+                            }
+                        },
+                    },
+                ),
+                "market": AgentResult(
+                    response="Market info",
+                    tools_used=["get_market_data"],
+                    data={
+                        "ticker": "LT",
+                        "provenance": {
+                            "market_data": {
+                                "primary_provider": "upstox",
+                                "source": "indian_api",
+                                "fallback_used": True,
+                                "data_status": "complete",
+                            }
+                        },
+                    },
+                ),
+            },
+        )
+
+        ctx = FinalSynthesisAgent.build_canonical_context(state)
+        self.assertIsInstance(ctx, ResearchContext)
+        self.assertEqual(ctx.ticker, "LT")
+        self.assertIn("financials", ctx.provenance)
+        self.assertIn("market_data", ctx.provenance)
+        self.assertEqual(ctx.provenance["financials"].source, "upstox")
+        self.assertEqual(ctx.provenance["market_data"].source, "indian_api")
+
+        result = agent.run(state)
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Synthesis across context.")
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "upstox")
+        self.assertEqual(result.data["provenance"]["market_data"]["source"], "indian_api")
+
+    def test_existing_dictionary_based_specialist_results_remain_supported(self):
+        llm_service = MagicMock(return_value="Dict synthesis response.")
+        agent = FinalSynthesisAgent(llm_service=llm_service)
+
+        state = AgentState(
+            user_message="Analyze LT",
+            ticker="LT",
+            results={
+                "financial": {
+                    "ticker": "LT",
+                    "provenance": {
+                        "financials": {
+                            "primary_provider": "upstox",
+                            "source": "upstox",
+                            "fallback_used": False,
+                        }
+                    },
+                },
+                "market": {
+                    "ticker": "LT",
+                    "quotes": [{"exchange": "NSE", "price": 1400.0}],
+                },
+            },
+        )
+
+        result = agent.run(state)
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Dict synthesis response.")
+        self.assertIn("financial", result.data)
+        self.assertIn("market", result.data)
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "upstox")
+
+    def test_provenance_survives_into_synthesis_context(self):
+        llm_service = MagicMock(return_value="Provenance synthesis.")
+        agent = FinalSynthesisAgent(llm_service=llm_service)
+
+        state = AgentState(
+            user_message="Synthesize provenance",
+            ticker="LT",
+            results={
+                "financial": AgentResult(
+                    response="Fin",
+                    tools_used=[],
+                    data={
+                        "provenance": {
+                            "financials": {
+                                "primary_provider": "upstox",
+                                "source": "upstox",
+                                "fallback_used": False,
+                                "data_status": "complete",
+                            }
+                        }
+                    },
+                ),
+                "news": AgentResult(
+                    response="News",
+                    tools_used=[],
+                    data={
+                        "provenance": {
+                            "news": {
+                                "primary_provider": "news_aggregator",
+                                "source": "marketaux",
+                                "fallback_used": False,
+                                "data_status": "complete",
+                            }
+                        }
+                    },
+                ),
+            },
+        )
+
+        result = agent.run(state)
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "upstox")
+        self.assertEqual(result.data["provenance"]["news"]["source"], "marketaux")
+
+    def test_portfolio_optimization_results_remain_intact(self):
+        llm_service = MagicMock(return_value="Portfolio synthesis.")
+        agent = FinalSynthesisAgent(llm_service=llm_service)
+
+        portfolio_data = {
+            "weights": {"RELIANCE": 0.6, "TCS": 0.4},
+            "metrics": {"expected_return": 0.15, "volatility": 0.10, "sharpe_ratio": 1.5},
+        }
+        state = AgentState(
+            user_message="Optimize portfolio",
+            results={
+                "portfolio_optimization": AgentResult(
+                    response="Optimal portfolio: 60% RELIANCE, 40% TCS.",
+                    tools_used=["optimize_portfolio"],
+                    data=portfolio_data,
+                ),
+            },
+        )
+
+        result = agent.run(state)
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("portfolio_optimization", result.data)
+        self.assertEqual(result.data["portfolio_optimization"], portfolio_data)
+        self.assertIn("optimize_portfolio", result.tools_used)
+
+    def test_prose_only_specialist_results_preserved_without_fabrication(self):
+        llm_service = MagicMock(return_value="Prose synthesis.")
+        agent = FinalSynthesisAgent(llm_service=llm_service)
+
+        state = AgentState(
+            user_message="Analyze company",
+            results={
+                "financial": AgentResult(response="Financial prose analysis only.", tools_used=[]),
+                "market": "Raw string market prose.",
+            },
+        )
+
+        result = agent.run(state)
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Prose synthesis.")
+        self.assertEqual(result.data["market"], "Raw string market prose.")
+        self.assertNotIn("financial", result.data)
+
+
 

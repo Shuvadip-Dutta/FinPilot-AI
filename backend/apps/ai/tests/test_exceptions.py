@@ -41,27 +41,6 @@ class ReliabilityExceptionTestCase(SimpleTestCase):
         with self.assertRaises(LLMError):
             provider.generate([{"role": "user", "content": "Hello"}])
 
-    @patch("apps.ai.services.agent_service.LLMService")
-    def test_malformed_tool_arguments_become_tool_execution_error(self, mock_llm):
-        tool_call = SimpleNamespace(
-            id="call_invalid",
-            function=SimpleNamespace(
-                name="get_market_data",
-                arguments="{not valid json}",
-            ),
-        )
-        response = MagicMock()
-        response.choices[0].message.tool_calls = [tool_call]
-        response.choices[0].message.content = None
-        mock_llm.return_value.generate_with_tools.return_value = response
-
-        service = AgentService()
-
-        with self.assertRaises(ToolExecutionError) as context:
-            service.run("What is the price of RELIANCE?")
-
-        self.assertIn("Malformed arguments", str(context.exception))
-
     def test_financial_agent_does_not_swallow_programming_error(self):
         def programming_error(**kwargs):
             raise RuntimeError("Unexpected defect")

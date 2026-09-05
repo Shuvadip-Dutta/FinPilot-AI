@@ -1,229 +1,138 @@
-import json
-
-from dataclasses import asdict, is_dataclass
-
-from apps.ai.exceptions import ToolExecutionError
-from apps.ai.mcp.access import AgentToolAccess, AgentToolPolicy
-from apps.ai.services import rag_tools, research_tools
-from apps.ai.services.llm_service import LLMService
-from apps.ai.services.prompts import (
-    FINPILOT_SYSTEM_PROMPT,
-)
+from apps.ai.mcp.access import AgentToolPolicy
 from apps.ai.services.schemas import AgentResult
-from apps.ai.services.tool_schemas import RESEARCH_TOOLS
 
 
 class AgentService:
-    MAX_TOOL_ROUNDS = 5
 
-    def __init__(self, policy: AgentToolPolicy | None = None):
-        self.llm = LLMService()
+    def __init__(
+        self,
+        policy: AgentToolPolicy | None = None,
+        workflow: object | None = None,
+    ):
+        self.policy = policy
+        if workflow is None:
+            from apps.ai.agents.financial import FinancialAnalysisAgent
+            from apps.ai.agents.market import MarketAnalysisAgent
+            from apps.ai.agents.news import NewsIntelligenceAgent
+            from apps.ai.agents.risk import RiskAnalysisAgent
+            from apps.ai.agents.synthesis import FinalSynthesisAgent
+            from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
+            from apps.ai.graph.router import WorkflowRouter
 
-        self.tool_registry = {
-            "get_company_profile": (
-                research_tools.get_company_profile
-            ),
-            "get_market_data": (
-                research_tools.get_market_data
-            ),
-            "get_financials": (
-                research_tools.get_financials
-            ),
-            "get_key_metrics": (
-                research_tools.get_key_metrics
-            ),
-            "get_historical_data": (
-                research_tools.get_historical_data
-            ),
-            "get_news": (
-                research_tools.get_news
-            ),
-            "search_financial_documents": (
-                rag_tools.search_financial_documents
-            ),
-        }
+            workflow = LangGraphResearchWorkflow(
+                router=WorkflowRouter(),
+                financial_agent=FinancialAnalysisAgent(),
+                market_agent=MarketAnalysisAgent(),
+                news_agent=NewsIntelligenceAgent(),
+                synthesis_agent=FinalSynthesisAgent(),
+                risk_agent=RiskAnalysisAgent(),
+            )
+        self.workflow = workflow
 
-        self.access = AgentToolAccess(
-            available_tools=set(self.tool_registry.keys())
-        )
+    @classmethod
+    def create_canonical(cls, policy: AgentToolPolicy | None = None) -> "AgentService":
+        return cls(policy=policy)
 
-        if policy is None:
-            policy = AgentToolPolicy(
-                allowed_tools=set(self.tool_registry.keys()),
-                max_tool_calls=5,
-                max_rounds=self.MAX_TOOL_ROUNDS,
+    def run_workflow(
+        self,
+        message: str,
+        user: object = None,
+        ticker: str | None = None,
+        market: str | None = None,
+        thread_id: str = "default",
+    ) -> AgentResult:
+        if self.workflow is None:
+            from apps.ai.agents.financial import FinancialAnalysisAgent
+            from apps.ai.agents.market import MarketAnalysisAgent
+            from apps.ai.agents.news import NewsIntelligenceAgent
+            from apps.ai.agents.risk import RiskAnalysisAgent
+            from apps.ai.agents.synthesis import FinalSynthesisAgent
+            from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
+            from apps.ai.graph.router import WorkflowRouter
+
+            self.workflow = LangGraphResearchWorkflow(
+                router=WorkflowRouter(),
+                financial_agent=FinancialAnalysisAgent(),
+                market_agent=MarketAnalysisAgent(),
+                news_agent=NewsIntelligenceAgent(),
+                synthesis_agent=FinalSynthesisAgent(),
+                risk_agent=RiskAnalysisAgent(),
             )
 
-        self.policy = policy
-        self.max_rounds = self.policy.max_rounds
-        self.allowed_tools = self.access.get_allowed_tools(self.policy)
+        state = self.workflow.run(
+            user_message=message,
+            user=user,
+            ticker=ticker,
+            market=market,
+            thread_id=thread_id,
+        )
 
-    def _get_allowed_tool_schemas(self):
-        allowed = self.access.get_allowed_tools(self.policy)
-        return [
-            tool
-            for tool in RESEARCH_TOOLS
-            if tool["function"]["name"] in allowed
-        ]
+        response_text = ""
+        tools_used: list[str] = []
 
+        if "synthesis" in state.results:
+            syn = state.results["synthesis"]
+            if hasattr(syn, "response"):
+                response_text = syn.response
+            elif isinstance(syn, dict):
+                response_text = syn.get("response", "")
+        elif state.route and state.route in state.results:
+            route_res = state.results[state.route]
+            if hasattr(route_res, "response"):
+                response_text = route_res.response
+            elif isinstance(route_res, dict):
+                response_text = route_res.get("response", "")
 
-    def _serialize_tool_result(
-    self,
-    result,
-    ):
-        if is_dataclass(result):
-            return asdict(result)
+        if not response_text:
+            for val in state.results.values():
+                if hasattr(val, "response") and val.response:
+                    response_text = val.response
+                    break
+                elif isinstance(val, dict) and val.get("response"):
+                    response_text = val.get("response")
+                    break
 
-        if isinstance(result, list):
-            return [
-                self._serialize_tool_result(item)
-                for item in result
-            ]
+        for val in state.results.values():
+            t_list = []
+            if hasattr(val, "tools_used"):
+                t_list = val.tools_used
+            elif isinstance(val, dict):
+                t_list = val.get("tools_used", [])
+            if isinstance(t_list, list):
+                for tool in t_list:
+                    if tool not in tools_used:
+                        tools_used.append(tool)
 
-        if isinstance(result, dict):
-            return {
-                key: self._serialize_tool_result(value)
-                for key, value in result.items()
+        data_payload: dict[str, object] = {
+            "route": state.route,
+            "ticker": state.ticker,
+            "market": state.market,
+        }
+        if state.research_context and state.research_context.provenance:
+            data_payload["provenance"] = {
+                k: v.model_dump() for k, v in state.research_context.provenance.items()
             }
 
-        return result
-    
-    def _build_messages(
-    self,
-    message: str,
-    ) -> list[dict]:
-        return [
-            {
-                "role": "system",
-                "content": FINPILOT_SYSTEM_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": message,
-            },
-        ]
-            
+        return AgentResult(
+            response=response_text,
+            tools_used=tools_used,
+            data=data_payload,
+        )
+
     def run(
         self,
         message: str,
+        user: object = None,
+        ticker: str | None = None,
+        market: str | None = None,
+        thread_id: str = "default",
     ) -> AgentResult:
-        tools_used: list[str] = []
-        tool_rounds = 0
-        tool_calls = 0
-
-        messages = self._build_messages(message)
-
-        response = self.llm.generate_with_tools(
-            messages=messages,
-            tools=self._get_allowed_tool_schemas(),
+        return self.run_workflow(
+            message=message,
+            user=user,
+            ticker=ticker,
+            market=market,
+            thread_id=thread_id,
         )
 
-        while True:
 
-            assistant_message = response.choices[0].message
-
-            if not assistant_message.tool_calls:
-                return AgentResult(
-                    response=(
-                        assistant_message.content
-                        or ""
-                    ),
-                    tools_used=tools_used,
-                )
-
-            tool_rounds += 1
-            self.access.validate_limits(
-                tool_calls=tool_calls,
-                rounds=tool_rounds,
-                policy=self.policy,
-            )
-
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": assistant_message.content,
-                    "tool_calls": [
-                        {
-                            "id": tool_call.id,
-                            "type": "function",
-                            "function": {
-                                "name": (
-                                    tool_call.function.name
-                                ),
-                                "arguments": (
-                                    tool_call.function.arguments
-                                ),
-                            },
-                        }
-                        for tool_call in assistant_message.tool_calls
-                    ],
-                }
-            )
-
-            for tool_call in assistant_message.tool_calls:
-                tool_name = tool_call.function.name
-
-                if tool_name not in self.tool_registry:
-                    raise ToolExecutionError(
-                        f"Unknown tool: {tool_name}"
-                    )
-
-                try:
-                    self.access.validate_tool(
-                        tool_name,
-                        self.policy,
-                    )
-                except ValueError as exc:
-                    raise ToolExecutionError(str(exc)) from exc
-
-                self.access.validate_limits(
-                    tool_calls=tool_calls + 1,
-                    rounds=tool_rounds,
-                    policy=self.policy,
-                )
-
-                tool_calls += 1
-                tools_used.append(tool_name)
-
-                try:
-                    arguments = json.loads(
-                        tool_call.function.arguments
-                    )
-                except json.JSONDecodeError as exc:
-                    raise ToolExecutionError(
-                        f"Malformed arguments for tool {tool_name}."
-                    ) from exc
-
-                if not isinstance(arguments, dict):
-                    raise ToolExecutionError(
-                        f"Arguments for tool {tool_name} must be a JSON object."
-                    )
-
-                tool_function = self.tool_registry[
-                    tool_name
-                ]
-
-                try:
-                    result = tool_function(
-                        **arguments
-                    )
-
-                except (ToolExecutionError, ValueError, TypeError) as exc:
-                    result = {
-                        "error": str(exc),
-                    }
-
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps(
-                            self._serialize_tool_result(result)
-                        ),
-                    }
-                )
-
-            response = self.llm.generate_with_tools(
-                messages=messages,
-                tools=self._get_allowed_tool_schemas(),
-            )

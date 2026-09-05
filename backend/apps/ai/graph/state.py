@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from apps.ai.graph.contracts import ResearchContext
+
 
 class AgentState(BaseModel):
 
@@ -19,6 +21,8 @@ class AgentState(BaseModel):
         "portfolio",
         "general",
     ] | None = None
+
+    research_context: ResearchContext | None = None
 
     results: dict[str, object] = Field(
         default_factory=dict

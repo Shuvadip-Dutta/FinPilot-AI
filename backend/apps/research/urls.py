@@ -1,6 +1,14 @@
 from django.urls import path
 
-from apps.research.views import CompanyResearchView, FinancialResearchView, KeyMetricsResearchView, NewsResearchView, HistoricalResearchView
+from apps.research.views import (
+    CompanyResearchView,
+    FinancialResearchView,
+    HistoricalResearchView,
+    KeyMetricsResearchView,
+    NewsResearchView,
+    ResearchSessionDetailView,
+    ResearchSessionListView,
+)
 
 
 urlpatterns = [
@@ -29,4 +37,14 @@ urlpatterns = [
         HistoricalResearchView.as_view(),
         name="research-historical",
     ),
-]
+    path(
+        "sessions/",
+        ResearchSessionListView.as_view(),
+        name="research-session-list",
+    ),
+    path(
+        "sessions/<uuid:session_id>/",
+        ResearchSessionDetailView.as_view(),
+        name="research-session-detail",
+    ),
+]

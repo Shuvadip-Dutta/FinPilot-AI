@@ -9,13 +9,13 @@ from apps.ai.services.token_budget import LLMUsage
 class GroqProviderTestCase(SimpleTestCase):
 
     @patch("apps.ai.services.providers.groq.Groq")
-    def test_generate(self, mock_groq):
+    def test_generate_qwen36_preserves_visible_reasoning(self, mock_groq):
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
 
         mock_response = MagicMock()
         mock_response.choices[0].message.content = (
-            "Reliance Industries is a major Indian company."
+            "<think>Reasoning content</think>\nFinal answer."
         )
         mock_response.usage.prompt_tokens = 15
         mock_response.usage.completion_tokens = 25
@@ -36,20 +36,13 @@ class GroqProviderTestCase(SimpleTestCase):
 
         self.assertEqual(
             result,
-            "Reliance Industries is a major Indian company.",
+            "<think>Reasoning content</think>\nFinal answer.",
         )
-        self.assertEqual(
-            mock_client.chat.completions.create.call_args.kwargs[
-                "reasoning_format"
-            ],
-            "hidden",
-        )
-        self.assertEqual(
-            mock_client.chat.completions.create.call_args.kwargs[
-                "max_completion_tokens"
-            ],
-            4096,
-        )
+
+        request_kwargs = mock_client.chat.completions.create.call_args.kwargs
+
+        self.assertNotIn("reasoning_format", request_kwargs)
+
         self.assertEqual(
             provider.last_usage,
             LLMUsage(
@@ -62,23 +55,32 @@ class GroqProviderTestCase(SimpleTestCase):
 
     @override_settings(REASONING_MAX_COMPLETION_TOKENS=4096)
     @patch("apps.ai.services.providers.groq.Groq")
-    def test_reasoning_generation_uses_configured_completion_limit(
+    def test_qwen38_uses_hidden_reasoning_configuration(
         self, mock_groq
     ):
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
+
         mock_client.chat.completions.create.return_value.choices[
             0
         ].message.content = "Configured answer"
 
-        with override_settings(REASONING_MODEL="configured-reasoning-model"):
-            provider = GroqProvider(model="configured-reasoning-model")
-            provider.generate([{"role": "user", "content": "Explain."}])
+        provider = GroqProvider(model="qwen/qwen3.8-27b")
+
+        provider.generate(
+            [{"role": "user", "content": "Explain."}]
+        )
 
         request_kwargs = mock_client.chat.completions.create.call_args.kwargs
-        self.assertEqual(request_kwargs["reasoning_format"], "hidden")
-        self.assertEqual(request_kwargs["max_completion_tokens"], 4096)
 
+        self.assertEqual(
+            request_kwargs["reasoning_format"],
+            "hidden",
+        )
+        self.assertEqual(
+            request_kwargs["max_completion_tokens"],
+            4096,
+        )
     @patch("apps.ai.services.providers.groq.Groq")
     def test_generate_forwards_explicit_max_completion_tokens(self, mock_groq):
         mock_client = MagicMock()
@@ -256,3 +258,12 @@ class GroqProviderTestCase(SimpleTestCase):
         with patch("apps.ai.services.providers.groq.Groq"):
             provider = GroqProvider()
             self.assertEqual(provider.model, "reasoning-model")
+            
+            
+    def test_reasoning_model_classification(self):
+        self.assertFalse(
+            GroqProvider(model="qwen/qwen3.6-27b")._is_reasoning_model()
+        )
+        self.assertTrue(
+            GroqProvider(model="qwen/qwen3.8-27b")._is_reasoning_model()
+        )

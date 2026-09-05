@@ -1,5 +1,7 @@
+from datetime import timedelta
 import uuid
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 
 from apps.ai.graph.state import AgentState
@@ -10,9 +12,15 @@ from apps.research.services.session_service import ResearchSessionService
 
 class ResearchSessionServiceTestCase(TestCase):
 
+    def setUp(self):
+        super().setUp()
+        self.user1 = User.objects.create_user(username="user1", email="user1@example.com", password="password1")
+        self.user2 = User.objects.create_user(username="user2", email="user2@example.com", password="password2")
+
     def test_create_session(self):
         session = ResearchSessionService.create_session(
             user_message="Analyze RELIANCE financial performance",
+            user=self.user1,
             ticker="RELIANCE",
             market="INDIA",
             route="financial",
@@ -20,12 +28,23 @@ class ResearchSessionServiceTestCase(TestCase):
         )
 
         self.assertIsNotNone(session.id)
+        self.assertEqual(session.user, self.user1)
         self.assertEqual(session.user_message, "Analyze RELIANCE financial performance")
         self.assertEqual(session.ticker, "RELIANCE")
         self.assertEqual(session.market, "INDIA")
         self.assertEqual(session.route, "financial")
         self.assertEqual(session.thread_id, "thread-123")
         self.assertEqual(session.status, "COMPLETED")
+
+    def test_multiple_users_separate_sessions(self):
+        s1 = ResearchSessionService.create_session(user_message="Msg 1", user=self.user1, ticker="RELIANCE")
+        s2 = ResearchSessionService.create_session(user_message="Msg 2", user=self.user2, ticker="TCS")
+
+        self.assertEqual(s1.user, self.user1)
+        self.assertEqual(s2.user, self.user2)
+        self.assertIn(s1, self.user1.research_sessions.all())
+        self.assertIn(s2, self.user2.research_sessions.all())
+        self.assertNotIn(s2, self.user1.research_sessions.all())
 
     def test_save_workflow_result_multiple_agents(self):
         session = ResearchSessionService.create_session(
@@ -290,6 +309,11 @@ class ResearchSessionServiceTestCase(TestCase):
         s2 = ResearchSessionService.create_session(user_message="Failed newest", ticker="INFY")
         s2.status = "FAILED"
         s2.save()
+
+        ResearchSession.objects.filter(pk=s2.id).update(
+            created_at=s1.created_at + timedelta(seconds=5)
+        )
+        s2.refresh_from_db()
 
         latest_completed = ResearchSessionService.get_latest_session_for_ticker("INFY", only_completed=True)
         self.assertIsNotNone(latest_completed)

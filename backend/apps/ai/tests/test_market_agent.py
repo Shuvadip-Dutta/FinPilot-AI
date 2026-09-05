@@ -443,3 +443,115 @@ class MarketAnalysisAgentTestCase(SimpleTestCase):
             result.data["market_data"]["quotes"][0]["price"], 1307.35
         )
         llm_service.assert_not_called()
+
+    def test_market_agent_consumes_canonical_research_context(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.schemas import ExchangeQuote, HistoricalMarketData
+
+        quotes = [
+            ExchangeQuote(exchange="NSE", price=1400.0, percent_change=1.2, year_high=1600.0, year_low=1200.0),
+            ExchangeQuote(exchange="BSE", price=1398.5, percent_change=1.1, year_high=1600.0, year_low=1200.0),
+        ]
+        market_data = HistoricalMarketData(ticker="LT", candles=[])
+        market_data.quotes = quotes
+        prov = {
+            "market_data": ProviderProvenance(
+                primary_provider="upstox",
+                source="upstox",
+                fallback_used=False,
+                data_status="complete",
+            )
+        }
+        ctx = ResearchContext(
+            ticker="LT",
+            market="IN",
+            market_data=market_data,
+            provenance=prov,
+        )
+
+        llm_service = MagicMock(return_value="LT market data is active.")
+        agent = MarketAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "LT market data is active.")
+        self.assertEqual(result.data["ticker"], "LT")
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["market_data"]["source"], "upstox")
+        self.assertEqual(len(result.data["market_data"]["quotes"]), 2)
+
+    def test_provenance_survives_from_market_tool_dict_into_agent_context(self):
+        market_dict = {
+            "ticker": "LT",
+            "market": "IN",
+            "primary_provider": "upstox",
+            "source": "indian_api",
+            "fallback_used": True,
+            "data_status": "complete",
+            "fallback_reason": "upstox_exception",
+            "provenance": {
+                "primary_provider": "upstox",
+                "source": "indian_api",
+                "fallback_used": True,
+                "data_status": "complete",
+                "fallback_reason": "upstox_exception",
+            },
+            "quotes": [{"exchange": "NSE", "price": 1400.0}],
+        }
+
+        llm_service = MagicMock(return_value="Market fallback analysis complete.")
+        agent = MarketAnalysisAgent(
+            market_data_tool=lambda **kwargs: market_dict,
+            historical_data_tool=lambda **kwargs: {"candles": []},
+            ticker="LT",
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Analyze LT market data.")
+
+        self.assertIn("provenance", result.data)
+        self.assertTrue(result.data["provenance"]["market_data"]["fallback_used"])
+        self.assertEqual(result.data["provenance"]["market_data"]["source"], "indian_api")
+
+    def test_missing_optional_market_sections_do_not_break_agent(self):
+        from apps.ai.graph.contracts import ResearchContext
+
+        ctx = ResearchContext(
+            ticker="INFY",
+            market="IN",
+            market_data=None,
+        )
+
+        llm_service = MagicMock(return_value="No market data available.")
+        agent = MarketAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.data["ticker"], "INFY")
+        self.assertNotIn("market_data", result.data)
+
+    def test_context_payload_is_bounded_and_removes_unnecessary_raw_fields(self):
+        market_dict = {
+            "ticker": "LT",
+            "market": "IN",
+            "raw_provider_payload": "x" * 1000,
+            "internal_debug_info": {"unparsed": "y" * 500},
+            "quotes": [{"exchange": "NSE", "price": 1400.0, "raw_feed_flags": 12345}],
+        }
+
+        llm_service = MagicMock(return_value="Analyzed market data.")
+        agent = MarketAnalysisAgent(
+            market_data_tool=lambda **kwargs: market_dict,
+            ticker="LT",
+            llm_service=llm_service,
+        )
+
+        agent.run("Analyze LT market data.")
+
+        prompt_content = llm_service.call_args[0][0][1]["content"]
+        self.assertNotIn("raw_provider_payload", prompt_content)
+        self.assertNotIn("internal_debug_info", prompt_content)
+        self.assertNotIn("raw_feed_flags", prompt_content)
+

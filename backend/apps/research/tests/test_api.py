@@ -1,10 +1,13 @@
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.urls import reverse
 import requests
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.research.models import ResearchEvidence, ResearchSession
+from apps.research.services.session_service import ResearchSessionService
 from apps.research.services.schemas import (
     CompanyProfile,
     ExchangeQuote,
@@ -21,6 +24,15 @@ from apps.research.services.schemas import (
 
 
 class CompanyResearchAPITestCase(APITestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="testresearcher",
+            email="researcher@example.com",
+            password="password123",
+        )
+        self.client.force_authenticate(user=self.user)
 
     @patch(
         "apps.research.views.ResearchService.get_company_profile"
@@ -870,5 +882,219 @@ class CompanyResearchAPITestCase(APITestCase):
             response.data["error"],
             "Unsupported Upstox ticker: UNKNOWN",
         )
+
+
+class ResearchSessionAPITestCase(APITestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.user1 = User.objects.create_user(
+            username="user1",
+            email="user1@example.com",
+            password="password123",
+        )
+        self.user2 = User.objects.create_user(
+            username="user2",
+            email="user2@example.com",
+            password="password123",
+        )
+
+    def test_authenticated_user_can_list_own_sessions(self):
+        s1 = ResearchSessionService.create_session(
+            user_message="Analyze RELIANCE",
+            user=self.user1,
+            ticker="RELIANCE",
+            market="IN",
+            route="financial",
+        )
+        s2 = ResearchSessionService.create_session(
+            user_message="Analyze TCS",
+            user=self.user1,
+            ticker="TCS",
+            market="IN",
+            route="market",
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get("/api/v1/research/sessions/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        session_ids = [item["id"] for item in response.data]
+        self.assertIn(str(s1.id), session_ids)
+        self.assertIn(str(s2.id), session_ids)
+
+    def test_another_users_sessions_are_absent(self):
+        s1 = ResearchSessionService.create_session(
+            user_message="User 1 session",
+            user=self.user1,
+            ticker="RELIANCE",
+        )
+        s2 = ResearchSessionService.create_session(
+            user_message="User 2 session",
+            user=self.user2,
+            ticker="INFY",
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get("/api/v1/research/sessions/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], str(s1.id))
+        self.assertNotIn(str(s2.id), [item["id"] for item in response.data])
+
+    def test_authenticated_user_can_retrieve_own_session(self):
+        s1 = ResearchSessionService.create_session(
+            user_message="Detailed research on AAPL",
+            user=self.user1,
+            ticker="AAPL",
+            market="US",
+            route="financial",
+        )
+        ResearchEvidence.objects.create(
+            session=s1,
+            agent_name="financial",
+            response="Financial metrics collected",
+            tools_used=["get_financial_metrics"],
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(f"/api/v1/research/sessions/{s1.id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(s1.id))
+        self.assertEqual(response.data["user_message"], "Detailed research on AAPL")
+        self.assertEqual(len(response.data["evidence_items"]), 1)
+        self.assertEqual(response.data["evidence_items"][0]["agent_name"], "financial")
+
+    def test_another_users_session_returns_404(self):
+        s2 = ResearchSessionService.create_session(
+            user_message="Private session of user2",
+            user=self.user2,
+            ticker="TCS",
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(f"/api/v1/research/sessions/{s2.id}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_evidence_is_returned_only_for_owned_session(self):
+        s1 = ResearchSessionService.create_session(
+            user_message="User 1 prompt",
+            user=self.user1,
+            ticker="AAPL",
+        )
+        ev1 = ResearchEvidence.objects.create(
+            session=s1,
+            agent_name="market",
+            response="Market evidence for user 1",
+        )
+
+        s2 = ResearchSessionService.create_session(
+            user_message="User 2 prompt",
+            user=self.user2,
+            ticker="MSFT",
+        )
+        ev2 = ResearchEvidence.objects.create(
+            session=s2,
+            agent_name="market",
+            response="Market evidence for user 2",
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        res1 = self.client.get(f"/api/v1/research/sessions/{s1.id}/")
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res1.data["evidence_items"]), 1)
+        self.assertEqual(res1.data["evidence_items"][0]["response"], "Market evidence for user 1")
+
+        res2 = self.client.get(f"/api/v1/research/sessions/{s2.id}/")
+        self.assertEqual(res2.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_unauthenticated_requests_return_401(self):
+        s1 = ResearchSessionService.create_session(
+            user_message="Public test",
+            user=self.user1,
+        )
+        self.client.force_authenticate(user=None)
+
+        res_list = self.client.get("/api/v1/research/sessions/")
+        self.assertEqual(res_list.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        res_detail = self.client.get(f"/api/v1/research/sessions/{s1.id}/")
+        self.assertEqual(res_detail.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_newest_first_ordering_works(self):
+        import time
+        s1 = ResearchSessionService.create_session(
+            user_message="First session",
+            user=self.user1,
+            ticker="RELIANCE",
+        )
+        time.sleep(0.01)
+        s2 = ResearchSessionService.create_session(
+            user_message="Second session",
+            user=self.user1,
+            ticker="TCS",
+        )
+        time.sleep(0.01)
+        s3 = ResearchSessionService.create_session(
+            user_message="Third session",
+            user=self.user1,
+            ticker="INFY",
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get("/api/v1/research/sessions/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [item["id"] for item in response.data]
+        self.assertEqual(ids, [str(s3.id), str(s2.id), str(s1.id)])
+
+    def test_completed_and_failed_sessions_represented_correctly(self):
+        s_completed = ResearchSessionService.create_session(
+            user_message="Successful run",
+            user=self.user1,
+            ticker="RELIANCE",
+        )
+        s_failed = ResearchSessionService.create_session(
+            user_message="Failed run",
+            user=self.user1,
+            ticker="TCS",
+        )
+        s_failed.status = "FAILED"
+        s_failed.save()
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get("/api/v1/research/sessions/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        statuses = {item["id"]: item["status"] for item in response.data}
+        self.assertEqual(statuses[str(s_completed.id)], "COMPLETED")
+        self.assertEqual(statuses[str(s_failed.id)], "FAILED")
+
+    def test_response_does_not_expose_secrets(self):
+        s1 = ResearchSessionService.create_session(
+            user_message="Secret check",
+            user=self.user1,
+            ticker="RELIANCE",
+        )
+        ResearchEvidence.objects.create(
+            session=s1,
+            agent_name="risk",
+            response="Risk assessment data",
+        )
+
+        self.client.force_authenticate(user=self.user1)
+
+        res_list = self.client.get("/api/v1/research/sessions/")
+        self.assertEqual(res_list.status_code, status.HTTP_200_OK)
+        session_data = res_list.data[0]
+        self.assertNotIn("password", session_data)
+        self.assertNotIn("user", session_data)
+        self.assertNotIn("secret", session_data)
+
+        res_detail = self.client.get(f"/api/v1/research/sessions/{s1.id}/")
+        self.assertEqual(res_detail.status_code, status.HTTP_200_OK)
+        detail_data = res_detail.data
+        self.assertNotIn("password", detail_data)
+        self.assertNotIn("user", detail_data)
+        self.assertNotIn("secret", detail_data)
+
         
         

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from apps.ai.agents.base import BaseAgent
 from apps.ai.exceptions import LLMError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
 from apps.ai.graph.state import AgentState
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
@@ -34,25 +35,37 @@ class RiskAnalysisAgent(BaseAgent):
     def name(self) -> str:
         return "risk"
 
-    def run(self, state: AgentState) -> AgentResult:
-        financial_result = self._coerce_result(state.results.get("financial"))
-        market_result = self._coerce_result(state.results.get("market"))
-        news_result = self._coerce_result(state.results.get("news"))
+    def run(self, state: AgentState | ResearchContext) -> AgentResult:
+        research_context: ResearchContext | None = None
+        ticker: str | None = None
+
+        if isinstance(state, ResearchContext):
+            research_context = state
+            ticker = research_context.ticker
+            financial_result = None
+            market_result = None
+            news_result = None
+        else:
+            ticker = state.ticker
+            financial_result = self._coerce_result(state.results.get("financial"))
+            market_result = self._coerce_result(state.results.get("market"))
+            news_result = self._coerce_result(state.results.get("news"))
+
+        has_financial = (financial_result is not None) or (research_context is not None and research_context.financials is not None)
+        has_market = (market_result is not None) or (research_context is not None and research_context.market_data is not None)
+        has_news = (news_result is not None) or (research_context is not None and research_context.news is not None)
 
         missing_information = []
-        if financial_result is None:
+        if not has_financial:
             missing_information.append("Financial research data is unavailable.")
-        if market_result is None:
+        if not has_market:
             missing_information.append("Current market data is unavailable.")
-        if news_result is None:
+        if not has_news:
             missing_information.append("News intelligence is unavailable.")
 
-        available_results = [
-            result for result in (financial_result, market_result, news_result) if result is not None
-        ]
-        if not available_results:
+        if not (has_financial or has_market or has_news):
             response = (
-                f"Risk analysis for {state.ticker or 'the requested company'}: "
+                f"Risk analysis for {ticker or 'the requested company'}: "
                 + " ".join(missing_information)
             )
             return AgentResult(response=response, tools_used=[])
@@ -62,17 +75,32 @@ class RiskAnalysisAgent(BaseAgent):
 
         tier = self._get_degradation_tier()
 
-        evidence = {
-            "financial": financial_result.data if financial_result else None,
-            "market": market_result.data if market_result else None,
-            "news": news_result.data if news_result else None,
+        # Collect section provenance from research_context or AgentResult data
+        provenance_dict: dict[str, dict] = {}
+        if research_context and research_context.provenance:
+            provenance_dict = {
+                sec: prov.model_dump() for sec, prov in research_context.provenance.items()
+            }
+        else:
+            for agent_name, res in (("financial", financial_result), ("market", market_result), ("news", news_result)):
+                if res and isinstance(res.data, dict) and "provenance" in res.data:
+                    p_data = res.data["provenance"]
+                    if isinstance(p_data, dict):
+                        provenance_dict.update(p_data)
+
+        evidence: dict[str, object] = {
+            "financial": financial_result.data if financial_result else (research_context.model_dump().get("financials") if research_context else None),
+            "market": market_result.data if market_result else (research_context.model_dump().get("market_data") if research_context else None),
+            "news": news_result.data if news_result else (research_context.model_dump().get("news") if research_context else None),
             "missing_information": missing_information,
         }
+        if provenance_dict:
+            evidence["provenance"] = provenance_dict
 
         if tier == DegradationTier.EXHAUSTED:
             return AgentResult(
                 response=(
-                    f"Risk analysis for {state.ticker or 'the requested company'} could not be completed: "
+                    f"Risk analysis for {ticker or 'the requested company'} could not be completed: "
                     "the LLM budget is exhausted."
                 ),
                 tools_used=[],
@@ -80,7 +108,7 @@ class RiskAnalysisAgent(BaseAgent):
             )
 
         messages = self._build_risk_messages(
-            state=state,
+            state=state if isinstance(state, AgentState) else AgentState(user_message=f"Risk analysis for {ticker}", ticker=ticker),
             financial_result=financial_result,
             market_result=market_result,
             news_result=news_result,
@@ -98,7 +126,7 @@ class RiskAnalysisAgent(BaseAgent):
         if not isinstance(response, str) or not response.strip():
             return AgentResult(
                 response=(
-                    f"Unable to analyze risk for {state.ticker or 'the requested company'}: "
+                    f"Unable to analyze risk for {ticker or 'the requested company'}: "
                     "the reasoning model returned an empty response."
                 ),
                 tools_used=[],
@@ -106,6 +134,7 @@ class RiskAnalysisAgent(BaseAgent):
             )
 
         return AgentResult(response=response.strip(), tools_used=[], data=evidence)
+
 
     def _get_degradation_tier(self) -> DegradationTier:
         manager = getattr(self.llm_service, "token_budget_manager", None)

@@ -9,12 +9,25 @@ class ResearchSessionService:
     @staticmethod
     def create_session(
         user_message: str,
+        user: object = None,
         ticker: str | None = None,
         market: str | None = None,
         route: str = "",
         thread_id: str = "",
     ) -> ResearchSession:
+        if user is None:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user, _ = User.objects.get_or_create(
+                username="system_default",
+                defaults={
+                    "email": "system_default@finpilot.local",
+                    "is_active": False,
+                },
+            )
+
         return ResearchSession.objects.create(
+            user=user,
             user_message=user_message,
             ticker=ticker,
             market=market,
@@ -26,6 +39,21 @@ class ResearchSessionService:
     def get_session(session_id: object) -> ResearchSession:
         try:
             return ResearchSession.objects.get(pk=session_id)
+        except (ResearchSession.DoesNotExist, ValueError, ValidationError):
+            raise ResearchSession.DoesNotExist(
+                f"ResearchSession with id '{session_id}' does not exist."
+            )
+
+    @staticmethod
+    def get_user_sessions(user: object) -> list[ResearchSession]:
+        return list(ResearchSession.objects.filter(user=user).order_by("-created_at"))
+
+    @staticmethod
+    def get_user_session(user: object, session_id: object) -> ResearchSession:
+        try:
+            return ResearchSession.objects.prefetch_related("evidence_items").get(
+                pk=session_id, user=user
+            )
         except (ResearchSession.DoesNotExist, ValueError, ValidationError):
             raise ResearchSession.DoesNotExist(
                 f"ResearchSession with id '{session_id}' does not exist."

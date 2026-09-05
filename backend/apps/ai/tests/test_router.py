@@ -68,3 +68,28 @@ class WorkflowRouterTestCase(SimpleTestCase):
             ),
             "portfolio",
         )
+
+    def test_comprehensive_multi_domain_query_routes_to_general(self):
+        route = self.router.route(
+            "Conduct a complete fundamental and market research analysis of Larsen & Toubro (L&T). "
+            "Cover company profile, current market data, financial health, recent news, sentiment, key risks."
+        )
+        self.assertEqual(route, "general")
+
+    def test_news_only_query_routes_to_news(self):
+        route = self.router.route(
+            "Show me recent news and latest updates for Reliance."
+        )
+        self.assertEqual(route, "news")
+
+    def test_financial_only_query_routes_to_financial(self):
+        route = self.router.route(
+            "Show quarterly revenue and earnings statement for Infosys."
+        )
+        self.assertEqual(route, "financial")
+
+    def test_market_only_query_routes_to_market(self):
+        route = self.router.route(
+            "What is the share price quote for TCS?"
+        )
+        self.assertEqual(route, "market")

@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from apps.ai.agents.base import BaseAgent
 from apps.ai.exceptions import LLMError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
 from apps.ai.graph.state import AgentState
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
@@ -107,6 +108,57 @@ class FinalSynthesisAgent(BaseAgent):
             data=self._collect_structured_evidence(state),
         )
 
+    @classmethod
+    def build_canonical_context(
+        cls,
+        state: AgentState,
+    ) -> ResearchContext:
+        """Construct a unified ResearchContext from specialist results in AgentState when structured models are available."""
+        if state.research_context is not None:
+            ctx = state.research_context
+            for key in ("financial", "market", "news", "risk"):
+                res = state.results.get(key)
+                if isinstance(res, AgentResult) and isinstance(res.data, dict):
+                    p_dict = res.data.get("provenance")
+                    if isinstance(p_dict, dict):
+                        for sec_name, prov_val in p_dict.items():
+                            if sec_name not in ctx.provenance and isinstance(prov_val, dict):
+                                status_val = str(prov_val.get("data_status") or "complete")
+                                ctx.provenance[sec_name] = ProviderProvenance(
+                                    primary_provider=str(prov_val.get("primary_provider") or prov_val.get("source") or "upstox"),
+                                    source=str(prov_val.get("source") or prov_val.get("provider_used") or "upstox"),
+                                    fallback_used=bool(prov_val.get("fallback_used", False)),
+                                    data_status=status_val if status_val in ("complete", "partial", "empty", "failed") else "complete",
+                                    fallback_reason=str(prov_val.get("fallback_reason")) if prov_val.get("fallback_reason") else None,
+                                )
+            return ctx
+
+        ticker = state.ticker or ""
+        market = state.market or "IN"
+        provenance_dict: dict[str, ProviderProvenance] = {}
+
+        for key in ("financial", "market", "news", "risk"):
+            res = state.results.get(key)
+            if isinstance(res, AgentResult) and isinstance(res.data, dict):
+                p_dict = res.data.get("provenance")
+                if isinstance(p_dict, dict):
+                    for sec_name, prov_val in p_dict.items():
+                        if isinstance(prov_val, dict):
+                            status_val = str(prov_val.get("data_status") or "complete")
+                            provenance_dict[sec_name] = ProviderProvenance(
+                                primary_provider=str(prov_val.get("primary_provider") or prov_val.get("source") or "upstox"),
+                                source=str(prov_val.get("source") or prov_val.get("provider_used") or "upstox"),
+                                fallback_used=bool(prov_val.get("fallback_used", False)),
+                                data_status=status_val if status_val in ("complete", "partial", "empty", "failed") else "complete",
+                                fallback_reason=str(prov_val.get("fallback_reason")) if prov_val.get("fallback_reason") else None,
+                            )
+
+        return ResearchContext(
+            ticker=ticker,
+            market=market,
+            provenance=provenance_dict,
+        )
+
     def _get_degradation_tier(self) -> DegradationTier:
         manager = getattr(self.llm_service, "token_budget_manager", None)
         if manager is None and hasattr(self.llm_service, "__self__"):
@@ -168,17 +220,30 @@ class FinalSynthesisAgent(BaseAgent):
             ("portfolio_optimization", "Portfolio analysis was not available."),
         ]
 
+        provenance_dict: dict[str, dict] = {}
+
         for result_key, missing_text in ordered_names:
             val = state.results.get(result_key)
             if isinstance(val, AgentResult):
                 if val.data is not None:
                     evidence[result_key] = val.data
+                    if isinstance(val.data, dict) and "provenance" in val.data:
+                        p_data = val.data["provenance"]
+                        if isinstance(p_data, dict):
+                            provenance_dict.update(p_data)
                 if not val.response or not val.response.strip():
                     missing_information.append(missing_text)
+            elif isinstance(val, dict):
+                evidence[result_key] = val
+                if "provenance" in val and isinstance(val["provenance"], dict):
+                    provenance_dict.update(val["provenance"])
             elif val is not None:
                 evidence[result_key] = str(val)
             else:
                 missing_information.append(missing_text)
+
+        if provenance_dict:
+            evidence["provenance"] = provenance_dict
 
         evidence["missing_information"] = missing_information
         if state.errors:

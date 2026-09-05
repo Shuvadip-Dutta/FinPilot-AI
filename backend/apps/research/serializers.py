@@ -65,4 +65,57 @@ class HistoricalResearchQuerySerializer(
             )
 
         return attrs
+
+
+from apps.research.models import ResearchEvidence, ResearchSession
+
+
+class ResearchEvidenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResearchEvidence
+        fields = (
+            "id",
+            "agent_name",
+            "response",
+            "tools_used",
+            "structured_data",
+            "created_at",
+        )
+
+
+class ResearchSessionListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResearchSession
+        fields = (
+            "id",
+            "thread_id",
+            "user_message",
+            "ticker",
+            "market",
+            "route",
+            "status",
+            "final_synthesis",
+            "latency_ms",
+            "created_at",
+        )
+
+
+class ResearchSessionDetailSerializer(serializers.ModelSerializer):
+    evidence_items = ResearchEvidenceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ResearchSession
+        fields = (
+            "id",
+            "thread_id",
+            "user_message",
+            "ticker",
+            "market",
+            "route",
+            "status",
+            "final_synthesis",
+            "latency_ms",
+            "created_at",
+            "evidence_items",
+        )
     

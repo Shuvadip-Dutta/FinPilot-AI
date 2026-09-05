@@ -21,6 +21,8 @@ from apps.research.services.schemas import (
     NewsArticle,
     NewsResearch,
     ExchangeQuote,
+    ProvenanceMetadata,
+    ProvenanceList,
 )
 
 
@@ -331,3 +333,34 @@ class ResearchToolsTestCase(SimpleTestCase):
             result["articles"][0]["title"],
             "Reliance market update",
         )
+
+    @patch("apps.ai.services.research_tools.ResearchService")
+    def test_provenance_metadata_in_tool_output(self, mock_research_service):
+        mock_service = mock_research_service.return_value
+        stmt = FinancialStatement(
+            statement_type="INC",
+            fiscal_year="2026",
+            end_date="2026-03-31",
+            period_type="annual",
+            period_length=12,
+            metrics=[],
+        )
+        prov = ProvenanceMetadata(
+            primary_provider="upstox",
+            source="indian_api",
+            fallback_used=True,
+            data_status="complete",
+            fallback_reason="upstox_exception",
+        )
+        stmt_list = ProvenanceList([stmt], provenance=prov)
+        mock_service.get_financials.return_value = stmt_list
+
+        res = get_financials("LT", "IN")
+
+        self.assertEqual(res["primary_provider"], "upstox")
+        self.assertEqual(res["source"], "indian_api")
+        self.assertTrue(res["fallback_used"])
+        self.assertEqual(res["data_status"], "complete")
+        self.assertEqual(res["fallback_reason"], "upstox_exception")
+        self.assertIn("provenance", res)
+        self.assertEqual(res["provenance"]["source"], "indian_api")

@@ -9,12 +9,21 @@ from django.conf import settings
 
 from apps.ai.agents.base import BaseAgent
 from apps.ai.exceptions import LLMError, ToolExecutionError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+from apps.ai.graph.state import AgentState
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
 from apps.ai.services.token_budget import (
     DegradationTier,
     get_default_token_budget_manager,
+)
+from apps.research.services.schemas import (
+    CompanyProfile,
+    FinancialMetric,
+    FinancialStatement,
+    KeyMetric,
+    KeyMetricsResearch,
 )
 
 
@@ -23,7 +32,7 @@ LLMCallable = Callable[[list[dict[str, str]]], str]
 
 
 class FinancialAnalysisContextBuilder:
-    """Prepare a bounded, deterministic financial-analysis prompt."""
+    """Prepare a bounded, deterministic financial-analysis prompt using canonical ResearchContext."""
 
     PRIORITY_METRICS = (
         "revenue",
@@ -64,16 +73,47 @@ class FinancialAnalysisContextBuilder:
         self,
         message: str,
         ticker: str,
-        financials: dict[str, object],
-        key_metrics: dict[str, object],
+        financials: dict[str, object] | list[FinancialStatement] | ResearchContext | None = None,
+        key_metrics: dict[str, object] | KeyMetricsResearch | None = None,
         tier: DegradationTier = DegradationTier.NORMAL,
+        research_context: ResearchContext | None = None,
     ) -> dict[str, object]:
-        base_context = {
+        if isinstance(message, ResearchContext):
+            research_context = message
+            message = f"Analyze financials for {research_context.ticker}"
+            ticker = research_context.ticker
+        elif isinstance(financials, ResearchContext):
+            research_context = financials
+            financials = None
+
+        if research_context is None:
+            research_context = self.build_canonical_context(
+                ticker=ticker,
+                market="IN",
+                financials_raw=financials,
+                key_metrics_raw=key_metrics,
+            )
+
+        fin_stmt_data = self._prepare_financial_statement_data(research_context.financials)
+        key_met_data = self._prepare_key_metrics_data(research_context.key_metrics)
+
+        base_context: dict[str, object] = {
             "user_question": message,
-            "ticker": ticker,
-            "financial_statement_data": self._prepare_financial_statement_data(financials),
-            "key_metrics_data": self._prepare_key_metrics_data(key_metrics),
+            "ticker": research_context.ticker,
+            "financial_statement_data": fin_stmt_data,
+            "key_metrics_data": key_met_data,
         }
+
+        if research_context.company_profile:
+            base_context["company_profile"] = self._prepare_company_profile_data(
+                research_context.company_profile
+            )
+
+        if research_context.provenance:
+            base_context["provenance"] = {
+                section: prov.model_dump()
+                for section, prov in research_context.provenance.items()
+            }
 
         if tier == DegradationTier.CONSTRAINED:
             reduced_context = self._apply_structural_reduction(base_context)
@@ -124,7 +164,7 @@ class FinancialAnalysisContextBuilder:
                 ),
             }
 
-        return {
+        res: dict[str, object] = {
             "user_question": message,
             "ticker": ticker,
             "financial_statement_data": "Financial statement data was omitted because the supplied dataset exceeded the configured context budget.",
@@ -136,72 +176,253 @@ class FinancialAnalysisContextBuilder:
                 "discarded before low-priority fields."
             ),
         }
+        if "provenance" in base_context:
+            res["provenance"] = base_context["provenance"]
+        return res
+
+    def build_canonical_context(
+        self,
+        ticker: str,
+        market: str = "IN",
+        financials_raw: object = None,
+        key_metrics_raw: object = None,
+        company_profile_raw: object = None,
+    ) -> ResearchContext:
+        """Construct a canonical ResearchContext from raw tool dictionary outputs or domain objects."""
+        if isinstance(financials_raw, ResearchContext):
+            return financials_raw
+
+        parsed_financials: list[FinancialStatement] | None = None
+        parsed_key_metrics: KeyMetricsResearch | None = None
+        parsed_profile: CompanyProfile | None = None
+        provenance_dict: dict[str, ProviderProvenance] = {}
+
+        # 1. Parse Financial Statements
+        if isinstance(financials_raw, list):
+            parsed_financials = [
+                item if isinstance(item, FinancialStatement) else self._dict_to_financial_statement(item)
+                for item in financials_raw
+                if isinstance(item, (FinancialStatement, dict))
+            ]
+        elif isinstance(financials_raw, dict):
+            raw_stmts = financials_raw.get("financials") or []
+            if isinstance(raw_stmts, list):
+                parsed_financials = [
+                    self._dict_to_financial_statement(item)
+                    for item in raw_stmts
+                    if isinstance(item, dict)
+                ]
+            prov = self._extract_provider_provenance(financials_raw)
+            if prov:
+                provenance_dict["financials"] = prov
+
+        # 2. Parse Key Metrics
+        if isinstance(key_metrics_raw, KeyMetricsResearch):
+            parsed_key_metrics = key_metrics_raw
+        elif isinstance(key_metrics_raw, dict):
+            raw_metrics = key_metrics_raw.get("metrics") or []
+            metric_objects: list[KeyMetric] = []
+            if isinstance(raw_metrics, list):
+                for item in raw_metrics:
+                    if isinstance(item, KeyMetric):
+                        metric_objects.append(item)
+                    elif isinstance(item, dict):
+                        metric_objects.append(
+                            KeyMetric(
+                                category=str(item.get("category") or "general"),
+                                name=str(item.get("name") or item.get("key") or ""),
+                                key=str(item.get("key") or item.get("name") or ""),
+                                value=item.get("value") if isinstance(item.get("value"), (int, float)) else None,
+                                raw_value=str(item.get("raw_value")) if item.get("raw_value") is not None else None,
+                            )
+                        )
+            parsed_key_metrics = KeyMetricsResearch(ticker=ticker, metrics=metric_objects)
+            prov = self._extract_provider_provenance(key_metrics_raw)
+            if prov:
+                provenance_dict["key_metrics"] = prov
+
+        # 3. Parse Company Profile
+        if isinstance(company_profile_raw, CompanyProfile):
+            parsed_profile = company_profile_raw
+        elif isinstance(company_profile_raw, dict):
+            parsed_profile = CompanyProfile(
+                ticker=str(company_profile_raw.get("ticker") or ticker),
+                name=str(company_profile_raw.get("name") or ticker),
+                exchange=str(company_profile_raw.get("exchange") or "NSE"),
+                country=str(company_profile_raw.get("country") or "India"),
+                sector=company_profile_raw.get("sector"),
+                industry=company_profile_raw.get("industry"),
+                description=company_profile_raw.get("description"),
+                isin=company_profile_raw.get("isin"),
+            )
+            prov = self._extract_provider_provenance(company_profile_raw)
+            if prov:
+                provenance_dict["company_profile"] = prov
+
+        return ResearchContext(
+            ticker=ticker,
+            market=market,
+            company_profile=parsed_profile,
+            financials=parsed_financials,
+            key_metrics=parsed_key_metrics,
+            provenance=provenance_dict,
+        )
+
+    def _extract_provider_provenance(self, raw_dict: dict) -> ProviderProvenance | None:
+        if not isinstance(raw_dict, dict):
+            return None
+        prov_dict = raw_dict.get("provenance") if isinstance(raw_dict.get("provenance"), dict) else raw_dict
+        if not isinstance(prov_dict, dict):
+            return None
+        if "source" in prov_dict or "primary_provider" in prov_dict or "fallback_used" in prov_dict:
+            status_val = str(prov_dict.get("data_status") or "complete")
+            if hasattr(status_val, "value"):
+                status_val = status_val.value
+            return ProviderProvenance(
+                primary_provider=str(prov_dict.get("primary_provider") or prov_dict.get("source") or "upstox"),
+                source=str(prov_dict.get("source") or prov_dict.get("provider_used") or "upstox"),
+                fallback_used=bool(prov_dict.get("fallback_used", False)),
+                data_status=status_val if status_val in ("complete", "partial", "empty", "failed") else "complete",
+                fallback_reason=str(prov_dict.get("fallback_reason")) if prov_dict.get("fallback_reason") else None,
+            )
+        return None
+
+    def _dict_to_financial_statement(self, record: dict) -> FinancialStatement:
+        metrics_raw = record.get("metrics") or []
+        metrics: list[FinancialMetric] = []
+        if isinstance(metrics_raw, list):
+            for m in metrics_raw:
+                if isinstance(m, FinancialMetric):
+                    metrics.append(m)
+                elif isinstance(m, dict):
+                    metrics.append(
+                        FinancialMetric(
+                            name=str(m.get("name") or m.get("key") or ""),
+                            key=str(m.get("key") or m.get("name") or ""),
+                            value=m.get("value") if isinstance(m.get("value"), (int, float)) else None,
+                        )
+                    )
+        fiscal_yr = record.get("fiscal_year") or record.get("period")
+        return FinancialStatement(
+            statement_type=str(record.get("statement_type") or "INC"),
+            fiscal_year=str(fiscal_yr) if fiscal_yr is not None else None,
+            end_date=str(record.get("end_date")) if record.get("end_date") is not None else None,
+            period_type=str(record.get("period_type")) if record.get("period_type") is not None else None,
+            period_length=record.get("period_length") if isinstance(record.get("period_length"), int) else None,
+            metrics=metrics,
+        )
+
+
+    def _prepare_company_profile_data(self, profile: CompanyProfile) -> dict[str, object]:
+        return {
+            "ticker": profile.ticker,
+            "name": profile.name,
+            "exchange": profile.exchange,
+            "country": profile.country,
+            "sector": profile.sector,
+            "industry": profile.industry,
+            "description": profile.description,
+            "isin": profile.isin,
+        }
 
     def _prepare_financial_statement_data(
         self,
-        financials: dict[str, object],
+        financials: list[FinancialStatement] | dict[str, object] | None,
     ) -> list[dict[str, object]] | str:
-        if not isinstance(financials, dict):
+        if financials is None:
             return "No financial statement data was returned."
 
-        records = list(financials.get("financials") or [])
+        records: list[FinancialStatement | dict] = []
+        if isinstance(financials, list):
+            records = financials
+        elif isinstance(financials, dict):
+            records = list(financials.get("financials") or [])
+
         if not records:
             return "No financial statement data was returned."
 
         prepared: list[dict[str, object]] = []
         for record in records:
-            if not isinstance(record, dict):
-                continue
-            metrics = record.get("metrics") or []
-            prepared_metrics: list[dict[str, object]] = []
-            for metric in metrics:
-                if not isinstance(metric, dict):
-                    continue
-                prepared_metrics.append(
+            if isinstance(record, FinancialStatement):
+                prepared_metrics = [
+                    {"name": m.name, "key": m.key, "value": m.value}
+                    for m in record.metrics
+                    if m.value is not None or m.key or m.name
+                ]
+                prepared.append(
                     {
-                        "name": metric.get("name"),
-                        "key": metric.get("key"),
-                        "value": metric.get("value"),
+                        "statement_type": record.statement_type,
+                        "period": record.fiscal_year or record.end_date,
+                        "fiscal_year": record.fiscal_year,
+                        "end_date": record.end_date,
+                        "period_type": record.period_type,
+                        "period_length": record.period_length,
+                        "metrics": prepared_metrics,
                     }
                 )
-            prepared.append(
-                {
-                    "statement_type": record.get("statement_type"),
-                    "period": record.get("period"),
-                    "fiscal_year": record.get("fiscal_year"),
-                    "end_date": record.get("end_date"),
-                    "period_type": record.get("period_type"),
-                    "period_length": record.get("period_length"),
-                    "metrics": prepared_metrics,
-                }
-            )
+            elif isinstance(record, dict):
+                metrics = record.get("metrics") or []
+                prepared_metrics = [
+                    {
+                        "name": m.get("name"),
+                        "key": m.get("key"),
+                        "value": m.get("value"),
+                    }
+                    for m in metrics
+                    if isinstance(m, dict)
+                ]
+                prepared.append(
+                    {
+                        "statement_type": record.get("statement_type"),
+                        "period": record.get("period") or record.get("fiscal_year") or record.get("end_date"),
+                        "fiscal_year": record.get("fiscal_year"),
+                        "end_date": record.get("end_date"),
+                        "period_type": record.get("period_type"),
+                        "period_length": record.get("period_length"),
+                        "metrics": prepared_metrics,
+                    }
+                )
 
         return prepared or "No financial statement data was returned."
 
     def _prepare_key_metrics_data(
         self,
-        key_metrics: dict[str, object],
+        key_metrics: KeyMetricsResearch | dict[str, object] | None,
     ) -> list[dict[str, object]] | str:
-        if not isinstance(key_metrics, dict):
+        if key_metrics is None:
             return "No key metrics were returned."
 
-        metrics = list(key_metrics.get("metrics") or [])
+        metrics: list[KeyMetric | dict] = []
+        if isinstance(key_metrics, KeyMetricsResearch):
+            metrics = key_metrics.metrics
+        elif isinstance(key_metrics, dict):
+            metrics = list(key_metrics.get("metrics") or [])
+
         if not metrics:
             return "No key metrics were returned."
 
         prepared: list[dict[str, object]] = []
         for metric in metrics:
-            if not isinstance(metric, dict):
-                continue
-            prepared.append(
-                {
-                    "category": metric.get("category"),
-                    "name": metric.get("name"),
-                    "key": metric.get("key"),
-                    "value": metric.get("value"),
-                    "raw_value": metric.get("raw_value"),
-                }
-            )
+            if isinstance(metric, KeyMetric):
+                prepared.append(
+                    {
+                        "category": metric.category,
+                        "name": metric.name,
+                        "key": metric.key,
+                        "value": metric.value,
+                        "raw_value": metric.raw_value,
+                    }
+                )
+            elif isinstance(metric, dict):
+                prepared.append(
+                    {
+                        "category": metric.get("category"),
+                        "name": metric.get("name"),
+                        "key": metric.get("key"),
+                        "value": metric.get("value"),
+                        "raw_value": metric.get("raw_value"),
+                    }
+                )
 
         return prepared or "No key metrics were returned."
 
@@ -222,12 +443,17 @@ class FinancialAnalysisContextBuilder:
         else:
             trimmed_metrics = key_metrics_data
 
-        return {
+        res: dict[str, object] = {
             "user_question": context.get("user_question"),
             "ticker": context.get("ticker"),
             "financial_statement_data": trimmed_statements,
             "key_metrics_data": trimmed_metrics,
         }
+        if "company_profile" in context:
+            res["company_profile"] = context["company_profile"]
+        if "provenance" in context:
+            res["provenance"] = context["provenance"]
+        return res
 
     def _apply_minimal_reduction(
         self,
@@ -246,12 +472,17 @@ class FinancialAnalysisContextBuilder:
         else:
             trimmed_metrics = key_metrics_data
 
-        return {
+        res: dict[str, object] = {
             "user_question": context.get("user_question"),
             "ticker": context.get("ticker"),
             "financial_statement_data": trimmed_statements,
             "key_metrics_data": trimmed_metrics,
         }
+        if "company_profile" in context:
+            res["company_profile"] = context["company_profile"]
+        if "provenance" in context:
+            res["provenance"] = context["provenance"]
+        return res
 
     def _select_recent_statements(
         self,
@@ -337,7 +568,7 @@ class FinancialAnalysisContextBuilder:
 
     @staticmethod
     def _statement_sort_key(statement: dict[str, object]) -> tuple[int, str, str]:
-        raw_value = statement.get("end_date") or statement.get("fiscal_year") or "0000"
+        raw_value = statement.get("end_date") or statement.get("fiscal_year") or statement.get("period") or "0000"
         value = str(raw_value)
         try:
             parsed = datetime.strptime(value, "%Y-%m-%d")
@@ -383,9 +614,30 @@ class FinancialAnalysisAgent(BaseAgent):
     def name(self) -> str:
         return "financial"
 
-    def run(self, message: str) -> AgentResult:
+    def run(self, message: str | AgentState | ResearchContext) -> AgentResult:
         """Return a deterministic financial-data summary interpreted by LLM."""
-        ticker = self.ticker or self._extract_ticker(message)
+        research_context: ResearchContext | None = None
+
+        if isinstance(message, ResearchContext):
+            research_context = message
+            user_message = f"Analyze financials for {research_context.ticker}"
+            ticker = research_context.ticker
+            market = research_context.market
+        elif isinstance(message, AgentState):
+            user_message = message.user_message
+            ticker = (
+                self.ticker
+                or (message.ticker.upper() if message.ticker else None)
+                or self._extract_ticker(user_message)
+            )
+            market = (
+                (message.market.upper() if message.market else None)
+                or self.market
+            )
+        else:
+            user_message = message
+            ticker = self.ticker or self._extract_ticker(message)
+            market = self.market
 
         if ticker is None:
             return AgentResult(
@@ -397,24 +649,33 @@ class FinancialAnalysisAgent(BaseAgent):
 
         tools_used: list[str] = []
 
-        try:
-            financials = self.financials_tool(
-                ticker=ticker,
-                market=self.market,
-            )
-            tools_used.append("get_financials")
+        if research_context is None or (not research_context.financials and not research_context.key_metrics):
+            try:
+                financials = self.financials_tool(
+                    ticker=ticker,
+                    market=market,
+                )
+                tools_used.append("get_financials")
 
-            key_metrics = self.key_metrics_tool(
+                key_metrics = self.key_metrics_tool(
+                    ticker=ticker,
+                    market=market,
+                )
+                tools_used.append("get_key_metrics")
+            except (ToolExecutionError, ValueError, TypeError) as exc:
+                return AgentResult(
+                    response=(
+                        f"Unable to retrieve financial analysis for {ticker}: {exc}"
+                    ),
+                    tools_used=tools_used,
+                )
+            
+            context_builder = FinancialAnalysisContextBuilder(max_chars=self.max_context_chars)
+            research_context = context_builder.build_canonical_context(
                 ticker=ticker,
-                market=self.market,
-            )
-            tools_used.append("get_key_metrics")
-        except (ToolExecutionError, ValueError, TypeError) as exc:
-            return AgentResult(
-                response=(
-                    f"Unable to retrieve financial analysis for {ticker}: {exc}"
-                ),
-                tools_used=tools_used,
+                market=market,
+                financials_raw=financials,
+                key_metrics_raw=key_metrics,
             )
 
         tier = self._get_degradation_tier()
@@ -422,10 +683,10 @@ class FinancialAnalysisAgent(BaseAgent):
 
         if tier == DegradationTier.EXHAUSTED:
             evidence = context_builder.prepare(
-                message=message,
+                message=user_message,
                 ticker=ticker,
-                financials=financials,
-                key_metrics=key_metrics,
+                tier=tier,
+                research_context=research_context,
             )
             return AgentResult(
                 response=(
@@ -437,11 +698,10 @@ class FinancialAnalysisAgent(BaseAgent):
             )
 
         messages = self._build_analysis_messages(
-            message=message,
+            message=user_message,
             ticker=ticker,
-            financials=financials,
-            key_metrics=key_metrics,
             tier=tier,
+            research_context=research_context,
         )
         self._enforce_context_budget(messages)
 
@@ -547,9 +807,10 @@ class FinancialAnalysisAgent(BaseAgent):
         self,
         message: str,
         ticker: str,
-        financials: dict[str, object],
-        key_metrics: dict[str, object],
         tier: DegradationTier = DegradationTier.NORMAL,
+        financials: object = None,
+        key_metrics: object = None,
+        research_context: ResearchContext | None = None,
     ) -> list[dict[str, str]]:
         system_prompt = (
             "You are the financial analysis specialist for FinPilot AI. "
@@ -570,6 +831,7 @@ class FinancialAnalysisAgent(BaseAgent):
             financials=financials,
             key_metrics=key_metrics,
             tier=tier,
+            research_context=research_context,
         )
 
         payload = json.dumps(

@@ -20,6 +20,15 @@ WorkflowRoute = Literal[
 class WorkflowRouter:
     """Classify messages using predictable, local keyword rules."""
 
+    COMPREHENSIVE_KEYWORDS = (
+        "overview",
+        "comprehensive",
+        "complete research",
+        "complete analysis",
+        "full analysis",
+        "full research",
+        "deep dive",
+    )
     NEWS_KEYWORDS = (
         "news",
         "headline",
@@ -66,6 +75,24 @@ class WorkflowRouter:
         """Return the workflow route for ``message`` without calling an LLM."""
         normalized_message = message.casefold()
 
+        if self._contains_keyword(normalized_message, self.COMPREHENSIVE_KEYWORDS):
+            return "general"
+
+        matching_domains = sum(
+            1
+            for domain_keywords in (
+                self.NEWS_KEYWORDS,
+                self.MARKET_KEYWORDS,
+                self.FINANCIAL_KEYWORDS,
+                self.RISK_KEYWORDS,
+                self.PORTFOLIO_KEYWORDS,
+            )
+            if self._contains_keyword(normalized_message, domain_keywords)
+        )
+
+        if matching_domains >= 2:
+            return "general"
+
         if self._contains_keyword(normalized_message, self.NEWS_KEYWORDS):
             return "news"
 
@@ -74,10 +101,10 @@ class WorkflowRouter:
 
         if self._contains_keyword(normalized_message, self.FINANCIAL_KEYWORDS):
             return "financial"
-        
+
         if self._contains_keyword(normalized_message, self.RISK_KEYWORDS):
             return "risk"
-        
+
         if self._contains_keyword(normalized_message, self.PORTFOLIO_KEYWORDS):
             return "portfolio"
 

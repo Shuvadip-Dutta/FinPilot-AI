@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 from apps.ai.agents.base import BaseAgent
 from apps.ai.exceptions import LLMError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+from apps.ai.graph.state import AgentState
 from apps.ai.services import research_tools
 from apps.ai.services.llm_service import LLMService
 from apps.ai.services.schemas import AgentResult
@@ -13,6 +15,7 @@ from apps.ai.services.token_budget import (
     DegradationTier,
     get_default_token_budget_manager,
 )
+from apps.research.services.schemas import HistoricalMarketData
 
 
 ResearchTool = Callable[..., dict[str, object]]
@@ -48,9 +51,30 @@ class MarketAnalysisAgent(BaseAgent):
     def name(self) -> str:
         return "market"
 
-    def run(self, message: str) -> AgentResult:
+    def run(self, message: str | AgentState | ResearchContext) -> AgentResult:
         """Return a deterministic summary based on market research payloads."""
-        ticker = self.ticker or self._extract_ticker(message)
+        research_context: ResearchContext | None = None
+
+        if isinstance(message, ResearchContext):
+            research_context = message
+            user_message = f"Analyze market data for {research_context.ticker}"
+            ticker = research_context.ticker
+            market = research_context.market
+        elif isinstance(message, AgentState):
+            user_message = message.user_message
+            ticker = (
+                self.ticker
+                or (message.ticker.upper() if message.ticker else None)
+                or self._extract_ticker(user_message)
+            )
+            market = (
+                (message.market.upper() if message.market else None)
+                or self.market
+            )
+        else:
+            user_message = message
+            ticker = self.ticker or self._extract_ticker(message)
+            market = self.market
 
         if ticker is None:
             return AgentResult(
@@ -59,46 +83,96 @@ class MarketAnalysisAgent(BaseAgent):
             )
 
         tools_used: list[str] = []
+        market_data: dict[str, object] | None = None
+        historical_data: dict[str, object] | None = None
 
-        try:
-            market_data = self.market_data_tool(
-                ticker=ticker,
-                market=self.market,
-            )
-            tools_used.append("get_market_data")
-
-            to_date, from_date = self._resolve_date_range(message)
-            historical_data: dict[str, object] | None = None
-
-            if to_date:
-                historical_data = self.historical_data_tool(
+        if research_context is not None:
+            if research_context.market_data:
+                quotes = [
+                    {
+                        "exchange": getattr(q, "exchange", None),
+                        "price": getattr(q, "price", None),
+                        "percent_change": getattr(q, "percent_change", None),
+                        "year_high": getattr(q, "year_high", None),
+                        "year_low": getattr(q, "year_low", None),
+                    }
+                    for q in (getattr(research_context.market_data, "quotes", []) or [])
+                ]
+                market_data = {
+                    "ticker": research_context.market_data.ticker,
+                    "market": market,
+                    "quotes": quotes,
+                }
+                if getattr(research_context.market_data, "candles", None):
+                    historical_data = {
+                        "ticker": research_context.market_data.ticker,
+                        "candles": [
+                            {
+                                "timestamp": c.timestamp,
+                                "open": c.open,
+                                "high": c.high,
+                                "low": c.low,
+                                "close": c.close,
+                                "volume": c.volume,
+                                "open_interest": c.open_interest,
+                            }
+                            for c in research_context.market_data.candles
+                        ],
+                    }
+        else:
+            try:
+                market_data = self.market_data_tool(
                     ticker=ticker,
-                    to_date=to_date,
-                    from_date=from_date,
-                    market=self.market,
+                    market=market,
                 )
-                tools_used.append("get_historical_data")
-        except (ValueError, TypeError) as exc:
-            return AgentResult(
-                response=(
-                    f"Unable to retrieve market analysis for {ticker}: {exc}"
-                ),
-                tools_used=tools_used,
+                tools_used.append("get_market_data")
+
+                to_date, from_date = self._resolve_date_range(user_message)
+
+                if to_date:
+                    historical_data = self.historical_data_tool(
+                        ticker=ticker,
+                        to_date=to_date,
+                        from_date=from_date,
+                        market=market,
+                    )
+                    tools_used.append("get_historical_data")
+            except (ValueError, TypeError) as exc:
+                return AgentResult(
+                    response=(
+                        f"Unable to retrieve market analysis for {ticker}: {exc}"
+                    ),
+                    tools_used=tools_used,
+                )
+            
+            research_context = self.build_canonical_context(
+                ticker=ticker,
+                market=market,
+                market_data_raw=market_data,
+                historical_data_raw=historical_data,
             )
 
         tier = self._get_degradation_tier()
 
-        evidence = {
+        evidence: dict[str, object] = {
             "ticker": ticker,
-            "market": self.market,
+            "market": market,
         }
-        if self._has_usable_quotes(market_data):
+
+        if market_data and self._has_usable_quotes(market_data):
             evidence["market_data"] = market_data
+
         if historical_data is not None:
             evidence["historical_data"] = historical_data
 
+        if research_context and research_context.provenance:
+            evidence["provenance"] = {
+                section: prov.model_dump()
+                for section, prov in research_context.provenance.items()
+            }
+
         if tier == DegradationTier.EXHAUSTED:
-            summary = self._build_summary(ticker, market_data, historical_data)
+            summary = self._build_summary(ticker, market_data or {}, historical_data)
             return AgentResult(
                 response=summary,
                 tools_used=tools_used,
@@ -110,9 +184,9 @@ class MarketAnalysisAgent(BaseAgent):
         )
 
         messages = self._build_analysis_messages(
-            message=message,
+            message=user_message,
             ticker=ticker,
-            market_data=market_data,
+            market_data=market_data or {},
             historical_data=effective_historical_data,
         )
 
@@ -139,6 +213,54 @@ class MarketAnalysisAgent(BaseAgent):
             tools_used=tools_used,
             data=evidence,
         )
+
+    def build_canonical_context(
+        self,
+        ticker: str,
+        market: str = "IN",
+        market_data_raw: object = None,
+        historical_data_raw: object = None,
+    ) -> ResearchContext:
+        """Construct a canonical ResearchContext from raw market data outputs."""
+        provenance_dict: dict[str, ProviderProvenance] = {}
+        parsed_hist: HistoricalMarketData | None = None
+
+        if isinstance(market_data_raw, dict):
+            prov = self._extract_provider_provenance(market_data_raw)
+            if prov:
+                provenance_dict["market_data"] = prov
+
+        if isinstance(historical_data_raw, dict):
+            prov_hist = self._extract_provider_provenance(historical_data_raw)
+            if prov_hist:
+                provenance_dict["historical_market_data"] = prov_hist
+
+        return ResearchContext(
+            ticker=ticker,
+            market=market,
+            market_data=parsed_hist,
+            provenance=provenance_dict,
+        )
+
+    def _extract_provider_provenance(self, raw_dict: dict) -> ProviderProvenance | None:
+        if not isinstance(raw_dict, dict):
+            return None
+        prov_dict = raw_dict.get("provenance") if isinstance(raw_dict.get("provenance"), dict) else raw_dict
+        if not isinstance(prov_dict, dict):
+            return None
+        if "source" in prov_dict or "primary_provider" in prov_dict or "fallback_used" in prov_dict:
+            status_val = str(prov_dict.get("data_status") or "complete")
+            if hasattr(status_val, "value"):
+                status_val = status_val.value
+            return ProviderProvenance(
+                primary_provider=str(prov_dict.get("primary_provider") or prov_dict.get("source") or "upstox"),
+                source=str(prov_dict.get("source") or prov_dict.get("provider_used") or "upstox"),
+                fallback_used=bool(prov_dict.get("fallback_used", False)),
+                data_status=status_val if status_val in ("complete", "partial", "empty", "failed") else "complete",
+                fallback_reason=str(prov_dict.get("fallback_reason")) if prov_dict.get("fallback_reason") else None,
+            )
+        return None
+
 
     def _get_degradation_tier(self) -> DegradationTier:
         manager = getattr(self.llm_service, "token_budget_manager", None)
@@ -263,12 +385,14 @@ class MarketAnalysisAgent(BaseAgent):
             "Never provide a buy/sell recommendation merely from the supplied data."
         )
 
+        clean_market_data = MarketAnalysisAgent._clean_market_data(market_data)
+
         context = {
             "user_question": message,
             "ticker": ticker,
             "current_market_data": (
-                market_data
-                if MarketAnalysisAgent._has_usable_quotes(market_data)
+                clean_market_data
+                if MarketAnalysisAgent._has_usable_quotes(clean_market_data)
                 else "Current market data is unavailable."
             ),
             "historical_market_data": (
@@ -294,6 +418,28 @@ class MarketAnalysisAgent(BaseAgent):
                 ),
             },
         ]
+
+    @staticmethod
+    def _clean_market_data(market_data: object) -> object:
+        if not isinstance(market_data, dict):
+            return market_data
+        quotes = market_data.get("quotes")
+        clean_quotes = []
+        if isinstance(quotes, list):
+            for q in quotes:
+                if isinstance(q, dict):
+                    clean_quotes.append({
+                        "exchange": q.get("exchange"),
+                        "price": q.get("price"),
+                        "percent_change": q.get("percent_change"),
+                        "year_high": q.get("year_high"),
+                        "year_low": q.get("year_low"),
+                    })
+        return {
+            "ticker": market_data.get("ticker"),
+            "market": market_data.get("market"),
+            "quotes": clean_quotes,
+        }
 
     @staticmethod
     def _has_usable_quotes(market_data: object) -> bool:

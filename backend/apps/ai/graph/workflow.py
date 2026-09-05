@@ -8,6 +8,12 @@ from apps.ai.graph.router import WorkflowRouter, WorkflowRoute
 from apps.ai.graph.state import AgentState
 
 
+from apps.ai.graph.langgraph_workflow import (
+    _extract_research_context_from_result,
+    _merge_research_context,
+)
+
+
 class ResearchWorkflow:
     """Route a request and collect results from specialized research agents.
 
@@ -95,9 +101,15 @@ class ResearchWorkflow:
     ) -> None:
         for key in agent_keys:
             try:
-                state.results[key] = self.agents[key].run(
-                    state.user_message
+                result = self.agents[key].run(state.user_message)
+                state.results[key] = result
+                ctx_patch = _extract_research_context_from_result(
+                    ticker=state.ticker or "",
+                    market=state.market or "IN",
+                    result=result,
                 )
+                if ctx_patch is not None:
+                    state.research_context = _merge_research_context(state.research_context, ctx_patch)
             except (AIError, ValueError, TypeError) as exc:
                 state.errors.append(f"{key}: {exc}")
 

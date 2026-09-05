@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.db import models
 
 
@@ -35,6 +36,17 @@ class Company(models.Model):
         unique=True,
     )
 
+    instrument_key = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
+
+    provider_symbols = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -56,6 +68,11 @@ class ResearchSession(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="research_sessions",
     )
     thread_id = models.CharField(
         max_length=255,

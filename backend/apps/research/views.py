@@ -1,10 +1,17 @@
-from django.db.migrations import serializer
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from dataclasses import asdict
-from apps.research.serializers import CompanyResearchQuerySerializer, HistoricalResearchQuerySerializer, IndiaOnlyResearchQuerySerializer
+from apps.research.serializers import (
+    CompanyResearchQuerySerializer,
+    HistoricalResearchQuerySerializer,
+    IndiaOnlyResearchQuerySerializer,
+    ResearchSessionListSerializer,
+    ResearchSessionDetailSerializer,
+)
 from apps.research.services.research_service import ResearchService
+from apps.research.services.session_service import ResearchSessionService
 from apps.research.services.symbols import Market
 import requests
 
@@ -330,3 +337,31 @@ class HistoricalResearchView(APIView):
                 ],
             }
         )
+
+
+class ResearchSessionListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sessions = ResearchSessionService.get_user_sessions(request.user)
+        serializer = ResearchSessionListSerializer(sessions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ResearchSessionDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, session_id):
+        try:
+            session = ResearchSessionService.get_user_session(
+                request.user, session_id
+            )
+        except Exception:
+            return Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ResearchSessionDetailSerializer(session)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

@@ -447,3 +447,191 @@ class NewsIntelligenceAgentTestCase(SimpleTestCase):
         self.assertEqual(len(result.data["articles"]), 5)
         llm_service.assert_not_called()
 
+    def test_run_accepts_agent_state_with_ticker_and_market(self):
+        from apps.ai.graph.state import AgentState
+
+        news_tool = MagicMock(return_value={"ticker": "LT", "articles": []})
+        agent = NewsIntelligenceAgent(news_tool=news_tool)
+
+        state = AgentState(
+            user_message="Conduct research on Larsen & Toubro",
+            ticker="LT",
+            market="IN",
+        )
+
+        result = agent.run(state)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(
+            result.response,
+            "News analysis for LT: no recent news articles found.",
+        )
+        news_tool.assert_called_once_with(ticker="LT", market="IN", limit=10)
+
+    def test_news_agent_consumes_canonical_research_context(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.schemas import NewsArticle, NewsResearch
+
+        articles = [
+            NewsArticle(
+                title="L&T Order Win",
+                summary="Larsen & Toubro receives mega order.",
+                url="https://example.com/lt-win",
+                source="Reuters",
+                published_at="2026-09-01T10:00:00Z",
+                relevance_type="DIRECT",
+            ),
+        ]
+        news_research = NewsResearch(ticker="LT", articles=articles)
+        prov = {
+            "news": ProviderProvenance(
+                primary_provider="news_aggregator",
+                source="marketaux",
+                fallback_used=False,
+                data_status="complete",
+            )
+        }
+        ctx = ResearchContext(
+            ticker="LT",
+            market="IN",
+            news=news_research,
+            provenance=prov,
+        )
+
+        sentiment_classifier = MagicMock(return_value={"label": "positive", "confidence": 0.95})
+        llm_service = MagicMock(return_value="L&T news sentiment is positive.")
+        agent = NewsIntelligenceAgent(
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("L&T news sentiment is positive.", result.response)
+        self.assertEqual(result.data["ticker"], "LT")
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["news"]["source"], "marketaux")
+
+    def test_news_article_source_remains_news_publisher_not_confused_with_provider_provenance(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.schemas import NewsArticle, NewsResearch
+
+        articles = [
+            NewsArticle(
+                title="Q1 Earnings Update",
+                summary="Strong growth reported by company.",
+                url="https://example.com/q1-earnings",
+                source="Bloomberg",
+                published_at="2026-09-01T10:00:00Z",
+            ),
+        ]
+        news_research = NewsResearch(ticker="RELIANCE", articles=articles)
+        prov = {
+            "news": ProviderProvenance(
+                primary_provider="upstox",
+                source="upstox_news_api",
+                fallback_used=False,
+                data_status="complete",
+            )
+        }
+        ctx = ResearchContext(
+            ticker="RELIANCE",
+            market="IN",
+            news=news_research,
+            provenance=prov,
+        )
+
+        sentiment_classifier = MagicMock(return_value={"label": "positive", "confidence": 0.88})
+        llm_service = MagicMock(return_value="Positive earnings coverage.")
+        agent = NewsIntelligenceAgent(
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        result = agent.run(ctx)
+
+        self.assertEqual(result.data["articles"][0]["source"], "Bloomberg")
+        self.assertEqual(result.data["provenance"]["news"]["source"], "upstox_news_api")
+        self.assertNotEqual(result.data["articles"][0]["source"], result.data["provenance"]["news"]["source"])
+
+    def test_provenance_survives_from_news_tool_dict_into_agent_context(self):
+        news_dict = {
+            "ticker": "LT",
+            "market": "IN",
+            "primary_provider": "news_aggregator",
+            "source": "indian_api",
+            "fallback_used": True,
+            "data_status": "complete",
+            "provenance": {
+                "primary_provider": "news_aggregator",
+                "source": "indian_api",
+                "fallback_used": True,
+                "data_status": "complete",
+            },
+            "articles": [
+                {"title": "LT update", "summary": "Order win.", "source": "Financial Express"},
+            ],
+        }
+
+        sentiment_classifier = MagicMock(return_value={"label": "positive", "confidence": 0.9})
+        llm_service = MagicMock(return_value="News analysis complete.")
+        agent = NewsIntelligenceAgent(
+            news_tool=lambda **kwargs: news_dict,
+            ticker="LT",
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Show LT news.")
+
+        self.assertIn("provenance", result.data)
+        self.assertTrue(result.data["provenance"]["news"]["fallback_used"])
+        self.assertEqual(result.data["provenance"]["news"]["source"], "indian_api")
+
+    def test_missing_optional_news_sections_do_not_break_agent(self):
+        from apps.ai.graph.contracts import ResearchContext
+
+        ctx = ResearchContext(
+            ticker="INFY",
+            market="IN",
+            news=None,
+        )
+
+        agent = NewsIntelligenceAgent()
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "News analysis for INFY: no recent news articles found.")
+        self.assertEqual(result.data["articles"], [])
+
+    def test_context_payload_is_bounded_and_removes_unnecessary_raw_fields(self):
+        news_dict = {
+            "ticker": "LT",
+            "articles": [
+                {
+                    "title": "Article Title",
+                    "summary": "Summary text.",
+                    "source": "Reuters",
+                    "raw_html": "<html><body>" + "x" * 2000 + "</body></html>",
+                    "provider_entity_tokens": ["token1", "token2"],
+                }
+            ],
+        }
+
+        sentiment_classifier = MagicMock(return_value={"label": "neutral", "confidence": 0.7})
+        llm_service = MagicMock(return_value="Clean summary.")
+        agent = NewsIntelligenceAgent(
+            news_tool=lambda **kwargs: news_dict,
+            ticker="LT",
+            sentiment_classifier=sentiment_classifier,
+            llm_service=llm_service,
+        )
+
+        agent.run("Show LT news.")
+
+        prompt_content = llm_service.call_args[0][0][1]["content"]
+        self.assertNotIn("raw_html", prompt_content)
+        self.assertNotIn("provider_entity_tokens", prompt_content)
+
+

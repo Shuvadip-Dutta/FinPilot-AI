@@ -9,7 +9,10 @@ from apps.ai.services.token_budget import LLMUsage
 
 class GroqProvider:
 
-    REASONING_MODELS = ("qwen3", "qwen/qwen3")
+    REASONING_MODELS = {
+        "qwen/qwen3.6-27b": False,
+        "qwen/qwen3.8-27b": True,
+    }
 
     def __init__(self, model: str | None = None):
 
@@ -39,9 +42,11 @@ class GroqProvider:
         configured_model = str(
             getattr(settings, "REASONING_MODEL", "")
         ).lower()
-        return normalized == configured_model or any(
-            marker in normalized for marker in self.REASONING_MODELS
-        )
+
+        if normalized in self.REASONING_MODELS:
+            return self.REASONING_MODELS[normalized]
+
+        return normalized == configured_model
 
     def _reasoning_request_kwargs(self) -> dict[str, object]:
         return {

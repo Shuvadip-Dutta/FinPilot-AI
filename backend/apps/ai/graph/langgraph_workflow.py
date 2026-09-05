@@ -8,15 +8,122 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from apps.ai.agents.base import BaseAgent
+from apps.ai.agents.base import AgentResult, BaseAgent
 from apps.ai.exceptions import AIError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
 from apps.ai.graph.router import WorkflowRouter, WorkflowRoute
 from apps.ai.graph.state import AgentState
 from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
 from apps.ai.graph.persistence import LangGraphPersistence
 from apps.ai.observability import AIObserver
+from apps.research.services.schemas import (
+    CompanyProfile,
+    FinancialStatement,
+    HistoricalMarketData,
+    KeyMetricsResearch,
+    NewsResearch,
+)
 from apps.research.services.session_service import ResearchSessionService
+from apps.research.services.symbols import Market
 from langgraph.checkpoint.base import BaseCheckpointSaver
+
+
+def _merge_research_context(
+    base: ResearchContext | dict[str, Any] | None,
+    patch: ResearchContext | dict[str, Any] | None,
+) -> ResearchContext | None:
+    if base is None and patch is None:
+        return None
+
+    def _to_rc(val: Any) -> ResearchContext | None:
+        if isinstance(val, ResearchContext):
+            return val
+        if isinstance(val, dict):
+            try:
+                return ResearchContext.model_validate(val)
+            except Exception:
+                return None
+        return None
+
+    base_rc = _to_rc(base)
+    patch_rc = _to_rc(patch)
+
+    if base_rc is None:
+        return patch_rc
+    if patch_rc is None:
+        return base_rc
+
+    ticker = patch_rc.ticker or base_rc.ticker
+    market = patch_rc.market or base_rc.market
+    company_profile = patch_rc.company_profile or base_rc.company_profile
+    financials = patch_rc.financials or base_rc.financials
+    key_metrics = patch_rc.key_metrics or base_rc.key_metrics
+    market_data = patch_rc.market_data or base_rc.market_data
+    news = patch_rc.news or base_rc.news
+
+    merged_prov = dict(base_rc.provenance)
+    merged_prov.update(patch_rc.provenance)
+
+    return ResearchContext(
+        ticker=ticker,
+        market=market,
+        company_profile=company_profile,
+        financials=financials,
+        key_metrics=key_metrics,
+        market_data=market_data,
+        news=news,
+        provenance=merged_prov,
+    )
+
+
+def _extract_research_context_from_result(
+    ticker: str,
+    market: str,
+    result: Any,
+) -> ResearchContext | None:
+    if not hasattr(result, "data") or not isinstance(result.data, dict):
+        if isinstance(result, dict) and "provenance" in result:
+            data = result
+        else:
+            return None
+    else:
+        data = result.data
+
+    provenance_dict: dict[str, ProviderProvenance] = {}
+    p_data = data.get("provenance")
+    if isinstance(p_data, dict):
+        for sec_name, prov_val in p_data.items():
+            if isinstance(prov_val, ProviderProvenance):
+                provenance_dict[sec_name] = prov_val
+            elif isinstance(prov_val, dict):
+                status_val = str(prov_val.get("data_status") or "complete")
+                provenance_dict[sec_name] = ProviderProvenance(
+                    primary_provider=str(prov_val.get("primary_provider") or prov_val.get("source") or "upstox"),
+                    source=str(prov_val.get("source") or prov_val.get("provider_used") or "upstox"),
+                    fallback_used=bool(prov_val.get("fallback_used", False)),
+                    data_status=status_val if status_val in ("complete", "partial", "empty", "failed") else "complete",
+                    fallback_reason=str(prov_val.get("fallback_reason")) if prov_val.get("fallback_reason") else None,
+                )
+
+    company_profile = data.get("company_profile") if isinstance(data.get("company_profile"), CompanyProfile) else None
+    financials = data.get("financials") if isinstance(data.get("financials"), list) else None
+    key_metrics = data.get("key_metrics") if isinstance(data.get("key_metrics"), KeyMetricsResearch) else None
+    market_data = data.get("market_data") if isinstance(data.get("market_data"), HistoricalMarketData) else None
+    news = data.get("news") if isinstance(data.get("news"), NewsResearch) else None
+
+    if not provenance_dict and not any([company_profile, financials, key_metrics, market_data, news]):
+        return None
+
+    return ResearchContext(
+        ticker=ticker,
+        market=market,
+        company_profile=company_profile,
+        financials=financials,
+        key_metrics=key_metrics,
+        market_data=market_data,
+        news=news,
+        provenance=provenance_dict,
+    )
 
 
 def _merge_graph_state(current: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
@@ -26,6 +133,8 @@ def _merge_graph_state(current: dict[str, Any], update: dict[str, Any]) -> dict[
             merged["results"] = {**merged["results"], **value}
         elif key == "errors" and isinstance(merged.get("errors"), list) and isinstance(value, list):
             merged["errors"] = [*merged["errors"], *value]
+        elif key == "research_context":
+            merged["research_context"] = _merge_research_context(merged.get("research_context"), value)
         else:
             merged[key] = value
     return merged
@@ -74,6 +183,7 @@ class LangGraphResearchWorkflow:
     def run(
         self,
         user_message: str,
+        user: object = None,
         ticker: str | None = None,
         market: str | None = None,
         portfolio_input: PortfolioWorkflowInput | None = None,
@@ -82,16 +192,22 @@ class LangGraphResearchWorkflow:
         """Execute the compiled graph for a user request."""
         start_time = time.perf_counter()
         route = self.router.route(user_message)
+        market = Market.normalize(market) or market
 
-        session = ResearchSessionService.create_session(
-            user_message=user_message,
-            ticker=ticker,
-            market=market,
-            route=route,
-            thread_id=thread_id,
-        )
-        session.status = "RUNNING"
-        session.save(update_fields=["status"])
+        session = None
+        try:
+            session = ResearchSessionService.create_session(
+                user_message=user_message,
+                user=user,
+                ticker=ticker,
+                market=market,
+                route=route,
+                thread_id=thread_id,
+            )
+            session.status = "RUNNING"
+            session.save(update_fields=["status"])
+        except Exception:
+            session = None
 
         initial_state = {
             "user_message": user_message,
@@ -117,24 +233,37 @@ class LangGraphResearchWorkflow:
                 error_count=len(state.errors),
             )
 
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-            ResearchSessionService.save_workflow_result(
-                session.id,
-                state,
-                latency_ms=latency_ms,
-                status="COMPLETED",
-            )
+            if session is not None:
+                try:
+                    latency_ms = (time.perf_counter() - start_time) * 1000.0
+                    ResearchSessionService.save_workflow_result(
+                        session.id,
+                        state,
+                        latency_ms=latency_ms,
+                        status="COMPLETED",
+                    )
+                except Exception:
+                    try:
+                        session.status = "FAILED"
+                        session.save(update_fields=["status"])
+                    except Exception:
+                        pass
+                    raise
 
             return state
         except Exception as exc:
+            if session is not None:
+                try:
+                    session.status = "FAILED"
+                    session.save(update_fields=["status"])
+                except Exception:
+                    pass
             self.observer.graph_failed(
                 thread_id=thread_id,
                 route=route,
                 error_type=type(exc).__name__,
                 error_message=str(exc),
             )
-            session.status = "FAILED"
-            session.save(update_fields=["status"])
             raise
 
     def _build_graph(self):
@@ -256,8 +385,21 @@ class LangGraphResearchWorkflow:
                     "market": self.market_agent,
                     "news": self.news_agent,
                 }[key]
-                result = agent.run(state["user_message"])
-                payload = {"results": {key: result.model_dump()}}
+                agent_state = self._to_agent_state(state)
+                result = agent.run(agent_state)
+                payload: dict[str, Any] = {
+                    "results": {
+                        key: result.model_dump() if hasattr(result, "model_dump") else result
+                    }
+                }
+                rc_patch = _extract_research_context_from_result(
+                    ticker=agent_state.ticker or "",
+                    market=agent_state.market or "IN",
+                    result=result,
+                )
+                if rc_patch is not None:
+                    payload["research_context"] = rc_patch
+
                 self.observer.node_completed(
                     thread_id=thread_id,
                     node=key,
@@ -354,11 +496,19 @@ class LangGraphResearchWorkflow:
             result = self.risk_agent.run(
                 final_state
             )
-            payload = {
+            payload: dict[str, Any] = {
                 "results": {
                     "risk": result,
                 }
             }
+            rc_patch = _extract_research_context_from_result(
+                ticker=final_state.ticker or "",
+                market=final_state.market or "IN",
+                result=result,
+            )
+            if rc_patch is not None:
+                payload["research_context"] = rc_patch
+
             self.observer.node_completed(
                 thread_id=thread_id,
                 node="risk",
@@ -560,12 +710,22 @@ class LangGraphResearchWorkflow:
         results = dict(root.get("results", {}))
         errors = list(root.get("errors", []))
         route = root.get("route")
+        rc_val = root.get("research_context")
+        rc: ResearchContext | None = None
+        if isinstance(rc_val, ResearchContext):
+            rc = rc_val
+        elif isinstance(rc_val, dict):
+            try:
+                rc = ResearchContext.model_validate(rc_val)
+            except Exception:
+                rc = None
+
         return AgentState(
             user_message=root.get("user_message", ""),
             ticker=root.get("ticker"),
             market=root.get("market"),
             route=route,
+            research_context=rc,
             results=results,
             errors=errors,
         )
-

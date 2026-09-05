@@ -573,3 +573,161 @@ class RiskAnalysisAgentTestCase(SimpleTestCase):
         self.assertIn("missing_information", result.data)
         llm_service.assert_not_called()
 
+    def test_risk_agent_consumes_canonical_research_context(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.schemas import (
+            CompanyProfile,
+            ExchangeQuote,
+            HistoricalMarketData,
+            NewsArticle,
+            NewsResearch,
+        )
+
+        profile = CompanyProfile(ticker="LT", name="Larsen & Toubro Ltd", exchange="NSE", country="India")
+        market_data = HistoricalMarketData(
+            ticker="LT",
+            candles=[],
+        )
+        market_data.quotes = [ExchangeQuote(exchange="NSE", price=1400.0, percent_change=None, year_high=None, year_low=None)]
+        news = NewsResearch(
+            ticker="LT",
+            articles=[NewsArticle(title="Order win", summary="Mega order.", source="Reuters", url="", published_at="2026-09-01")],
+        )
+        prov = {
+            "financials": ProviderProvenance(primary_provider="upstox", source="upstox", fallback_used=False, data_status="complete"),
+            "market_data": ProviderProvenance(primary_provider="upstox", source="upstox", fallback_used=False, data_status="complete"),
+            "news": ProviderProvenance(primary_provider="news_aggregator", source="marketaux", fallback_used=False, data_status="complete"),
+        }
+        ctx = ResearchContext(
+            ticker="LT",
+            market="IN",
+            company_profile=profile,
+            market_data=market_data,
+            news=news,
+            provenance=prov,
+        )
+
+        llm_service = MagicMock(return_value="LT risk is well managed.")
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "LT risk is well managed.")
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "upstox")
+        self.assertEqual(result.data["provenance"]["market_data"]["source"], "upstox")
+        self.assertEqual(result.data["provenance"]["news"]["source"], "marketaux")
+
+    def test_provenance_survives_from_specialist_results_into_risk_context(self):
+        financial_result = AgentResult(
+            response="Financial analysis.",
+            tools_used=[],
+            data={
+                "provenance": {
+                    "financials": {
+                        "primary_provider": "upstox",
+                        "source": "indian_api",
+                        "fallback_used": True,
+                        "data_status": "complete",
+                    }
+                }
+            },
+        )
+        market_result = AgentResult(
+            response="Market analysis.",
+            tools_used=[],
+            data={
+                "provenance": {
+                    "market_data": {
+                        "primary_provider": "upstox",
+                        "source": "upstox",
+                        "fallback_used": False,
+                        "data_status": "complete",
+                    }
+                }
+            },
+        )
+        state = AgentState(
+            user_message="Assess risk for LT",
+            ticker="LT",
+            market="IN",
+            results={
+                "financial": financial_result,
+                "market": market_result,
+            },
+        )
+
+        llm_service = MagicMock(return_value="Risk evaluation complete.")
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(state)
+
+        self.assertIn("provenance", result.data)
+        self.assertTrue(result.data["provenance"]["financials"]["fallback_used"])
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "indian_api")
+        self.assertFalse(result.data["provenance"]["market_data"]["fallback_used"])
+
+    def test_missing_optional_sections_in_risk_research_context(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.schemas import ExchangeQuote, HistoricalMarketData
+
+        market_data = HistoricalMarketData(ticker="INFY", candles=[])
+        market_data.quotes = [ExchangeQuote(exchange="NSE", price=1500.0, percent_change=None, year_high=None, year_low=None)]
+        ctx = ResearchContext(
+            ticker="INFY",
+            market="IN",
+            market_data=market_data,
+            financials=None,
+            news=None,
+        )
+
+        llm_service = MagicMock(return_value="Market-only risk assessment.")
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "Market-only risk assessment.")
+        prompt_content = llm_service.call_args[0][0][1]["content"]
+        self.assertIn("Financial research data is unavailable", prompt_content)
+        self.assertIn("News intelligence is unavailable", prompt_content)
+
+    def test_risk_agent_bounded_context_no_raw_data_duplication(self):
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.schemas import (
+            CompanyProfile,
+            ExchangeQuote,
+            HistoricalMarketData,
+            NewsArticle,
+            NewsResearch,
+        )
+
+        profile = CompanyProfile(ticker="LT", name="Larsen & Toubro Ltd", exchange="NSE", country="India")
+        market_data = HistoricalMarketData(
+            ticker="LT",
+            candles=[],
+        )
+        market_data.quotes = [ExchangeQuote(exchange="NSE", price=1400.0, percent_change=None, year_high=None, year_low=None)]
+        news = NewsResearch(
+            ticker="LT",
+            articles=[NewsArticle(title="Order win", summary="Order details " * 200, source="Reuters", url="", published_at="2026-09-01")],
+        )
+        ctx = ResearchContext(
+            ticker="LT",
+            market="IN",
+            company_profile=profile,
+            market_data=market_data,
+            news=news,
+        )
+
+        llm_service = MagicMock(return_value="Bounded risk assessment.")
+        agent = RiskAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        prompt_content = llm_service.call_args[0][0][1]["content"]
+        self.assertLess(len(prompt_content), 12000)
+
+

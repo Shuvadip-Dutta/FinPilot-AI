@@ -144,7 +144,10 @@ class MarketauxProvider:
                 "MarketauxProvider currently supports India only."
             )
 
-        symbol = f"{ticker.upper()}.NS"
+        from apps.research.services.company_resolver import CanonicalCompanyResolver
+
+        identity = CanonicalCompanyResolver.resolve(ticker, market)
+        symbol = identity.get_provider_symbol("marketaux", fallback_ticker=f"{ticker.upper()}.NS")
 
         data = self._get(
             "news/all",

@@ -60,7 +60,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         state = workflow.run("Show revenue for RELIANCE.")
 
         self.assertEqual(state.route, "financial")
-        financial.run.assert_called_once_with("Show revenue for RELIANCE.")
+        financial.run.assert_called_once()
+        self.assertEqual(financial.run.call_args.args[0].user_message, "Show revenue for RELIANCE.")
         market.run.assert_not_called()
         news.run.assert_not_called()
 
@@ -71,7 +72,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
 
         self.assertEqual(state.route, "market")
         financial.run.assert_not_called()
-        market.run.assert_called_once_with("What is the RELIANCE price?")
+        market.run.assert_called_once()
+        self.assertEqual(market.run.call_args.args[0].user_message, "What is the RELIANCE price?")
         news.run.assert_not_called()
 
     def test_news_route_executes_only_news_node(self):
@@ -82,7 +84,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         self.assertEqual(state.route, "news")
         financial.run.assert_not_called()
         market.run.assert_not_called()
-        news.run.assert_called_once_with("Show RELIANCE news.")
+        news.run.assert_called_once()
+        self.assertEqual(news.run.call_args.args[0].user_message, "Show RELIANCE news.")
 
     def test_general_route_executes_financial_market_and_news(self):
         workflow, financial, market, news = self._build_workflow(route="general")
@@ -114,12 +117,45 @@ class LangGraphResearchWorkflowTestCase(TestCase):
 
         state = workflow.run("Give me an overview of Reliance.")
 
-        financial.run.assert_called_once_with("Give me an overview of Reliance.")
-        market.run.assert_called_once_with("Give me an overview of Reliance.")
-        news.run.assert_called_once_with("Give me an overview of Reliance.")
+        financial.run.assert_called_once()
+        self.assertEqual(financial.run.call_args.args[0].user_message, "Give me an overview of Reliance.")
+        market.run.assert_called_once()
+        self.assertEqual(market.run.call_args.args[0].user_message, "Give me an overview of Reliance.")
+        news.run.assert_called_once()
+        self.assertEqual(news.run.call_args.args[0].user_message, "Give me an overview of Reliance.")
         risk.run.assert_called_once()
         synthesis.run.assert_called_once()
         self.assertIn("risk", state.results)
+
+    def test_agent_nodes_receive_ticker_and_market_from_state(self):
+        workflow, financial, market, news = self._build_workflow(route="general")
+
+        workflow.run(
+            "Conduct a research analysis.",
+            ticker="LT",
+            market="IN",
+        )
+
+        for mock_agent in (financial, market, news):
+            mock_agent.run.assert_called_once()
+            passed_state = mock_agent.run.call_args.args[0]
+            self.assertIsInstance(passed_state, AgentState)
+            self.assertEqual(passed_state.ticker, "LT")
+            self.assertEqual(passed_state.market, "IN")
+
+    def test_workflow_normalizes_human_readable_market_input(self):
+        workflow, financial, market, news = self._build_workflow(route="general")
+
+        state = workflow.run(
+            "Conduct a research analysis.",
+            ticker="LT",
+            market="INDIA",
+        )
+
+        self.assertEqual(state.market, "IN")
+        for mock_agent in (financial, market, news):
+            passed_state = mock_agent.run.call_args.args[0]
+            self.assertEqual(passed_state.market, "IN")
 
     def test_general_route_risk_receives_merged_research_state(self):
         workflow, _, _, _, risk = self._build_workflow(
@@ -739,7 +775,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         session = ResearchSession.objects.get(thread_id="test-session-persist")
         self.assertEqual(session.user_message, "Give me an overview of Reliance.")
         self.assertEqual(session.ticker, "RELIANCE")
-        self.assertEqual(session.market, "INDIA")
+        self.assertEqual(session.market, "IN")
         self.assertEqual(session.route, "general")
         self.assertEqual(session.status, "COMPLETED")
         self.assertIsNotNone(session.latency_ms)
@@ -754,6 +790,26 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         self.assertIn("news", agent_names)
         self.assertIn("synthesis", agent_names)
 
+    def test_workflow_persists_explicit_user_ownership(self):
+        from django.contrib.auth.models import User
+        user = User.objects.create_user(username="workflow_user", password="password")
+
+        workflow, _, _, _, synthesis = self._build_workflow(
+            route="general",
+            synthesis_agent=True,
+        )
+
+        workflow.run(
+            "Overview of Reliance",
+            user=user,
+            ticker="RELIANCE",
+            thread_id="user-persist-thread",
+        )
+
+        session = ResearchSession.objects.get(thread_id="user-persist-thread")
+        self.assertEqual(session.user, user)
+        self.assertEqual(session.user.username, "workflow_user")
+
     def test_workflow_failure_updates_session_status_to_failed(self):
         workflow, _, market, _ = self._build_workflow(route="market")
         market.run.side_effect = RuntimeError("Market node failure")
@@ -766,6 +822,24 @@ class LangGraphResearchWorkflowTestCase(TestCase):
 
         session = ResearchSession.objects.get(thread_id="failed-session-thread")
         self.assertEqual(session.status, "FAILED")
+
+    def test_workflow_failure_retains_correct_user(self):
+        from django.contrib.auth.models import User
+        user = User.objects.create_user(username="failed_user", password="password")
+
+        workflow, _, market, _ = self._build_workflow(route="market")
+        market.run.side_effect = RuntimeError("Market node failure")
+
+        with self.assertRaises(RuntimeError):
+            workflow.run(
+                "What is the RELIANCE price?",
+                user=user,
+                thread_id="failed-user-thread",
+            )
+
+        session = ResearchSession.objects.get(thread_id="failed-user-thread")
+        self.assertEqual(session.status, "FAILED")
+        self.assertEqual(session.user, user)
 
     def test_persistence_failure_marks_session_as_failed(self):
         workflow, _, _, _ = self._build_workflow(route="market")

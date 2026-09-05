@@ -1,5 +1,30 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
+
+
+class DataStatus(str, Enum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    EMPTY = "empty"
+    FAILED = "failed"
+
+
+@dataclass
+class ProvenanceMetadata:
+    primary_provider: str
+    source: str
+    fallback_used: bool = False
+    data_status: str = "complete"
+    fallback_reason: Optional[str] = None
+
+
+class ProvenanceList(list):
+    """List subclass that retains _provenance metadata while preserving standard list behavior."""
+
+    def __init__(self, iterable=(), provenance: Optional[ProvenanceMetadata] = None):
+        super().__init__(iterable)
+        self._provenance = provenance
 
 
 @dataclass

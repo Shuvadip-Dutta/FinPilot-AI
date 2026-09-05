@@ -69,6 +69,30 @@ class IndianAPINewsProviderTestCase(SimpleTestCase):
 
         self.assertEqual(result.ticker, "RELIANCE")
         self.assertEqual(result.articles, [])
+
+    @patch(
+        "apps.research.services.providers.indian_api.IndianAPIProvider._get"
+    )
+    def test_lt_symbol_mapped_to_larsen_in_get_stock(self, mock_get):
+        mock_get.return_value = {"companyName": "Larsen & Toubro Ltd"}
+        provider = IndianAPIProvider()
+
+        res = provider.get_stock("LT", Market.INDIA)
+
+        self.assertEqual(res["companyName"], "Larsen & Toubro Ltd")
+        mock_get.assert_called_once_with("stock", {"name": "LARSEN"})
+
+    @patch(
+        "apps.research.services.providers.indian_api.IndianAPIProvider._get"
+    )
+    def test_normal_ticker_remains_unchanged_in_get_stock(self, mock_get):
+        mock_get.return_value = {"companyName": "Reliance Industries Ltd"}
+        provider = IndianAPIProvider()
+
+        res = provider.get_stock("RELIANCE", Market.INDIA)
+
+        self.assertEqual(res["companyName"], "Reliance Industries Ltd")
+        mock_get.assert_called_once_with("stock", {"name": "RELIANCE"})
         
 class MarketauxNewsProviderTestCase(SimpleTestCase):
 

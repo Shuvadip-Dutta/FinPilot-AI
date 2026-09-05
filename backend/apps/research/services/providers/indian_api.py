@@ -106,6 +106,10 @@ class IndianAPIProvider:
 
     BASE_URL = "https://stock.indianapi.in"
 
+    SYMBOL_ALIASES = {
+        "LT": "LARSEN",
+    }
+
     def __init__(self) -> None:
         self.api_key = os.getenv("INDIAN_STOCK_MARKET_API_KEY")
 
@@ -113,6 +117,13 @@ class IndianAPIProvider:
             raise ValueError(
                 "INDIAN_STOCK_MARKET_API_KEY is not configured."
             )
+
+    def _resolve_provider_symbol(self, ticker: str) -> str:
+        from apps.research.services.company_resolver import CanonicalCompanyResolver
+
+        identity = CanonicalCompanyResolver.resolve(ticker, Market.INDIA)
+        fallback = self.SYMBOL_ALIASES.get(ticker.upper(), ticker.upper())
+        return identity.get_provider_symbol("indianapi", fallback_ticker=fallback)
 
     def _get(
         self,
@@ -151,10 +162,12 @@ class IndianAPIProvider:
                 "IndianAPIProvider currently supports India only."
             )
 
+        provider_symbol = self._resolve_provider_symbol(ticker)
+
         return self._get(
             "stock",
             {
-                "name": ticker.upper(),
+                "name": provider_symbol,
             },
         )
 
@@ -229,7 +242,7 @@ class IndianAPIProvider:
 
         statements: list[FinancialStatement] = []
 
-        for record in data.get("financials", []):
+        for record in (data.get("financials") or []):
             financial_map = (
                 record.get("stockFinancialMap") or {}
             )

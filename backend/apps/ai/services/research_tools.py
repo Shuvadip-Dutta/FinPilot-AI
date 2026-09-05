@@ -3,6 +3,50 @@ from apps.research.services.schemas import ExchangeQuote
 from apps.research.services.symbols import Market
 
 
+def _extract_provenance(result) -> dict:
+    if result is None:
+        return {}
+
+    prov = getattr(result, "_provenance", None) or getattr(result, "provenance", None)
+
+    if not prov and isinstance(result, list):
+        prov = getattr(result, "_provenance", None) or getattr(result, "provenance", None)
+        if not prov and len(result) > 0:
+            prov = getattr(result[0], "_provenance", None) or getattr(result[0], "provenance", None)
+
+    if not prov and isinstance(result, dict):
+        if "primary_provider" in result or "source" in result or "fallback_used" in result:
+            prov_dict = {
+                "primary_provider": result.get("primary_provider"),
+                "source": result.get("source") or result.get("provider_used"),
+                "provider_used": result.get("provider_used") or result.get("source"),
+                "fallback_used": result.get("fallback_used", False),
+                "data_status": result.get("data_status", "complete"),
+                "fallback_reason": result.get("fallback_reason"),
+            }
+            return prov_dict
+
+    if not prov:
+        return {}
+
+    if isinstance(prov, dict):
+        prov_dict = dict(prov)
+    else:
+        prov_dict = {
+            "primary_provider": getattr(prov, "primary_provider", None),
+            "source": getattr(prov, "source", None),
+            "provider_used": getattr(prov, "source", None),
+            "fallback_used": getattr(prov, "fallback_used", False),
+            "data_status": getattr(prov, "data_status", "complete"),
+            "fallback_reason": getattr(prov, "fallback_reason", None),
+        }
+
+    if hasattr(prov_dict.get("data_status"), "value"):
+        prov_dict["data_status"] = prov_dict["data_status"].value
+
+    return prov_dict
+
+
 def get_company_profile(
     ticker: str,
     market: str,
@@ -10,10 +54,39 @@ def get_company_profile(
 
     service = ResearchService()
 
-    return service.get_company_profile(
+    profile = service.get_company_profile(
         ticker=ticker,
         market=Market(market.upper()),
     )
+
+    prov = _extract_provenance(profile)
+
+    if isinstance(profile, dict):
+        res = dict(profile)
+    elif profile is not None:
+        res = {
+            "ticker": getattr(profile, "ticker", ticker.upper()),
+            "name": getattr(profile, "name", None),
+            "exchange": getattr(profile, "exchange", None),
+            "country": getattr(profile, "country", None),
+            "sector": getattr(profile, "sector", None),
+            "industry": getattr(profile, "industry", None),
+            "description": getattr(profile, "description", None),
+            "isin": getattr(profile, "isin", None),
+            "nse_symbol": getattr(profile, "nse_symbol", None),
+            "bse_code": getattr(profile, "bse_code", None),
+        }
+    else:
+        res = {
+            "ticker": ticker.upper(),
+            "market": market.upper(),
+        }
+
+    if prov:
+        res.update(prov)
+        res["provenance"] = prov
+
+    return res
 
 
 def get_market_data(
@@ -35,7 +108,9 @@ def get_market_data(
             "ResearchService.get_market_data returned an unexpected result."
         )
 
-    return {
+    prov = _extract_provenance(result)
+
+    res = {
         "ticker": ticker.upper(),
         "market": market.upper(),
         "quotes": [
@@ -50,6 +125,12 @@ def get_market_data(
         ],
     }
 
+    if prov:
+        res.update(prov)
+        res["provenance"] = prov
+
+    return res
+
 
 def get_financials(
     ticker: str,
@@ -63,7 +144,9 @@ def get_financials(
         market=Market(market.upper()),
     )
 
-    return {
+    prov = _extract_provenance(result)
+
+    res = {
         "ticker": ticker.upper(),
         "market": market.upper(),
         "financials": [
@@ -86,6 +169,12 @@ def get_financials(
         ],
     }
 
+    if prov:
+        res.update(prov)
+        res["provenance"] = prov
+
+    return res
+
 
 def get_key_metrics(
     ticker: str,
@@ -99,8 +188,10 @@ def get_key_metrics(
         market=Market(market.upper()),
     )
 
-    return {
-        "ticker": result.ticker,
+    prov = _extract_provenance(result)
+
+    res = {
+        "ticker": getattr(result, "ticker", ticker.upper()),
         "market": market.upper(),
         "metrics": [
             {
@@ -110,9 +201,15 @@ def get_key_metrics(
                 "value": metric.value,
                 "raw_value": metric.raw_value,
             }
-            for metric in result.metrics
+            for metric in (getattr(result, "metrics", []) or [])
         ],
     }
+
+    if prov:
+        res.update(prov)
+        res["provenance"] = prov
+
+    return res
 
 
 def get_historical_data(
@@ -131,8 +228,10 @@ def get_historical_data(
         market=Market(market.upper()),
     )
 
-    return {
-        "ticker": result.ticker,
+    prov = _extract_provenance(result)
+
+    res = {
+        "ticker": getattr(result, "ticker", ticker.upper()),
         "market": market.upper(),
         "candles": [
             {
@@ -144,9 +243,15 @@ def get_historical_data(
                 "volume": candle.volume,
                 "open_interest": candle.open_interest,
             }
-            for candle in result.candles
+            for candle in (getattr(result, "candles", []) or [])
         ],
     }
+
+    if prov:
+        res.update(prov)
+        res["provenance"] = prov
+
+    return res
 
 
 def get_news(
@@ -162,8 +267,10 @@ def get_news(
         market=Market(market.upper()),
     )
 
-    return {
-        "ticker": result.ticker,
+    prov = _extract_provenance(result)
+
+    res = {
+        "ticker": getattr(result, "ticker", ticker.upper()),
         "market": market.upper(),
         "articles": [
             {
@@ -188,6 +295,12 @@ def get_news(
                     for entity in article.entities or []
                 ],
             }
-            for article in result.articles[:limit]
+            for article in (getattr(result, "articles", []) or [])[:limit]
         ],
     }
+
+    if prov:
+        res.update(prov)
+        res["provenance"] = prov
+
+    return res

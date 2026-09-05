@@ -6,11 +6,19 @@ from django.test import SimpleTestCase
 
 from apps.ai.agents.financial import FinancialAnalysisAgent, FinancialAnalysisContextBuilder
 from apps.ai.exceptions import LLMError
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
 from apps.ai.services.schemas import AgentResult
 from apps.ai.services.token_budget import (
     DegradationTier,
     LLMUsage,
     TokenBudgetManager,
+)
+from apps.research.services.schemas import (
+    CompanyProfile,
+    FinancialMetric,
+    FinancialStatement,
+    KeyMetric,
+    KeyMetricsResearch,
 )
 
 
@@ -482,4 +490,163 @@ class FinancialAnalysisAgentTestCase(SimpleTestCase):
         self.assertIn("financial_statement_data", result.data)
         self.assertIn("key_metrics_data", result.data)
         llm_service.assert_not_called()
+
+    def test_financial_agent_consumes_canonical_research_context(self):
+        profile = CompanyProfile(
+            ticker="LT",
+            name="Larsen & Toubro Ltd",
+            exchange="NSE",
+            country="India",
+            sector="Industrials",
+        )
+        statement = FinancialStatement(
+            statement_type="INC",
+            fiscal_year="2026",
+            end_date="2026-03-31",
+            period_type="Annual",
+            period_length=12,
+            metrics=[FinancialMetric(name="Revenue", key="revenue", value=200000.0)],
+        )
+        key_metrics = KeyMetricsResearch(
+            ticker="LT",
+            metrics=[KeyMetric(category="valuation", name="P/E", key="pe_ratio", value=30.0)],
+        )
+        prov = {
+            "financials": ProviderProvenance(
+                primary_provider="upstox",
+                source="upstox",
+                fallback_used=False,
+                data_status="complete",
+            )
+        }
+
+        ctx = ResearchContext(
+            ticker="LT",
+            market="IN",
+            company_profile=profile,
+            financials=[statement],
+            key_metrics=key_metrics,
+            provenance=prov,
+        )
+
+        llm_service = MagicMock(return_value="L&T financials are robust.")
+        agent = FinancialAnalysisAgent(llm_service=llm_service)
+
+        result = agent.run(ctx)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual(result.response, "L&T financials are robust.")
+        self.assertEqual(result.data["ticker"], "LT")
+        self.assertIn("provenance", result.data)
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "upstox")
+        self.assertEqual(result.data["company_profile"]["name"], "Larsen & Toubro Ltd")
+
+    def test_provenance_survives_from_tool_dict_into_agent_context(self):
+        financials_dict = {
+            "ticker": "LT",
+            "market": "IN",
+            "primary_provider": "upstox",
+            "source": "indian_api",
+            "fallback_used": True,
+            "data_status": "complete",
+            "fallback_reason": "upstox_exception",
+            "provenance": {
+                "primary_provider": "upstox",
+                "source": "indian_api",
+                "fallback_used": True,
+                "data_status": "complete",
+                "fallback_reason": "upstox_exception",
+            },
+            "financials": [
+                {
+                    "statement_type": "INC",
+                    "fiscal_year": "2026",
+                    "end_date": "2026-03-31",
+                    "period_type": "annual",
+                    "period_length": 12,
+                    "metrics": [{"name": "Revenue", "key": "revenue", "value": 150000.0}],
+                }
+            ],
+        }
+
+        key_metrics_dict = {
+            "ticker": "LT",
+            "market": "IN",
+            "primary_provider": "upstox",
+            "source": "upstox",
+            "fallback_used": False,
+            "data_status": "complete",
+            "metrics": [{"category": "valuation", "name": "P/E", "key": "pe_ratio", "value": 28.0}],
+        }
+
+        llm_service = MagicMock(return_value="Fallback analysis complete.")
+        agent = FinancialAnalysisAgent(
+            financials_tool=lambda **kwargs: financials_dict,
+            key_metrics_tool=lambda **kwargs: key_metrics_dict,
+            ticker="LT",
+            llm_service=llm_service,
+        )
+
+        result = agent.run("Analyze LT financials.")
+
+        self.assertIn("provenance", result.data)
+        self.assertTrue(result.data["provenance"]["financials"]["fallback_used"])
+        self.assertEqual(result.data["provenance"]["financials"]["source"], "indian_api")
+        self.assertEqual(result.data["provenance"]["financials"]["fallback_reason"], "upstox_exception")
+        self.assertEqual(result.data["provenance"]["key_metrics"]["source"], "upstox")
+
+    def test_missing_optional_sections_do_not_break_agent(self):
+        ctx = ResearchContext(
+            ticker="INFY",
+            market="IN",
+            company_profile=None,
+            financials=None,
+            key_metrics=None,
+        )
+
+        builder = FinancialAnalysisContextBuilder()
+        prepared = builder.prepare(
+            message="Analyze INFY financials.",
+            ticker="INFY",
+            research_context=ctx,
+        )
+
+        self.assertEqual(prepared["ticker"], "INFY")
+        self.assertEqual(prepared["financial_statement_data"], "No financial statement data was returned.")
+        self.assertEqual(prepared["key_metrics_data"], "No key metrics were returned.")
+        self.assertNotIn("company_profile", prepared)
+
+    def test_context_payload_is_smaller_than_raw_dict(self):
+        builder = FinancialAnalysisContextBuilder()
+
+        raw_financials = {
+            "ticker": "LT",
+            "market": "IN",
+            "extra_unused_provider_metadata": "x" * 500,
+            "raw_debug_payload": {"raw_unparsed_buffer": "y" * 1000},
+            "financials": [
+                {
+                    "statement_type": "INC",
+                    "fiscal_year": "2026",
+                    "end_date": "2026-03-31",
+                    "period_type": "annual",
+                    "period_length": 12,
+                    "unnecessary_internal_flag": True,
+                    "metrics": [
+                        {"name": "Revenue", "key": "revenue", "value": 150000.0, "unused_raw_field": "abc"},
+                    ],
+                }
+            ],
+        }
+
+        raw_json_len = len(json.dumps(raw_financials))
+
+        prepared = builder.prepare(
+            message="Analyze LT financials",
+            ticker="LT",
+            financials=raw_financials,
+        )
+
+        canonical_json_len = len(json.dumps(prepared))
+        self.assertLess(canonical_json_len, raw_json_len)
 
