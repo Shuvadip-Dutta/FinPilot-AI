@@ -199,25 +199,31 @@ class FinalSynthesisAgent(BaseAgent):
     @staticmethod
     def _collect_specialist_tools_used(state: AgentState) -> list[str]:
         tools: list[str] = []
-        for value in state.results.values():
-            if not isinstance(value, AgentResult):
-                continue
-            for tool in value.tools_used:
-                if tool not in tools:
-                    tools.append(tool)
+        for key, value in state.results.items():
+            if isinstance(value, AgentResult):
+                for tool in value.tools_used:
+                    if tool not in tools:
+                        tools.append(tool)
+            elif key == "portfolio":
+                if "portfolio_intelligence" not in tools:
+                    tools.append("portfolio_intelligence")
         return tools
 
     @staticmethod
     def _collect_structured_evidence(state: AgentState) -> dict[str, object]:
         evidence: dict[str, object] = {}
         missing_information: list[str] = []
+        is_portfolio_route = (state.route == "portfolio") or (state.portfolio_input is not None)
 
         ordered_names = [
             ("financial", "Financial analysis was not available."),
             ("market", "Market analysis was not available."),
             ("news", "News intelligence was not available."),
             ("risk", "Risk analysis was not available."),
-            ("portfolio_optimization", "Portfolio analysis was not available."),
+            ("portfolio", "Portfolio intelligence was not available."),
+            ("portfolio_optimization", "Portfolio optimization was not available."),
+            ("portfolio_risk", "Portfolio quantitative risk was not available."),
+            ("portfolio_backtest", "Portfolio backtest was not requested."),
         ]
 
         provenance_dict: dict[str, dict] = {}
@@ -233,14 +239,30 @@ class FinalSynthesisAgent(BaseAgent):
                             provenance_dict.update(p_data)
                 if not val.response or not val.response.strip():
                     missing_information.append(missing_text)
+            elif hasattr(val, "model_dump") or hasattr(val, "dict"):
+                dumped = val.model_dump() if hasattr(val, "model_dump") else val.dict()
+                evidence[result_key] = dumped
             elif isinstance(val, dict):
-                evidence[result_key] = val
+                dumped_dict = {}
+                for k, v in val.items():
+                    if hasattr(v, "model_dump"):
+                        dumped_dict[k] = v.model_dump()
+                    elif hasattr(v, "dict"):
+                        dumped_dict[k] = v.dict()
+                    else:
+                        dumped_dict[k] = v
+                evidence[result_key] = dumped_dict
                 if "provenance" in val and isinstance(val["provenance"], dict):
                     provenance_dict.update(val["provenance"])
             elif val is not None:
                 evidence[result_key] = str(val)
             else:
-                missing_information.append(missing_text)
+                if is_portfolio_route:
+                    if result_key == "portfolio":
+                        missing_information.append(missing_text)
+                else:
+                    if result_key in ("financial", "market", "news", "risk"):
+                        missing_information.append(missing_text)
 
         if provenance_dict:
             evidence["provenance"] = provenance_dict
@@ -260,14 +282,17 @@ class FinalSynthesisAgent(BaseAgent):
             "Answer the user's original request directly using the supplied specialist outputs as evidence. "
             "Synthesize specialist findings rather than merely repeating their raw text. "
             "Prioritize evidence provided by the specialists, preserve important supplied numerical values exactly, and reconcile conflicting findings when present. "
-            "Structured specialist evidence is authoritative for numerical values and deterministic outputs; use it over prose when they differ. "
+            "Structured specialist evidence is authoritative for numerical values and deterministic outputs (including PORTFOLIO QUANTITATIVE RISK EVIDENCE and PORTFOLIO BACKTEST EVIDENCE); use it over prose when they differ. "
+            "Clearly distinguish Current Portfolio Risk from Optimized Portfolio Risk when both are present. "
+            "When PORTFOLIO BACKTEST EVIDENCE is supplied: present strategy metrics, buy-and-hold comparison, and benchmark comparison (when available) using the exact values provided. "
+            "The LLM must treat PortfolioRiskMetrics and backtest metric values as authoritative deterministic evidence and must not recalculate or modify these metrics. "
             "Identify uncertainty, disagreement, and important missing information. Distinguish factual observations from interpretation. "
             "Do not invent financial, market, news, sentiment, portfolio, or risk data. Do not create unsupported quantitative metrics. "
             "Never invent dates, prices, percentages, allocations, ratios, returns, or other values. "
             "Never claim an action was executed unless the supplied context explicitly confirms it. "
             "Avoid guarantees or certainty about future market performance. Avoid unconditional buy/sell recommendations. "
-            "Do not independently retrieve external information or recalculate portfolio optimization metrics. "
-            "If portfolio optimization or risk results are supplied, explain them using the exact values provided and do not replace them with unsupported values. "
+            "Do not independently retrieve external information or recalculate portfolio optimization or backtest metrics. "
+            "If portfolio optimization, risk, or backtest results are supplied, explain them using the exact values provided and do not replace them with unsupported values. "
             "Do not describe a company as debt-heavy or highly leveraged unless the structured evidence contains sufficient debt or leverage measurements; otherwise state that leverage cannot be assessed from the supplied data. "
             "Use only the information provided in the context. Clearly mark missing or unavailable information and do not fabricate it. "
             "Remain concise but useful."
@@ -306,18 +331,44 @@ class FinalSynthesisAgent(BaseAgent):
     ) -> dict[str, object]:
         sections: dict[str, object] = {}
         missing_information: list[str] = []
+        is_portfolio_route = (state.route == "portfolio") or (state.portfolio_input is not None)
 
         ordered_names = [
             ("financial", "FINANCIAL ANALYSIS", "Financial analysis was not available."),
             ("market", "MARKET ANALYSIS", "Market analysis was not available."),
             ("news", "NEWS INTELLIGENCE", "News intelligence was not available."),
             ("risk", "RISK ANALYSIS", "Risk analysis was not available."),
-            ("portfolio_optimization", "PORTFOLIO ANALYSIS", "Portfolio analysis was not available."),
+            ("portfolio", "PORTFOLIO INTELLIGENCE", "Portfolio intelligence was not available."),
+            ("portfolio_optimization", "PORTFOLIO ANALYSIS", "Portfolio optimization was not available."),
+            ("portfolio_risk", "PORTFOLIO QUANTITATIVE RISK EVIDENCE", "Portfolio quantitative risk was not available."),
+            ("portfolio_backtest", "PORTFOLIO BACKTEST EVIDENCE", "Portfolio backtest was not requested."),
         ]
 
         for result_key, title, missing_text in ordered_names:
             value = state.results.get(result_key)
-            if isinstance(value, AgentResult):
+            if result_key == "portfolio_risk" and isinstance(value, dict):
+                cur_risk = value.get("current_risk")
+                opt_risk = value.get("optimized_risk")
+                cur_dump = (
+                    cur_risk.model_dump()
+                    if hasattr(cur_risk, "model_dump")
+                    else (cur_risk if isinstance(cur_risk, dict) else cur_risk)
+                )
+                opt_dump = (
+                    opt_risk.model_dump()
+                    if hasattr(opt_risk, "model_dump")
+                    else (opt_risk if isinstance(opt_risk, dict) else opt_risk)
+                ) if opt_risk is not None else None
+
+                sections[title] = {
+                    "Current Portfolio Risk": cur_dump,
+                    "Optimized Portfolio Risk": opt_dump if opt_dump is not None else "Not requested or unavailable",
+                }
+            elif result_key == "portfolio_backtest" and isinstance(value, dict):
+                # Backtest evidence: pass the deterministic payload verbatim.
+                # The LLM is instructed to treat these figures as authoritative.
+                sections[title] = value
+            elif isinstance(value, AgentResult):
                 if value.response and value.response.strip():
                     sections[title] = {
                         "response": FinalSynthesisAgent._bounded_response(
@@ -336,13 +387,25 @@ class FinalSynthesisAgent(BaseAgent):
                         "response": "No specialist response was produced.",
                         "tools_used": value.tools_used,
                     }
+            elif hasattr(value, "model_dump") or hasattr(value, "dict"):
+                dumped = value.model_dump() if hasattr(value, "model_dump") else value.dict()
+                sections[title] = {
+                    "response": f"Portfolio intelligence: invested_value={dumped.get('invested_value')}, current_value={dumped.get('current_value')}, profit_loss={dumped.get('profit_loss')} ({dumped.get('profit_loss_percentage')}%), holdings_count={dumped.get('holdings_count')}.",
+                    "tools_used": ["portfolio_intelligence"] if result_key == "portfolio" else [],
+                    "data": dumped,
+                }
             elif value is not None:
                 sections[title] = {
                     "response": str(value),
                     "tools_used": [],
                 }
             else:
-                missing_information.append(missing_text)
+                if is_portfolio_route:
+                    if result_key == "portfolio":
+                        missing_information.append(missing_text)
+                else:
+                    if result_key in ("financial", "market", "news", "risk"):
+                        missing_information.append(missing_text)
 
         if state.errors:
             sections["WORKFLOW ERRORS / MISSING INFORMATION"] = {
@@ -413,7 +476,8 @@ class FinalSynthesisAgent(BaseAgent):
                 for title, section in sections.items()
                 if title in {
                     "FINANCIAL ANALYSIS", "MARKET ANALYSIS", "NEWS INTELLIGENCE",
-                    "RISK ANALYSIS", "PORTFOLIO ANALYSIS",
+                    "RISK ANALYSIS", "PORTFOLIO ANALYSIS", "PORTFOLIO QUANTITATIVE RISK EVIDENCE",
+                    "PORTFOLIO BACKTEST EVIDENCE",
                 }
             }
         return sections

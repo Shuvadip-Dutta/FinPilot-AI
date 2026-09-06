@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from apps.ai.graph.contracts import ResearchContext
+from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
 
 
 class AgentState(BaseModel):
@@ -12,6 +13,8 @@ class AgentState(BaseModel):
     ticker: str | None = None
 
     market: str | None = None
+
+    portfolio_input: PortfolioWorkflowInput | None = None
 
     route: Literal[
         "financial",

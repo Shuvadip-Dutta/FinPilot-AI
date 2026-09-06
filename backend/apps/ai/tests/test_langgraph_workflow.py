@@ -597,7 +597,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             portfolio_input.portfolio
         )
 
-        risk.run.assert_called_once()
+        risk.run.assert_not_called()
 
         optimization.run.assert_not_called()
 
@@ -608,7 +608,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             state.results,
         )
 
-        self.assertIn(
+        self.assertNotIn(
             "risk",
             state.results,
         )
@@ -636,7 +636,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             portfolio_input.portfolio
         )
 
-        risk.run.assert_called_once()
+        risk.run.assert_not_called()
 
         optimization.run.assert_called_once_with(
             portfolio_input.optimization_input
@@ -671,7 +671,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         portfolio.analyze.assert_called_once_with(
             portfolio_input.portfolio,
         )
-        risk.run.assert_called_once()
+        risk.run.assert_not_called()
         optimization.run.assert_not_called()
         synthesis.run.assert_called_once()
 
@@ -679,7 +679,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             "portfolio",
             state.results,
         )
-        self.assertIn(
+        self.assertNotIn(
             "risk",
             state.results,
         )
@@ -706,7 +706,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         portfolio.analyze.assert_called_once_with(
             portfolio_input.portfolio,
         )
-        risk.run.assert_called_once()
+        risk.run.assert_not_called()
         optimization.run.assert_called_once_with(
             portfolio_input.optimization_input,
         )
@@ -856,3 +856,394 @@ class LangGraphResearchWorkflowTestCase(TestCase):
 
         session = ResearchSession.objects.get(thread_id="persist-fail-thread")
         self.assertEqual(session.status, "FAILED")
+
+
+# ---------------------------------------------------------------------------
+# Portfolio Backtest Node Tests
+# ---------------------------------------------------------------------------
+
+class PortfolioBacktestNodeTestCase(TestCase):
+    """Unit tests for the portfolio_backtest LangGraph node and related routing."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _base_portfolio() -> Portfolio:
+        return Portfolio(
+            holdings=[
+                Holding(ticker="RELIANCE", market="IN", quantity=10, average_price=1200),
+                Holding(ticker="TCS", market="IN", quantity=5, average_price=3500),
+            ]
+        )
+
+    @staticmethod
+    def _backtest_portfolio_input(
+        include_backtest: bool = True,
+        portfolio_id: str | None = None,
+    ) -> PortfolioWorkflowInput:
+        p = Portfolio(
+            holdings=[
+                Holding(ticker="RELIANCE", market="IN", quantity=10, average_price=1200),
+                Holding(ticker="TCS", market="IN", quantity=5, average_price=3500),
+            ]
+        )
+        if portfolio_id is not None:
+            # inject synthetic id so node can look it up
+            p = p.model_copy(update={"id": portfolio_id})
+        return PortfolioWorkflowInput(
+            portfolio=p,
+            include_backtest=include_backtest,
+            backtest_from_date="2024-01-01",
+            backtest_to_date="2025-06-01",
+            backtest_benchmark_ticker="NIFTY 50",
+            backtest_initial_capital=100_000.0,
+            backtest_rebalance_frequency="monthly",
+            backtest_in_sample_window_days=252,
+            backtest_out_of_sample_step_days=21,
+            backtest_transaction_cost_bps=10.0,
+            backtest_risk_free_rate=0.0,
+            backtest_min_weight=0.0,
+            backtest_max_weight=1.0,
+        )
+
+    @staticmethod
+    def _build_backtest_workflow(
+        backtest_engine=None,
+        backtest_evaluator=None,
+    ):
+        """Build a LangGraphResearchWorkflow with all mocks, including optional backtest deps."""
+        checkpointer = _test_checkpointer()
+        router = MagicMock()
+        router.route.return_value = "portfolio"
+
+        financial = MagicMock()
+        market = MagicMock()
+        news = MagicMock()
+        risk = MagicMock()
+
+        portfolio = MagicMock()
+        portfolio.analyze.return_value = PortfolioIntelligence(
+            invested_value=12000.0,
+            current_value=13000.0,
+            profit_loss=1000.0,
+            profit_loss_percentage=8.33,
+            holdings_count=2,
+        )
+        portfolio.get_last_prices.return_value = {"RELIANCE": 1250.0, "TCS": 3600.0}
+
+        optimization = MagicMock()
+        optimization.run.return_value = AgentResult(
+            response="Optimization result",
+            tools_used=["portfolio_optimization"],
+        )
+
+        synthesis = MagicMock()
+        synthesis.run.return_value = AgentResult(
+            response="Synthesis including backtest",
+            tools_used=["llm_synthesis"],
+        )
+
+        workflow = LangGraphResearchWorkflow(
+            router=router,
+            financial_agent=financial,
+            market_agent=market,
+            news_agent=news,
+            synthesis_agent=synthesis,
+            risk_agent=risk,
+            portfolio_intelligence=portfolio,
+            portfolio_optimization_agent=optimization,
+            portfolio_backtest_engine=backtest_engine,
+            portfolio_backtest_evaluator=backtest_evaluator,
+            checkpointer=checkpointer,
+        )
+
+        return workflow, portfolio, synthesis
+
+    # ------------------------------------------------------------------
+    # 1. _portfolio_risk_decision routing
+    # ------------------------------------------------------------------
+
+    def test_portfolio_risk_decision_routes_to_backtest_when_flag_true(self):
+        """_portfolio_risk_decision returns 'portfolio_backtest' when include_backtest=True."""
+        workflow, _, _ = self._build_backtest_workflow()
+        pi = self._backtest_portfolio_input(include_backtest=True)
+        result = workflow._portfolio_risk_decision({"portfolio_input": pi})
+        self.assertEqual(result, "portfolio_backtest")
+
+    def test_portfolio_risk_decision_routes_to_synthesis_when_flag_false(self):
+        """_portfolio_risk_decision returns 'synthesis' when include_backtest=False."""
+        workflow, _, _ = self._build_backtest_workflow()
+        pi = self._backtest_portfolio_input(include_backtest=False)
+        result = workflow._portfolio_risk_decision({"portfolio_input": pi})
+        self.assertEqual(result, "synthesis")
+
+    def test_portfolio_risk_decision_routes_to_synthesis_with_no_portfolio_input(self):
+        """_portfolio_risk_decision returns 'synthesis' when portfolio_input is None."""
+        workflow, _, _ = self._build_backtest_workflow()
+        result = workflow._portfolio_risk_decision({})
+        self.assertEqual(result, "synthesis")
+
+    # ------------------------------------------------------------------
+    # 2. Node skips gracefully when include_backtest=False
+    # ------------------------------------------------------------------
+
+    def test_backtest_node_returns_empty_when_flag_false(self):
+        """Node must be a no-op when include_backtest is False (defensive guard)."""
+        workflow, _, _ = self._build_backtest_workflow()
+        pi = self._backtest_portfolio_input(include_backtest=False)
+        result = workflow._execute_portfolio_backtest_node({"portfolio_input": pi})
+        # Should return an empty dict — no errors, no results
+        self.assertNotIn("errors", result)
+
+    # ------------------------------------------------------------------
+    # 3. Node returns error when portfolio_input is missing
+    # ------------------------------------------------------------------
+
+    def test_backtest_node_returns_error_without_portfolio_input(self):
+        """Node must emit a non-fatal error dict when portfolio_input is absent."""
+        workflow, _, _ = self._build_backtest_workflow()
+        result = workflow._execute_portfolio_backtest_node({})
+        self.assertIn("errors", result)
+        self.assertTrue(any("required" in e.lower() for e in result["errors"]))
+
+    # ------------------------------------------------------------------
+    # 4. Node produces a failure payload on exception (non-fatal)
+    # ------------------------------------------------------------------
+
+    def test_backtest_node_is_nonfatal_on_builder_exception(self):
+        """When the builder raises, the node must NOT raise; it returns a failure dict
+        so that synthesis can still execute."""
+        from unittest.mock import patch
+
+        workflow, _, _ = self._build_backtest_workflow()
+        pi = self._backtest_portfolio_input(include_backtest=True)
+        # No django_portfolio_id → node emits a non-fatal error and returns without raising
+        result = workflow._execute_portfolio_backtest_node({"portfolio_input": pi})
+
+        # Must NOT raise — must return errors + a failure payload
+        self.assertIn("errors", result)
+        self.assertIn("results", result)
+        bt = result["results"].get("portfolio_backtest", {})
+        self.assertFalse(bt.get("success", True))
+        self.assertIn("error", bt)
+
+    # ------------------------------------------------------------------
+    # 5. Node executes full pipeline and stores result
+    # ------------------------------------------------------------------
+
+    def test_backtest_node_stores_result_when_pipeline_succeeds(self):
+        """When Builder/Engine/Evaluator all succeed, results['portfolio_backtest'] is populated."""
+        from unittest.mock import MagicMock, patch
+
+        mock_backtest_input = MagicMock()
+        mock_backtest_input.tickers = ["RELIANCE", "TCS"]
+        mock_backtest_input.initial_capital = 100_000.0
+        mock_backtest_input.backtest_from_date = None
+        mock_backtest_input.backtest_to_date = None
+
+        mock_raw_result = MagicMock()
+        mock_raw_result.success = True
+        mock_raw_result.message = "Backtest completed successfully."
+        mock_raw_result.final_portfolio_value = 115_000.0
+        mock_raw_result.total_transaction_costs = 450.0
+        mock_raw_result.equity_curve = [
+            {"date": "2024-01-15", "portfolio_value": 100_000.0, "daily_return": 0.0},
+            {"date": "2024-06-01", "portfolio_value": 107_500.0, "daily_return": 0.002},
+            {"date": "2025-06-01", "portfolio_value": 115_000.0, "daily_return": 0.003},
+        ]
+        mock_raw_result.rebalance_events = []
+        mock_raw_result.strategy_metrics = None
+        mock_raw_result.buy_and_hold_metrics = None
+        mock_raw_result.benchmark_metrics = None
+        mock_raw_result.benchmark_ticker = "NIFTY 50"
+        mock_raw_result.relative_metrics = None
+
+        mock_engine = MagicMock()
+        mock_engine.run.return_value = mock_raw_result
+
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate.return_value = mock_raw_result
+
+        workflow, _, _ = self._build_backtest_workflow(
+            backtest_engine=mock_engine,
+            backtest_evaluator=mock_evaluator,
+        )
+        # Provide a django_portfolio_id so the node can proceed to the builder stage
+        from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
+        from apps.ai.portfolio.schemas import Portfolio, Holding
+        pi = PortfolioWorkflowInput(
+            portfolio=Portfolio(
+                holdings=[
+                    Holding(ticker="RELIANCE", market="IN", quantity=10, average_price=1200),
+                    Holding(ticker="TCS", market="IN", quantity=5, average_price=3500),
+                ]
+            ),
+            include_backtest=True,
+            django_portfolio_id="aaaaaaaa-0000-0000-0000-000000000001",
+            backtest_from_date="2024-01-01",
+            backtest_to_date="2025-06-01",
+            backtest_initial_capital=100_000.0,
+        )
+
+        with patch(
+            "apps.portfolio.backtest_builder.PortfolioBacktestInputBuilder.build_backtest_input",
+            return_value=mock_backtest_input,
+        ):
+            with patch(
+                "apps.portfolio.models.Portfolio.objects.get",
+                return_value=MagicMock(),
+            ):
+                result = workflow._execute_portfolio_backtest_node(
+                    {"portfolio_input": pi}
+                )
+
+        self.assertNotIn("errors", result)
+        self.assertIn("results", result)
+        bt = result["results"]["portfolio_backtest"]
+        self.assertTrue(bt["success"])
+        self.assertAlmostEqual(bt["final_portfolio_value"], 115_000.0)
+        self.assertEqual(bt["benchmark_ticker"], "NIFTY 50")
+        # Equity curve sample present
+        self.assertIn("equity_curve_sample", bt)
+        self.assertGreater(len(bt["equity_curve_sample"]), 0)
+
+    # ------------------------------------------------------------------
+    # 6. Full graph run with include_backtest=False skips backtest node
+    # ------------------------------------------------------------------
+
+    def test_full_graph_without_backtest_skips_portfolio_backtest(self):
+        """When include_backtest=False, synthesis receives no 'portfolio_backtest' result."""
+        from unittest.mock import patch
+
+        workflow, portfolio, synthesis = self._build_backtest_workflow()
+
+        # Patch portfolio risk node so it doesn't need real price data
+        with patch.object(workflow, "_execute_portfolio_risk_node", return_value={
+            "results": {
+                "portfolio_risk": {
+                    "current_risk": None,
+                    "optimized_risk": None,
+                }
+            }
+        }):
+            pi = self._backtest_portfolio_input(include_backtest=False)
+            state = workflow.run("Analyze my portfolio.", portfolio_input=pi)
+
+        # Synthesis must have been called
+        synthesis.run.assert_called_once()
+        # portfolio_backtest must NOT appear in results
+        self.assertNotIn("portfolio_backtest", state.results)
+
+    # ------------------------------------------------------------------
+    # 7. _serialise_backtest_result equity-curve sampling
+    # ------------------------------------------------------------------
+
+    def test_serialise_backtest_result_samples_large_equity_curve(self):
+        """_serialise_backtest_result must sample equity curves longer than 30 points."""
+        from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
+
+        large_curve = [
+            {"date": f"2024-{i:03d}", "portfolio_value": 100_000 + i * 10, "daily_return": 0.0}
+            for i in range(120)
+        ]
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.message = "ok"
+        mock_result.final_portfolio_value = 101_200.0
+        mock_result.total_transaction_costs = 50.0
+        mock_result.equity_curve = large_curve
+        mock_result.rebalance_events = []
+        mock_result.strategy_metrics = None
+        mock_result.buy_and_hold_metrics = None
+        mock_result.benchmark_metrics = None
+        mock_result.benchmark_ticker = None
+        mock_result.relative_metrics = None
+
+        mock_input = MagicMock()
+        mock_input.tickers = ["RELIANCE", "TCS"]
+        mock_input.initial_capital = 100_000.0
+
+        payload = LangGraphResearchWorkflow._serialise_backtest_result(
+            mock_result, mock_input
+        )
+
+        # Full curve has 120 points — sampled result must be much shorter
+        sampled = payload["equity_curve_sample"]
+        self.assertLessEqual(len(sampled), 30)
+        # First and last points must be preserved
+        self.assertEqual(sampled[0]["date"], "2024-000")
+        self.assertEqual(sampled[-1]["date"], "2024-119")
+
+    # ------------------------------------------------------------------
+    # 8. PortfolioWorkflowInput backtest field defaults
+    # ------------------------------------------------------------------
+
+    def test_portfolio_workflow_input_backtest_defaults(self):
+        """PortfolioWorkflowInput must default include_backtest=False and use sensible values."""
+        p = self._base_portfolio()
+        wi = PortfolioWorkflowInput(portfolio=p)
+
+        self.assertFalse(wi.include_backtest)
+        self.assertIsNone(wi.backtest_from_date)
+        self.assertIsNone(wi.backtest_to_date)
+        self.assertIsNone(wi.backtest_benchmark_ticker)
+        self.assertEqual(wi.backtest_initial_capital, 100_000.0)
+        self.assertEqual(wi.backtest_rebalance_frequency, "monthly")
+        self.assertEqual(wi.backtest_in_sample_window_days, 252)
+        self.assertEqual(wi.backtest_out_of_sample_step_days, 21)
+        self.assertEqual(wi.backtest_transaction_cost_bps, 10.0)
+        self.assertEqual(wi.backtest_risk_free_rate, 0.0)
+        self.assertEqual(wi.backtest_min_weight, 0.0)
+        self.assertEqual(wi.backtest_max_weight, 1.0)
+
+    # ------------------------------------------------------------------
+    # 9. PortfolioWorkflowInput backtest fields round-trip correctly
+    # ------------------------------------------------------------------
+
+    def test_portfolio_workflow_input_backtest_fields_round_trip(self):
+        """All backtest config fields must survive a model_dump / model_validate cycle."""
+        from pydantic import ValidationError
+
+        p = self._base_portfolio()
+        wi = PortfolioWorkflowInput(
+            portfolio=p,
+            include_backtest=True,
+            backtest_from_date="2024-01-01",
+            backtest_to_date="2025-06-01",
+            backtest_benchmark_ticker="NIFTY 50",
+            backtest_initial_capital=50_000.0,
+            backtest_rebalance_frequency="quarterly",
+            backtest_in_sample_window_days=126,
+            backtest_out_of_sample_step_days=63,
+            backtest_transaction_cost_bps=5.0,
+            backtest_risk_free_rate=0.065,
+            backtest_min_weight=0.05,
+            backtest_max_weight=0.40,
+        )
+
+        dumped = wi.model_dump()
+        restored = PortfolioWorkflowInput.model_validate(dumped)
+
+        self.assertTrue(restored.include_backtest)
+        self.assertEqual(restored.backtest_from_date, "2024-01-01")
+        self.assertEqual(restored.backtest_to_date, "2025-06-01")
+        self.assertEqual(restored.backtest_benchmark_ticker, "NIFTY 50")
+        self.assertAlmostEqual(restored.backtest_initial_capital, 50_000.0)
+        self.assertEqual(restored.backtest_rebalance_frequency, "quarterly")
+        self.assertEqual(restored.backtest_in_sample_window_days, 126)
+        self.assertEqual(restored.backtest_out_of_sample_step_days, 63)
+        self.assertAlmostEqual(restored.backtest_transaction_cost_bps, 5.0)
+        self.assertAlmostEqual(restored.backtest_risk_free_rate, 0.065)
+        self.assertAlmostEqual(restored.backtest_min_weight, 0.05)
+        self.assertAlmostEqual(restored.backtest_max_weight, 0.40)
+
+        # Reject invalid capital
+        with self.assertRaises(ValidationError):
+            PortfolioWorkflowInput(portfolio=p, backtest_initial_capital=-1.0)
+
+        # Reject invalid in_sample_window_days
+        with self.assertRaises(ValidationError):
+            PortfolioWorkflowInput(portfolio=p, backtest_in_sample_window_days=1)

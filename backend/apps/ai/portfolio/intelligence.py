@@ -46,6 +46,15 @@ class PortfolioIntelligenceService:
             holdings_count=len(portfolio.holdings),
         )
 
+    def get_last_prices(self, portfolio: Portfolio) -> dict[str, float]:
+        """Fetch current last prices for all holdings in a portfolio."""
+        prices: dict[str, float] = {}
+        for holding in portfolio.holdings:
+            ticker = holding.ticker.strip().upper()
+            if ticker not in prices:
+                prices[ticker] = self._get_last_price(holding.ticker, holding.market)
+        return prices
+
     def _get_last_price(self, ticker: str, market: str) -> float:
         try:
             market_data = self.market_data_tool(

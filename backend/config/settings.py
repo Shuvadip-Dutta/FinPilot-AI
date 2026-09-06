@@ -132,6 +132,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.research",
     "apps.ai",
+    "apps.portfolio",
 ]
 
 MIDDLEWARE = [

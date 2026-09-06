@@ -38,3 +38,21 @@ class PortfolioIntelligence(BaseModel):
     profit_loss: float
     profit_loss_percentage: float
     holdings_count: int
+
+
+class PortfolioRiskMetrics(BaseModel):
+    """Deterministic quantitative risk analytics for a portfolio."""
+
+    volatility: float
+    downside_volatility: float
+    sharpe_ratio: float
+    sortino_ratio: float
+    calmar_ratio: float | None = None
+    max_drawdown: float
+    max_drawdown_duration_days: int
+    var_95_historical: float
+    cvar_95_historical: float
+    annualized_return: float
+    cagr: float
+    total_period_return: float
+

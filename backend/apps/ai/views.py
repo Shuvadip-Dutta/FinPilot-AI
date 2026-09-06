@@ -1,5 +1,6 @@
 import uuid
 
+from django.http import Http404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,6 +21,7 @@ class AIChatView(APIView):
         message = serializer.validated_data["message"]
         ticker = serializer.validated_data.get("ticker")
         market = serializer.validated_data.get("market")
+        portfolio_id = serializer.validated_data.get("portfolio_id")
         thread_id = serializer.validated_data.get("thread_id") or str(uuid.uuid4())
 
         service = AgentService.create_canonical()
@@ -31,6 +33,12 @@ class AIChatView(APIView):
                 ticker=ticker,
                 market=market,
                 thread_id=thread_id,
+                portfolio_id=portfolio_id,
+            )
+        except Http404 as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND,
             )
         except (ValueError, AIError) as exc:
             return Response(

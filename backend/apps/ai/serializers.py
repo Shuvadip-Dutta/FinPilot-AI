@@ -19,6 +19,11 @@ class AIChatSerializer(serializers.Serializer):
         allow_null=True,
         default=None,
     )
+    portfolio_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        default=None,
+    )
     thread_id = serializers.CharField(
         required=False,
         allow_blank=True,

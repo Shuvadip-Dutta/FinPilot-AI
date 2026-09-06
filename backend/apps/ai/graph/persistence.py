@@ -30,6 +30,30 @@ class LangGraphPersistence:
                     "apps.ai.services.schemas",
                     "AgentResult",
                 ),
+                (
+                    "apps.ai.graph.portfolio_contracts",
+                    "PortfolioWorkflowInput",
+                ),
+                (
+                    "apps.ai.portfolio.schemas",
+                    "PortfolioIntelligence",
+                ),
+                (
+                    "apps.ai.portfolio.schemas",
+                    "Portfolio",
+                ),
+                (
+                    "apps.ai.portfolio.schemas",
+                    "Holding",
+                ),
+                (
+                    "apps.ai.portfolio.optimization",
+                    "OptimizationInput",
+                ),
+                (
+                    "apps.ai.portfolio.optimization",
+                    "OptimizationResult",
+                ),
             ],
         )
 
