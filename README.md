@@ -12,7 +12,7 @@ The platform is designed to demonstrate how an agentic AI system can combine det
 
 FinPilot AI is currently in active development.
 
-The research and multi-agent backend is substantially implemented and validated. Portfolio workflow integration, SEC filing ingestion, frontend interfaces, and portfolio monitoring are the remaining major product areas.
+The research and multi-agent backend, along with the full portfolio quantitative suite (optimization, quantitative risk, and walk-forward backtesting), is implemented and validated. SEC filing ingestion, frontend interfaces, portfolio monitoring, and conversational backtest activation are the remaining major product areas.
 
 ### Current Status
 
@@ -34,14 +34,18 @@ The research and multi-agent backend is substantially implemented and validated.
 | Observability | ✅ Implemented |
 | Model Evaluation | ✅ Implemented |
 | RAG Foundation | ✅ Implemented |
-| Portfolio Intelligence | ⚠️ Partial |
+| Portfolio Intelligence | ✅ Implemented |
 | Portfolio Optimization Engine | ✅ Implemented |
-| Portfolio Optimization Workflow | 🚧 In Progress |
+| Portfolio Quantitative Risk Engine | ✅ Implemented |
+| Portfolio Walk-Forward Backtesting | ✅ Implemented |
+| Portfolio REST API (CRUD + Backtest) | ✅ Implemented |
+| Portfolio LangGraph Integration | ✅ Implemented |
 | SEC Filing RAG | 🚧 In Progress |
 | Frontend | 🚧 In Progress |
 | Portfolio Dashboard | 🚧 In Progress |
 | Portfolio Monitoring | 🚧 In Progress |
 | Background Processing | 🚧 In Progress |
+| Conversational Backtest Activation | 🚧 In Progress |
 
 ---
 
@@ -67,6 +71,7 @@ The research and multi-agent backend is substantially implemented and validated.
 - [API Overview](#api-overview)
 - [Example Research Workflow](#example-research-workflow)
 - [Portfolio Workflow](#portfolio-workflow)
+- [Backtesting](#backtesting)
 - [Engineering Principles](#engineering-principles)
 - [Project Structure](#project-structure)
 - [Technology Stack](#technology-stack)
@@ -237,25 +242,66 @@ Implemented:
 - retrieval tools
 - RAG-specific error handling
 
-#### Portfolio Optimization
+#### Portfolio Suite
 
-The deterministic portfolio optimization engine is implemented.
+FinPilot includes a complete, deterministic portfolio quantitative stack, integrated end-to-end through the authenticated API and the LangGraph workflow.
 
-It includes:
+**Portfolio Intelligence**
 
-- portfolio return calculation
-- covariance-based risk calculation
-- volatility
-- Sharpe ratio
-- bounded long-only allocation
-- minimum allocation constraints
-- maximum allocation constraints
-- feasibility validation
-- numerical input validation
+- portfolio and holding persistence (Django models)
+- authenticated portfolio CRUD API
+- invested value, current value, profit/loss
+- holding-level and portfolio-level aggregation
+- portfolio market-data adapter with date-aware historical alignment
+- `PortfolioWorkflowInputBuilder` for constructing workflow input
 
-The optimization result can also be interpreted by an LLM through the Portfolio Optimization Agent.
+**Portfolio Optimization**
 
-The public portfolio workflow is still being integrated.
+- deterministic `PortfolioOptimizationEngine`
+- portfolio return and covariance-based risk calculation
+- bounded long-only allocation with minimum/maximum constraints
+- feasibility and numerical input validation
+
+**Quantitative Risk**
+
+- deterministic `PortfolioRiskEngine`
+- volatility and Sharpe ratio
+- structured, computed risk evidence rather than LLM-narrated risk
+
+**Walk-Forward Backtesting**
+
+- deterministic `PortfolioBacktestEngine`
+- rolling in-sample/out-of-sample evaluation
+- date-aware historical alignment
+- transaction-cost-aware simulation
+- uses the portfolio's actual persisted initial weights
+
+**Buy-and-Hold Baseline**
+
+- every backtest is compared against a simple buy-and-hold baseline for the same holdings
+
+**Benchmark Comparison**
+
+- backtest results are also compared against a market benchmark
+
+**Relative Metrics**
+
+- `PortfolioBacktestEvaluator` computes strategy, benchmark, and relative performance metrics
+
+**Backtest REST API**
+
+- authenticated `POST /api/v1/portfolio/<portfolio_id>/backtest/`
+- `PortfolioBacktestInputBuilder` for constructing backtest inputs
+- validated against live Upstox data
+
+**LangGraph Backtest Integration**
+
+- dedicated LangGraph portfolio backtest node
+- conditional backtest routing (`include_backtest`, default `False`)
+- structured Portfolio Backtest Evidence
+- synthesis integration, so backtest results are explained rather than computed by the LLM
+
+All optimization, risk, and backtest results can be interpreted by an LLM through the Portfolio Optimization Agent, but the underlying calculations remain fully deterministic.
 
 #### Persistence
 
@@ -370,9 +416,10 @@ The high-level architecture is:
                          └────────┬─────────┘
                                   │
                                   ▼
-                    ┌──────────────────────────┐
-                    │ Portfolio / Optimization │
-                    └────────────┬─────────────┘
+                    ┌─────────────────────────────────┐
+                    │ Portfolio / Optimization / Risk  │
+                    │      / Optional Backtest         │
+                    └────────────────┬──────────────────┘
                                  │
                                  ▼
                          ┌──────────────────┐
@@ -484,11 +531,11 @@ Current functionality includes:
 - holding-level calculations
 - portfolio-level aggregation
 
-The portfolio workflow is currently being connected to the public API.
+The Portfolio Intelligence layer is fully connected to the authenticated public API and to the LangGraph workflow, including the optimization, quantitative risk, and optional backtest stages.
 
 ### Portfolio Optimization Agent
 
-The Portfolio Optimization Agent does not perform the mathematical optimization itself.
+The Portfolio Optimization Agent does not perform the mathematical optimization, quantitative risk calculation, or backtesting itself.
 
 Instead:
 
@@ -499,15 +546,24 @@ Deterministic Optimizer
       ↓
  OptimizationResult
       ↓
+Deterministic Risk Engine
+      ↓
+ RiskResult
+      ↓
+Optional Backtest Engine
+      ↓
+ BacktestResult (if requested)
+      ↓
  LLM Explanation
 ```
 
-This keeps numerical optimization deterministic while allowing the LLM to explain:
+This keeps numerical optimization, quantitative risk, and backtesting deterministic while allowing the LLM to explain:
 
 - allocation
 - expected return
 - volatility
 - Sharpe ratio
+- backtest performance (when requested)
 - trade-offs
 - optimization implications
 
@@ -924,9 +980,10 @@ Current repository validation:
 
 | Metric | Value |
 |---|---|
-| Tests | 580 |
-| Passed | 580 |
+| Tests | 705 |
+| Passed | 705 |
 | Failures | 0 |
+| Errors | 0 |
 
 Tests cover areas including:
 
@@ -939,7 +996,7 @@ Tests cover areas including:
 - LangGraph
 - MCP
 - RAG
-- portfolio optimization
+- portfolio optimization, risk, and walk-forward backtesting
 - token management
 - provider fallback
 - provenance
@@ -1001,7 +1058,10 @@ Canonical company identities, ISIN resolution, provider symbols, Upstox fundamen
 **Phase 12 — API & Workflow Finalization ✅**
 Canonical ResearchContext, canonical LangGraph API execution path, AI service facade, provider architecture, provenance integration, authenticated AI workflow, persistence integration, model-specific Groq reasoning behaviour, live workflow verification, final automated test suite.
 
-Current validation: **580 tests, 580 passed.**
+**Phase 13 — Portfolio Quantitative Integration ✅**
+Portfolio Django persistence, holding persistence, authenticated Portfolio CRUD API, portfolio market-data adapter, `PortfolioWorkflowInputBuilder`, date-aware historical alignment, deterministic `PortfolioOptimizationEngine`, deterministic `PortfolioRiskEngine`, walk-forward `PortfolioBacktestEngine`, `PortfolioBacktestEvaluator`, buy-and-hold baseline, benchmark comparison, relative performance metrics, actual persisted portfolio initial weights, `PortfolioBacktestInputBuilder`, authenticated Portfolio Backtest REST API, live Upstox validation, LangGraph portfolio backtest node, conditional backtest routing, structured Portfolio Backtest Evidence, synthesis integration, and live AgentService → LangGraph → portfolio → optimization → risk → backtest → synthesis validation.
+
+Current validation: **705 tests, 705 passed, 0 failures, 0 errors.**
 
 ---
 
@@ -1009,22 +1069,9 @@ Current validation: **580 tests, 580 passed.**
 
 The following areas are intentionally not yet considered fully complete.
 
-### Portfolio Product Integration
-
-The optimization engine exists, but the complete product path still requires:
-
-- portfolio database models
-- portfolio API
-- holding persistence
-- ownership
-- canonical portfolio workflow input
-- LangGraph dependency injection
-- end-to-end API integration
-- frontend portfolio interface
-
 ### SEC Filing RAG
 
-The current RAG implementation is a generic financial-document retrieval foundation. SEC-specific ingestion is not yet complete.
+The current RAG implementation is a generic financial-document retrieval foundation and lacks a complete document-ingestion management workflow. SEC-specific ingestion (source integration, filing download/parsing, CIK-based ingestion, filing metadata, indexing, retrieval) is not yet implemented.
 
 ### Frontend
 
@@ -1038,7 +1085,12 @@ Planned interfaces include:
 - evidence display
 - risk view
 - portfolio optimization view
+- portfolio backtest view
 - portfolio dashboard
+
+### Portfolio Dashboard
+
+A dedicated portfolio dashboard (holdings, optimization results, risk metrics, and backtest performance) is not yet implemented. It is planned as part of the frontend work in Phase 14.
 
 ### Portfolio Monitoring
 
@@ -1050,54 +1102,39 @@ Future work may include:
 - portfolio health checks
 - event detection
 - alerts
-- background processing
 
 ### Background Processing
 
 Celery and Redis are not currently part of the active production workflow. They should only be introduced when scheduled ingestion, portfolio monitoring, or other background processing requirements justify them.
 
+### Conversational Backtest Activation
+
+Triggering a portfolio backtest through natural language in the AI chat / AgentService flow is not yet implemented. Backtests are currently triggered directly through the authenticated Backtest REST API (`include_backtest`); conversational activation from a chat message is planned for a future phase.
+
+Some minor technical debt remains across the codebase and is tracked incrementally as part of ongoing hardening.
+
 ---
 
 ## Roadmap
 
-**Phase 13 — Documentation & Architecture Polish**
-Finalize architecture documentation, document provider interfaces, document data flow, document model routing, document RAG design, document persistence, align README with implementation, finalize developer setup instructions.
+### Completed
 
-**Phase 14 — Portfolio Integration**
+Core research, the multi-agent AI system, model evaluation, evidence and session persistence, authentication and authorization, the canonical provider architecture, and the full portfolio quantitative suite (optimization, quantitative risk, and walk-forward backtesting) are implemented and validated. See [Development Phases](#development-phases) for the complete phase-by-phase history.
 
-```text
-Portfolio Model
-      ↓
- Holding Model
-      ↓
- Portfolio API
-      ↓
-PortfolioWorkflowInput
-      ↓
-   LangGraph
-      ↓
-Portfolio Intelligence
-      ↓
-Deterministic Optimizer
-      ↓
- OptimizationResult
-      ↓
- LLM Explanation
-      ↓
- Persistence
-      ↓
- API Response
-```
+### Next
 
-Tasks: portfolio models, holding models, serializers, API endpoints, user ownership, portfolio workflow input, dependency injection, portfolio evidence persistence, integration tests.
+**Phase 14 — Frontend / Research & Portfolio Dashboard**
+Planned: registration/login, JWT handling, research chatbot, research dashboard, evidence panel, provenance panel, risk summary, portfolio optimization interface, portfolio backtest interface, portfolio dashboard.
+
+### Future
 
 **Phase 15 — SEC Filing RAG**
 Planned: SEC source integration, filing retrieval, filing parser, metadata, indexing, provenance, retrieval, financial-agent integration.
 
-**Phase 16 — Frontend**
-Planned: registration/login, JWT handling, research chatbot, research dashboard, evidence panel, provenance panel, risk summary, portfolio optimization interface, portfolio dashboard.
+**Phase 16 — Conversational Backtest Activation**
+Planned: natural-language backtest triggering from AgentService, intent detection for backtest requests, conversational parameter extraction (date ranges, benchmark selection), routed into the existing LangGraph backtest node without requiring a direct API call.
 
-**Phase 17 — Portfolio Monitoring**
+**Phase 17 — Portfolio Monitoring & Background Processing**
 
 ```text
 Stored Portfolio
@@ -1113,10 +1150,10 @@ Risk / Change Detection
     Alert
 ```
 
-Background processing can be introduced at this stage if required.
+Planned: scheduled portfolio refreshes, portfolio health checks, event detection, alerts. Celery and Redis are introduced at this stage, once scheduled/background requirements justify them.
 
 **Phase 18 — Final Integration & Evaluation**
-Final validation will include: complete backend integration, portfolio end-to-end workflow, SEC RAG workflow, frontend integration, authenticated user flow, PostgreSQL persistence, LangGraph checkpoint persistence, Qdrant retrieval, provider integration, model evaluation, token usage, latency, failure handling, final demo workflow.
+Final validation will include: complete backend integration, frontend integration, SEC RAG workflow, authenticated user flow, PostgreSQL persistence, LangGraph checkpoint persistence, Qdrant retrieval, provider integration, model evaluation, token usage, latency, failure handling, final demo workflow.
 
 ---
 
@@ -1230,15 +1267,16 @@ The API is available under `/api/v1/`.
 Run the full application suite:
 
 ```bash
-python manage.py test apps --noinput
+python manage.py test apps.core apps.portfolio apps.ai apps.research --verbosity=1
 ```
 
 Expected current result:
 
 ```text
-580 tests
-580 passed
+705 tests
+705 passed
 0 failures
+0 errors
 ```
 
 ---
@@ -1268,6 +1306,18 @@ Supported research domains include:
 - historical data
 - news
 - research sessions
+
+### Portfolio
+
+Authenticated portfolio CRUD endpoints are available under `/api/v1/portfolio/`.
+
+The backtest endpoint is:
+
+```text
+POST /api/v1/portfolio/<portfolio_id>/backtest/
+```
+
+It returns structured, deterministic backtest results — strategy metrics, buy-and-hold baseline, benchmark comparison, and relative performance — computed by the `PortfolioBacktestEngine` and `PortfolioBacktestEvaluator`. The LLM interprets these results; it does not compute them.
 
 ### AI Chat
 
@@ -1361,7 +1411,7 @@ For a general research route, Financial, Market, and News agents can execute in 
 
 ## Portfolio Workflow
 
-The intended portfolio flow is:
+The current, implemented portfolio flow is:
 
 ```text
  User Portfolio
@@ -1374,20 +1424,24 @@ Portfolio Workflow Input
       ↓
 Portfolio Intelligence
       ↓
-Deterministic Optimization
+   Optimization
       ↓
- OptimizationResult
+ Quantitative Risk
       ↓
-Qwen Reasoning Model
+Optional Backtest
       ↓
-  Explanation
+   Synthesis
       ↓
- Persistence
+Evidence + Provenance
       ↓
-  Response
+  Persistence
+      ↓
+ API Response
 ```
 
-The mathematical optimizer remains deterministic. The LLM is responsible for explaining the result rather than producing authoritative portfolio weights.
+The mathematical optimizer, risk engine, and backtest engine all remain deterministic. The LLM is responsible for explaining the results rather than producing authoritative portfolio weights, risk figures, or performance metrics.
+
+The backtest stage is **opt-in**: it only runs when the request explicitly sets `include_backtest=True`. The default is `include_backtest=False`, so a standard portfolio optimization/risk request does not run a backtest unless asked for.
 
 ### Example Optimization Concepts
 
@@ -1405,6 +1459,46 @@ Minimum Weight ≤ Asset Weight ≤ Maximum Weight
 ```
 
 The optimizer also validates feasibility and numerical input conditions.
+
+---
+
+## Backtesting
+
+FinPilot's portfolio backtesting is a deterministic, quantitative simulation layer — the LLM only interprets and explains the results; it does not compute them.
+
+Key characteristics:
+
+- **Date-aware historical data** — the portfolio market-data adapter aligns historical prices to the actual date range being backtested.
+- **Walk-forward evaluation** — a rolling in-sample/out-of-sample split is used rather than a single static backtest window, so the strategy is evaluated on data it was not fit to.
+- **Transaction costs** — the simulation accounts for transaction costs rather than assuming frictionless trading.
+- **Actual portfolio weights** — the backtest uses the portfolio's actual persisted initial weights, not synthetic or idealized weights.
+- **Buy-and-hold baseline** — every backtest is compared against a simple buy-and-hold baseline for the same holdings.
+- **Benchmark comparison** — results are also compared against a market benchmark.
+- **Strategy / benchmark / relative metrics** — the `PortfolioBacktestEvaluator` computes metrics for the strategy, the benchmark, and the relative performance between them.
+
+Architecture:
+
+```text
+Portfolio + Date Range
+        ↓
+PortfolioBacktestInputBuilder
+        ↓
+PortfolioBacktestEngine
+   (walk-forward, deterministic)
+        ↓
+PortfolioBacktestEvaluator
+        ↓
+Strategy / Benchmark / Relative Metrics
+        ↓
+Structured Portfolio Backtest Evidence
+        ↓
+LLM Interpretation (Synthesis)
+```
+
+Backtesting is available through:
+
+- the authenticated `POST /api/v1/portfolio/<portfolio_id>/backtest/` REST endpoint, and
+- an optional LangGraph portfolio backtest node, gated by `include_backtest` (default `False`), so it only runs when explicitly requested.
 
 ---
 
@@ -1508,6 +1602,15 @@ FinPilot-AI/
 │   │   │   ├── serializers.py
 │   │   │   ├── views.py
 │   │   │   └── tests.py
+│   │   │
+│   │   ├── portfolio/
+│   │   │   ├── models.py
+│   │   │   ├── serializers.py
+│   │   │   ├── views.py
+│   │   │   ├── urls.py
+│   │   │   ├── services/
+│   │   │   ├── migrations/
+│   │   │   └── tests/
 │   │   │
 │   │   └── research/
 │   │       ├── models.py
@@ -1658,6 +1761,9 @@ The final FinPilot architecture is intended to evolve toward:
                                │
                                ▼
                     Deterministic Optimizer
+                               │
+                               ▼
+                    Quantitative Risk Engine
                                │
                                ▼
                        Synthesis Agent
