@@ -47,6 +47,10 @@ class LangGraphPersistence:
                     "Holding",
                 ),
                 (
+                    "apps.ai.portfolio.schemas",
+                    "PortfolioRiskMetrics",
+                ),
+                (
                     "apps.ai.portfolio.optimization",
                     "OptimizationInput",
                 ),

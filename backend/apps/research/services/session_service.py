@@ -1,7 +1,13 @@
+import datetime
+import decimal
+import json
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.research.models import ResearchEvidence, ResearchSession
+
 
 
 class ResearchSessionService:
@@ -196,27 +202,83 @@ class ResearchSessionService:
             "sessions": session_list,
         }
 
-    @staticmethod
+    @classmethod
+    def _to_json_compatible(cls, val: object) -> object:
+        if val is None or isinstance(val, (bool, int, float, str)):
+            return val
+        if hasattr(val, "model_dump") and callable(getattr(val, "model_dump")):
+            try:
+                dumped = val.model_dump(mode="json")
+            except TypeError:
+                dumped = val.model_dump()
+            return cls._to_json_compatible(dumped)
+        if hasattr(val, "dict") and callable(getattr(val, "dict")):
+            return cls._to_json_compatible(val.dict())
+        if isinstance(val, dict):
+            return {str(k): cls._to_json_compatible(v) for k, v in val.items()}
+        if isinstance(val, (list, tuple, set)):
+            return [cls._to_json_compatible(item) for item in val]
+        if isinstance(val, uuid.UUID):
+            return str(val)
+        if isinstance(val, (datetime.date, datetime.datetime)):
+            return val.isoformat()
+        if isinstance(val, decimal.Decimal):
+            return float(val)
+        try:
+            json.dumps(val)
+            return val
+        except (TypeError, OverflowError):
+            return str(val)
+
+    @classmethod
     def _coerce_agent_result(
+        cls,
         raw: object,
     ) -> tuple[str, list[str], dict[str, object] | None]:
         if isinstance(raw, dict):
             response = str(raw.get("response", ""))
-            tools_used = list(raw.get("tools_used", []))
-            structured_data = raw.get("data")
-            if isinstance(structured_data, dict):
-                structured_data = dict(structured_data)
+            tools_val = raw.get("tools_used", [])
+            tools_used = [str(t) for t in tools_val] if isinstance(tools_val, (list, tuple)) else []
+            if "data" in raw:
+                raw_data = raw["data"]
+                if isinstance(raw_data, dict):
+                    structured_data = cls._to_json_compatible(raw_data)
+                elif hasattr(raw_data, "model_dump") or hasattr(raw_data, "dict"):
+                    dumped = cls._to_json_compatible(raw_data)
+                    structured_data = dumped if isinstance(dumped, dict) else None
+                else:
+                    structured_data = None
             else:
+                candidate = {
+                    k: v for k, v in raw.items() if k not in ("response", "tools_used")
+                }
+                structured_data = cls._to_json_compatible(candidate) if candidate else None
+
+            if not isinstance(structured_data, dict):
                 structured_data = None
+
             return response, tools_used, structured_data
         elif hasattr(raw, "response"):
             response = str(getattr(raw, "response", ""))
-            tools_used = list(getattr(raw, "tools_used", []))
-            structured_data = getattr(raw, "data", None)
-            if isinstance(structured_data, dict):
-                structured_data = dict(structured_data)
+            tools_val = getattr(raw, "tools_used", [])
+            tools_used = [str(t) for t in tools_val] if isinstance(tools_val, (list, tuple)) else []
+            raw_data = getattr(raw, "data", None)
+            if isinstance(raw_data, dict):
+                structured_data = cls._to_json_compatible(raw_data)
+            elif hasattr(raw_data, "model_dump") or hasattr(raw_data, "dict"):
+                dumped = cls._to_json_compatible(raw_data)
+                structured_data = dumped if isinstance(dumped, dict) else None
             else:
                 structured_data = None
+
+            if not isinstance(structured_data, dict):
+                structured_data = None
+
             return response, tools_used, structured_data
+        elif hasattr(raw, "model_dump") and callable(getattr(raw, "model_dump")):
+            dumped = cls._to_json_compatible(raw)
+            if isinstance(dumped, dict):
+                return "", [], dumped
+            return str(raw), [], None
         else:
             return str(raw), [], None

@@ -405,3 +405,184 @@ class ResearchSessionServiceTestCase(TestCase):
         # Verify TCS is not included anywhere
         session_ids = [s["session_id"] for s in multi_ctx["sessions"]]
         self.assertNotIn(str(tcs_s.id), session_ids)
+
+    def test_coerce_agent_result_with_existing_data_dict(self):
+        payload = {
+            "response": "Financials retrieved",
+            "tools_used": ["get_metrics"],
+            "data": {"revenue": 50000, "ebitda": 12000},
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(payload)
+        self.assertEqual(resp, "Financials retrieved")
+        self.assertEqual(tools, ["get_metrics"])
+        self.assertEqual(structured, {"revenue": 50000, "ebitda": 12000})
+
+    def test_coerce_agent_result_with_direct_structured_dict(self):
+        direct_payload = {
+            "pe_ratio": 22.5,
+            "roe": 0.18,
+            "debt_to_equity": 0.5,
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(direct_payload)
+        self.assertEqual(resp, "")
+        self.assertEqual(tools, [])
+        self.assertEqual(
+            structured,
+            {"pe_ratio": 22.5, "roe": 0.18, "debt_to_equity": 0.5},
+        )
+
+        # Direct structured payload with response and tools
+        payload_with_meta = {
+            "response": "Risk computed",
+            "tools_used": ["calc_risk"],
+            "volatility": 0.15,
+            "sharpe_ratio": 1.4,
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(payload_with_meta)
+        self.assertEqual(resp, "Risk computed")
+        self.assertEqual(tools, ["calc_risk"])
+        self.assertEqual(structured, {"volatility": 0.15, "sharpe_ratio": 1.4})
+
+    def test_coerce_agent_result_with_normal_response_payload(self):
+        normal_payload = {
+            "response": "Synthesized analysis completed.",
+            "tools_used": ["search_news", "get_quote"],
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(normal_payload)
+        self.assertEqual(resp, "Synthesized analysis completed.")
+        self.assertEqual(tools, ["search_news", "get_quote"])
+        self.assertIsNone(structured)
+
+    def _create_sample_risk_metrics(self):
+        from apps.ai.portfolio.schemas import PortfolioRiskMetrics
+        return PortfolioRiskMetrics(
+            volatility=0.18,
+            downside_volatility=0.12,
+            sharpe_ratio=1.2,
+            sortino_ratio=1.5,
+            calmar_ratio=1.1,
+            max_drawdown=0.10,
+            max_drawdown_duration_days=35,
+            var_95_historical=0.02,
+            cvar_95_historical=0.03,
+            annualized_return=0.15,
+            cagr=0.14,
+            total_period_return=0.30,
+        )
+
+    def test_coerce_agent_result_dict_containing_portfolio_risk_metrics(self):
+        import json
+        from apps.ai.portfolio.schemas import PortfolioRiskMetrics
+        metrics = self._create_sample_risk_metrics()
+        payload = {
+            "current_risk": metrics,
+            "optimized_risk": None,
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(payload)
+        self.assertEqual(resp, "")
+        self.assertEqual(tools, [])
+        self.assertIsInstance(structured, dict)
+        self.assertIsInstance(structured["current_risk"], dict)
+        self.assertNotIsInstance(structured["current_risk"], PortfolioRiskMetrics)
+        self.assertEqual(structured["current_risk"]["volatility"], 0.18)
+        self.assertEqual(structured["current_risk"]["sharpe_ratio"], 1.2)
+        self.assertIsNone(structured["optimized_risk"])
+        # Verify JSON serializability
+        dumped = json.dumps(structured)
+        self.assertIn('"volatility": 0.18', dumped)
+
+    def test_coerce_agent_result_nested_pydantic_inside_dict(self):
+        import json
+        metrics = self._create_sample_risk_metrics()
+        payload = {
+            "analysis": {
+                "nested_section": {
+                    "metrics": metrics,
+                    "label": "stress_test",
+                }
+            }
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(payload)
+        self.assertIsInstance(structured, dict)
+        nested_metrics = structured["analysis"]["nested_section"]["metrics"]
+        self.assertIsInstance(nested_metrics, dict)
+        self.assertEqual(nested_metrics["sortino_ratio"], 1.5)
+        self.assertEqual(structured["analysis"]["nested_section"]["label"], "stress_test")
+        json.dumps(structured)
+
+    def test_coerce_agent_result_pydantic_model_inside_list(self):
+        import json
+        metrics = self._create_sample_risk_metrics()
+        payload = {
+            "metrics_history": [metrics, {"label": "baseline"}],
+        }
+        resp, tools, structured = ResearchSessionService._coerce_agent_result(payload)
+        self.assertIsInstance(structured, dict)
+        self.assertIsInstance(structured["metrics_history"], list)
+        self.assertIsInstance(structured["metrics_history"][0], dict)
+        self.assertEqual(structured["metrics_history"][0]["calmar_ratio"], 1.1)
+        self.assertEqual(structured["metrics_history"][1]["label"], "baseline")
+        json.dumps(structured)
+
+    def test_save_workflow_result_persists_jsonfield_with_risk_metrics(self):
+        import json
+        session = ResearchSessionService.create_session(
+            user_message="Portfolio risk request",
+            ticker=None,
+            route="portfolio",
+        )
+        metrics = self._create_sample_risk_metrics()
+        state = AgentState(
+            user_message="Portfolio risk request",
+            route="portfolio",
+            results={
+                "portfolio_risk": {
+                    "current_risk": metrics,
+                    "optimized_risk": None,
+                },
+                "synthesis": AgentResult(
+                    response="Portfolio risk synthesis.",
+                    tools_used=["calc_risk"],
+                    data=None,
+                ),
+            },
+        )
+
+        ResearchSessionService.save_workflow_result(session.id, state)
+
+        evidence = ResearchEvidence.objects.get(session=session, agent_name="portfolio_risk")
+        self.assertIsNotNone(evidence.structured_data)
+        self.assertIsInstance(evidence.structured_data, dict)
+        self.assertIsInstance(evidence.structured_data["current_risk"], dict)
+        self.assertEqual(evidence.structured_data["current_risk"]["volatility"], 0.18)
+        self.assertIsNone(evidence.structured_data["optimized_risk"])
+        # Crucial: verify psycopg JSONField round-trip is valid JSON
+        serialized = json.dumps(evidence.structured_data)
+        self.assertIn('"volatility": 0.18', serialized)
+
+    def test_existing_persisted_agent_results_no_regression(self):
+        session = ResearchSessionService.create_session(user_message="Test no regression")
+        state = AgentState(
+            user_message="Test no regression",
+            results={
+                "financial": AgentResult(
+                    response="Financial statement summary.",
+                    tools_used=["get_financials"],
+                    data={"revenue": 100000, "currency": "INR"},
+                ),
+                "market": AgentResult(
+                    response="Market quote summary.",
+                    tools_used=["get_quote"],
+                    data=None,
+                ),
+            },
+        )
+        ResearchSessionService.save_workflow_result(session.id, state)
+
+        fin_ev = ResearchEvidence.objects.get(session=session, agent_name="financial")
+        self.assertEqual(fin_ev.structured_data, {"revenue": 100000, "currency": "INR"})
+        self.assertEqual(fin_ev.response, "Financial statement summary.")
+        self.assertEqual(fin_ev.tools_used, ["get_financials"])
+
+        mkt_ev = ResearchEvidence.objects.get(session=session, agent_name="market")
+        self.assertIsNone(mkt_ev.structured_data)
