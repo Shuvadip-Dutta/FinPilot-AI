@@ -3,6 +3,35 @@ import { authApi } from '../../api/auth';
 import { HealthResponse } from '../../types/api';
 import { Activity } from 'lucide-react';
 
+// Shared cache/promise across all mounted SystemHealthIndicator instances
+let inFlightHealthPromise: Promise<HealthResponse> | null = null;
+let lastHealthFetchTime = 0;
+let cachedHealthResponse: HealthResponse | null = null;
+
+async function getCachedHealth(): Promise<HealthResponse> {
+  const now = Date.now();
+  if (cachedHealthResponse && now - lastHealthFetchTime < 5000) {
+    return cachedHealthResponse;
+  }
+  if (inFlightHealthPromise) {
+    return inFlightHealthPromise;
+  }
+  inFlightHealthPromise = authApi
+    .getHealth()
+    .then((res) => {
+      cachedHealthResponse = res;
+      lastHealthFetchTime = Date.now();
+      inFlightHealthPromise = null;
+      return res;
+    })
+    .catch((err) => {
+      cachedHealthResponse = null;
+      inFlightHealthPromise = null;
+      throw err;
+    });
+  return inFlightHealthPromise;
+}
+
 export const SystemHealthIndicator: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [status, setStatus] = useState<'operational' | 'degraded' | 'unavailable' | 'checking'>('checking');
@@ -12,7 +41,7 @@ export const SystemHealthIndicator: React.FC<{ compact?: boolean }> = ({ compact
 
     const checkHealth = async () => {
       try {
-        const res = await authApi.getHealth();
+        const res = await getCachedHealth();
         if (!isMounted) return;
         setHealth(res);
         const lower = String(res.status || '').toLowerCase();

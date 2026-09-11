@@ -6,6 +6,7 @@ import {
   ResearchSessionDetail,
   ResearchSessionListResponse,
   CompanyProfile,
+  CompanyResearchResponse,
   FinancialsData,
   MarketMetrics,
   NewsResponse,
@@ -53,11 +54,17 @@ export const researchApi = {
 
   /**
    * GET /api/v1/research/company/?ticker=&market=
-   * Retrieves fundamental company profile, sector, description, and capitalization
+   * Retrieves fundamental company profile, sector, description, and market quotes from Django
    */
-  async getCompany(ticker: string, market: string = 'NSE'): Promise<CompanyProfile> {
-    return apiClient.get<CompanyProfile>('research/company/', {
-      params: { ticker: ticker.toUpperCase(), market: market.toUpperCase() },
+  async getCompany(ticker: string, market: string = 'IN'): Promise<CompanyResearchResponse> {
+    const rawMarket = (market || 'IN').trim().toUpperCase();
+    const normalizedMarket =
+      rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
+        ? 'US'
+        : 'IN';
+
+    return apiClient.get<CompanyResearchResponse>('research/company/', {
+      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
     });
   },
 

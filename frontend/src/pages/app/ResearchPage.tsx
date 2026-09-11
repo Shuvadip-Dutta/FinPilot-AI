@@ -46,7 +46,7 @@ export const ResearchPage: React.FC = () => {
 
   // Active target asset
   const [ticker, setTicker] = useState<string>(searchParams.get('ticker') || 'RELIANCE');
-  const [market, setMarket] = useState<string>(searchParams.get('market') || 'NSE');
+  const [market, setMarket] = useState<string>(searchParams.get('market') || 'IN');
 
   // Active view tab
   const [activeTab, setActiveTab] = useState<ResearchTab>(

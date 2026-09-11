@@ -49,19 +49,20 @@ const PRESET_PROMPTS = [
 ];
 
 const POPULAR_TICKERS = [
-  { ticker: 'RELIANCE', market: 'NSE' },
-  { ticker: 'TCS', market: 'NSE' },
-  { ticker: 'HDFCBANK', market: 'NSE' },
-  { ticker: 'INFY', market: 'NSE' },
-  { ticker: 'AAPL', market: 'NASDAQ' },
-  { ticker: 'NVDA', market: 'NASDAQ' },
+  { ticker: 'RELIANCE', market: 'IN' },
+  { ticker: 'TCS', market: 'IN' },
+  { ticker: 'HDFCBANK', market: 'IN' },
+  { ticker: 'INFY', market: 'IN' },
+  { ticker: 'AAPL', market: 'US' },
+  { ticker: 'NVDA', market: 'US' },
+  { ticker: 'MSFT', market: 'US' },
 ];
 
 export const ResearchComposer: React.FC<ResearchComposerProps> = ({
   onSubmit,
   isLoading,
   initialTicker = 'RELIANCE',
-  initialMarket = 'NSE',
+  initialMarket = 'IN',
   placeholder = 'Ask FinPilot AI any financial question or synthesis request...',
 }) => {
   const [prompt, setPrompt] = useState('');
@@ -92,7 +93,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
 
   const applyPreset = (presetFn: (t: string, m: string) => string) => {
     const activeTicker = ticker.trim() || 'RELIANCE';
-    const activeMarket = market.trim() || 'NSE';
+    const activeMarket = market.trim() || 'IN';
     const text = presetFn(activeTicker, activeMarket);
     setPrompt(text);
     if (textareaRef.current) {
@@ -127,10 +128,8 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
             onChange={(e) => setMarket(e.target.value)}
             className="px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-700 text-cyan-300 focus:outline-none focus:border-cyan-500 cursor-pointer"
           >
-            <option value="NSE">NSE (India)</option>
-            <option value="BSE">BSE (India)</option>
-            <option value="NASDAQ">NASDAQ (US)</option>
-            <option value="NYSE">NYSE (US)</option>
+            <option value="IN">India (NSE/BSE)</option>
+            <option value="US">United States (US)</option>
           </select>
 
           {/* Quick Ticker Chips */}

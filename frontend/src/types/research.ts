@@ -134,6 +134,52 @@ export interface ResearchSessionListResponse {
   results?: ResearchSession[];
 }
 
+export interface CompanyInfo {
+  ticker: string;
+  name: string;
+  exchange?: string | null;
+  country?: string | null;
+  sector?: string | null;
+  industry?: string | null;
+  description?: string | null;
+  isin?: string | null;
+  nse_symbol?: string | null;
+  bse_code?: string | null;
+  [key: string]: unknown;
+}
+
+export interface UsMarketQuote {
+  ticker?: string | null;
+  price?: number | null;
+  change?: number | null;
+  percent_change?: number | null;
+  high?: number | null;
+  low?: number | null;
+  open?: number | null;
+  previous_close?: number | null;
+  [key: string]: unknown;
+}
+
+export interface IndiaExchangeQuote {
+  exchange?: string | null;
+  price?: number | null;
+  percent_change?: number | null;
+  year_high?: number | null;
+  year_low?: number | null;
+  [key: string]: unknown;
+}
+
+export type CompanyMarketData = UsMarketQuote | IndiaExchangeQuote[] | null | undefined;
+
+export interface CompanyResearchResponse {
+  ticker: string;
+  market: string;
+  company: CompanyInfo;
+  market_data?: CompanyMarketData;
+  error?: string;
+  [key: string]: unknown;
+}
+
 export interface CompanyProfile {
   ticker: string;
   market?: string;

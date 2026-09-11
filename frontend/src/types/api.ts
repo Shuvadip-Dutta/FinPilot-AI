@@ -13,6 +13,7 @@ export interface ApiError {
 
 export interface HealthResponse {
   status: 'ok' | 'healthy' | 'degraded' | 'unavailable' | string;
+  service?: string;
   database?: string;
   vector_store?: string;
   version?: string;
