@@ -321,27 +321,40 @@ export interface MarketMetrics {
   [key: string]: unknown;
 }
 
+export interface NewsEntity {
+  symbol: string;
+  name: string;
+  country?: string | null;
+  entity_type?: string | null;
+  match_score?: number | null;
+  sentiment_score?: number | null;
+}
+
 export interface NewsArticle {
   id?: string | number;
   title: string;
-  summary?: string;
-  description?: string;
-  content?: string;
+  summary?: string | null;
+  description?: string | null;
+  content?: string | null;
   source: string;
   url: string;
-  published_at?: string;
-  published_date?: string;
-  datetime?: string;
+  published_at?: string | null;
+  published_date?: string | null;
+  datetime?: string | null;
+  image_url?: string | null;
+  relevance_score?: number | null;
+  target_match_score?: number | null;
+  relevance_type?: 'DIRECT' | 'RELATED' | 'MARKET_CONTEXT' | string | null;
+  entities?: NewsEntity[] | null;
   sentiment?: 'positive' | 'negative' | 'neutral' | 'bullish' | 'bearish' | string;
-  sentiment_score?: number;
-  relevance_score?: number;
-  thumbnail?: string;
+  sentiment_score?: number | null;
+  thumbnail?: string | null;
 }
 
 export interface NewsResponse {
-  ticker?: string;
+  ticker: string;
   market?: string;
-  articles?: NewsArticle[];
+  articles: NewsArticle[];
   news?: NewsArticle[];
   sentiment?: SentimentAnalysis;
   overall_sentiment?: string;

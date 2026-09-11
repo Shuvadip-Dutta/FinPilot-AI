@@ -105,11 +105,17 @@ export const researchApi = {
 
   /**
    * GET /api/v1/research/news/?ticker=&market=
-   * Retrieves verified market news and sentiment classification
+   * Retrieves verified market news and entity sentiment from Django
    */
-  async getNews(ticker: string, market: string = 'NSE'): Promise<NewsResponse> {
+  async getNews(ticker: string, market: string = 'IN'): Promise<NewsResponse> {
+    const rawMarket = (market || 'IN').trim().toUpperCase();
+    const normalizedMarket =
+      rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
+        ? 'US'
+        : 'IN';
+
     return apiClient.get<NewsResponse>('research/news/', {
-      params: { ticker: ticker.toUpperCase(), market: market.toUpperCase() },
+      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
     });
   },
 
