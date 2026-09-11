@@ -203,6 +203,43 @@ export interface CompanyProfile {
   [key: string]: unknown;
 }
 
+export interface FinancialMetricItem {
+  name: string;
+  key: string;
+  value: number | null;
+}
+
+export interface FinancialStatementItem {
+  statement_type: 'INC' | 'BAL' | 'CAS' | string;
+  fiscal_year: string;
+  end_date: string;
+  period_type: string;
+  period_length?: number;
+  metrics: FinancialMetricItem[];
+}
+
+export interface FinancialsResponse {
+  ticker: string;
+  market: string;
+  financials: FinancialStatementItem[];
+  [key: string]: unknown;
+}
+
+export interface KeyMetricItem {
+  category: string;
+  name: string;
+  key: string;
+  value: number | null;
+  raw_value: string | null;
+}
+
+export interface KeyMetricsResponse {
+  ticker: string;
+  market: string;
+  metrics: KeyMetricItem[];
+  [key: string]: unknown;
+}
+
 export interface FinancialPeriod {
   period?: string;
   year?: string | number;
@@ -231,6 +268,7 @@ export interface FinancialsData {
   ticker: string;
   market?: string;
   currency?: string;
+  financials?: FinancialStatementItem[];
   periods?: FinancialPeriod[];
   annual?: FinancialPeriod[];
   quarterly?: FinancialPeriod[];
@@ -252,6 +290,7 @@ export interface FinancialsData {
 export interface MarketMetrics {
   ticker: string;
   market?: string;
+  metrics?: KeyMetricItem[];
   price?: number;
   current_price?: number;
   close_price?: number;

@@ -8,7 +8,9 @@ import {
   CompanyProfile,
   CompanyResearchResponse,
   FinancialsData,
+  FinancialsResponse,
   MarketMetrics,
+  KeyMetricsResponse,
   NewsResponse,
   HistoricalDataResponse,
 } from '../types/research';
@@ -70,21 +72,33 @@ export const researchApi = {
 
   /**
    * GET /api/v1/research/financials/?ticker=&market=
-   * Retrieves income statement, balance sheet, margins, and cash flow periods
+   * Retrieves income statement (INC), balance sheet (BAL), and cash flow (CAS) statements
    */
-  async getFinancials(ticker: string, market: string = 'NSE'): Promise<FinancialsData> {
-    return apiClient.get<FinancialsData>('research/financials/', {
-      params: { ticker: ticker.toUpperCase(), market: market.toUpperCase() },
+  async getFinancials(ticker: string, market: string = 'IN'): Promise<FinancialsResponse> {
+    const rawMarket = (market || 'IN').trim().toUpperCase();
+    const normalizedMarket =
+      rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
+        ? 'US'
+        : 'IN';
+
+    return apiClient.get<FinancialsResponse>('research/financials/', {
+      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
     });
   },
 
   /**
    * GET /api/v1/research/metrics/?ticker=&market=
-   * Retrieves valuation multiples, ratios (P/E, P/B, EV/EBITDA, ROE), and 52w range
+   * Retrieves key valuation, profitability, and liquidity metrics from Django
    */
-  async getMetrics(ticker: string, market: string = 'NSE'): Promise<MarketMetrics> {
-    return apiClient.get<MarketMetrics>('research/metrics/', {
-      params: { ticker: ticker.toUpperCase(), market: market.toUpperCase() },
+  async getMetrics(ticker: string, market: string = 'IN'): Promise<KeyMetricsResponse> {
+    const rawMarket = (market || 'IN').trim().toUpperCase();
+    const normalizedMarket =
+      rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
+        ? 'US'
+        : 'IN';
+
+    return apiClient.get<KeyMetricsResponse>('research/metrics/', {
+      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
     });
   },
 

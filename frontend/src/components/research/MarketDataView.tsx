@@ -57,7 +57,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
       ]);
 
       if (metricsRes.status === 'fulfilled') {
-        setMetrics(metricsRes.value);
+        setMetrics(metricsRes.value as unknown as MarketMetrics);
       } else {
         console.warn('Metrics fetch error:', metricsRes.reason);
       }
