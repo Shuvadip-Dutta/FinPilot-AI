@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { authApi } from '../api/auth';
-import { AuthTokens, LoginCredentials, RegisterPayload, User } from '../types/auth';
+import { AuthTokens, LoginCredentials, RegisterPayload, RegisterResponse, User } from '../types/auth';
+import { ApiError } from '../types/api';
 import { storage } from '../utils/storage';
 
 interface AuthContextType {
@@ -10,7 +11,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (credentials: LoginCredentials) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<RegisterResponse>;
   logout: () => void;
   clearError: () => void;
 }
@@ -95,6 +96,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [logout]);
 
+  // Listen for successful token refresh to synchronize context state
+  useEffect(() => {
+    const handleTokenRefreshed = (e: Event) => {
+      const customEvent = e as CustomEvent<{ access: string }>;
+      if (customEvent.detail?.access) {
+        setTokens((prev) => (prev ? { ...prev, access: customEvent.detail.access } : null));
+      }
+    };
+
+    window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+    return () => {
+      window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+    };
+  }, []);
+
   const login = async (credentials: LoginCredentials) => {
     setError(null);
     try {
@@ -113,40 +129,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       storage.setUser(authenticatedUser);
       setUser(authenticatedUser);
     } catch (err: unknown) {
-      const apiErr = err as { message?: string; detail?: string };
+      const apiErr = err as ApiError;
       setError(apiErr.detail || apiErr.message || 'Invalid username or password.');
       throw err;
     }
   };
 
-  const register = async (payload: RegisterPayload) => {
+  const register = async (payload: RegisterPayload): Promise<RegisterResponse> => {
     setError(null);
     try {
       const res = await authApi.register(payload);
-
-      // If backend directly returns tokens on register
-      if (res.access && res.refresh) {
-        const authTokens: AuthTokens = { access: res.access, refresh: res.refresh };
-        storage.setTokens(authTokens);
-        setTokens(authTokens);
-
-        const tokenPayload = decodeJwt(res.access);
-        const newUser: User = res.user || {
-          id: (tokenPayload?.user_id as string | number) || '1',
-          username: payload.username,
-          email: payload.email,
-        };
-        storage.setUser(newUser);
-        setUser(newUser);
-      } else {
-        // Backend register succeeded, now log in to acquire JWT token pair
-        await login({
-          username: payload.username,
-          password: payload.password,
-        });
-      }
+      return res;
     } catch (err: unknown) {
-      const apiErr = err as { message?: string; detail?: string };
+      const apiErr = err as ApiError;
       setError(apiErr.detail || apiErr.message || 'Registration failed. Please check your details and try again.');
       throw err;
     }

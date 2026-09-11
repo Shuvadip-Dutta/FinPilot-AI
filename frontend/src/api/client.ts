@@ -51,6 +51,9 @@ async function performTokenRefresh(): Promise<string | null> {
       if (data.refresh) {
         storage.setRefreshToken(data.refresh);
       }
+      window.dispatchEvent(
+        new CustomEvent('auth:token-refreshed', { detail: { access: data.access } })
+      );
       return data.access;
     }
     storage.clearAuth();
@@ -112,7 +115,12 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     clearTimeout(timeoutId);
 
     // Handle 401 Unauthorized (attempt token refresh and retry)
-    if (response.status === 401 && !skipAuth && !endpoint.includes('auth/token/')) {
+    if (
+      response.status === 401 &&
+      !skipAuth &&
+      !endpoint.includes('auth/token') &&
+      !endpoint.includes('auth/register')
+    ) {
       const refreshToken = storage.getRefreshToken();
       if (!refreshToken) {
         storage.clearAuth();
@@ -205,7 +213,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       throw createClientError('timeout');
     }
 
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    if (error instanceof TypeError) {
       throw createClientError('network', error);
     }
 

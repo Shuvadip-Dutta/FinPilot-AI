@@ -10,23 +10,31 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  CheckCircle2,
   Server,
   ArrowRight,
 } from 'lucide-react';
 import { API_BASE_URL } from '../../api/client';
+import { ApiError } from '../../types/api';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [username, setUsername] = useState('');
+  const locationState = location.state as {
+    from?: { pathname?: string } | string;
+    registered?: boolean;
+    username?: string;
+  } | null;
+
+  const [username, setUsername] = useState(locationState?.username || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const stateFrom = (location.state as { from?: { pathname?: string } | string })?.from;
+  const stateFrom = locationState?.from;
   const targetRoute =
     typeof stateFrom === 'string'
       ? stateFrom
@@ -46,24 +54,30 @@ export const LoginPage: React.FC = () => {
       await login({ username: username.trim(), password });
       navigate(targetRoute, { replace: true });
     } catch (err: unknown) {
-      const apiErr = err as {
-        status?: number;
-        message?: string;
-        detail?: string;
-        isNetworkError?: boolean;
-      };
+      const apiErr = err as ApiError;
 
-      if (apiErr.status === 401) {
-        setError(apiErr.detail || apiErr.message || 'Invalid username or password. Please verify your credentials.');
+      if (apiErr.isNetworkError) {
+        setError(
+          'Unable to connect to the FinPilot server. Please ensure the Django backend is running at ' +
+            API_BASE_URL
+        );
+      } else if (apiErr.isTimeout) {
+        setError('The request timed out. Please check your network connection.');
+      } else if (apiErr.status === 401) {
+        setError(
+          apiErr.detail ||
+            apiErr.message ||
+            'Invalid username or password. Please verify your credentials.'
+        );
       } else if (apiErr.status === 400) {
         setError(apiErr.detail || apiErr.message || 'Invalid request. Please review your credentials.');
-      } else if (apiErr.status && apiErr.status >= 500) {
+      } else if (apiErr.status >= 500) {
         setError(`Backend server error (${apiErr.status}). Please verify the Django logs.`);
       } else {
         setError(
-          apiErr.message ||
           apiErr.detail ||
-          'Authentication failed. Please check your credentials or verify the Django backend is running.'
+            apiErr.message ||
+            'Authentication failed. Please verify your credentials.'
         );
       }
     } finally {
@@ -104,6 +118,18 @@ export const LoginPage: React.FC = () => {
               Enter your credentials to access research models and portfolio engines.
             </p>
           </div>
+
+          {locationState?.registered && !error && (
+            <div
+              className="mb-5 p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-300 animate-in fade-in"
+              role="status"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed">
+                Registration successful! Please sign in with your credentials.
+              </div>
+            </div>
+          )}
 
           {error && (
             <div

@@ -15,6 +15,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { API_BASE_URL } from '../../api/client';
+import { ApiError } from '../../types/api';
 
 export const RegisterPage: React.FC = () => {
   const { register } = useAuth();
@@ -43,8 +44,8 @@ export const RegisterPage: React.FC = () => {
       setError('Please provide a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     if (password !== passwordConfirm) {
@@ -60,23 +61,35 @@ export const RegisterPage: React.FC = () => {
         password,
         password_confirm: passwordConfirm,
       });
-      navigate('/app/dashboard', { replace: true });
+      navigate('/login', {
+        state: {
+          registered: true,
+          username: username.trim(),
+        },
+        replace: true,
+      });
     } catch (err: unknown) {
-      const apiErr = err as {
-        message?: string;
-        detail?: string;
-        errors?: Record<string, string[] | string>;
-      };
+      const apiErr = err as ApiError;
 
-      if (apiErr.errors) {
+      if (apiErr.isNetworkError) {
+        setError('Unable to connect to the FinPilot server. Please ensure the Django backend is running at ' + API_BASE_URL);
+      } else if (apiErr.errors) {
         const fieldMap: Record<string, string> = {};
         for (const [key, val] of Object.entries(apiErr.errors)) {
           fieldMap[key] = Array.isArray(val) ? val[0] : String(val);
         }
         setFieldErrors(fieldMap);
-      }
 
-      if (apiErr.detail) {
+        if (apiErr.detail) {
+          setError(apiErr.detail);
+        } else if (apiErr.message) {
+          setError(apiErr.message);
+        } else {
+          setError('Please review and resolve the errors highlighted below.');
+        }
+      } else if (apiErr.status && apiErr.status >= 500) {
+        setError(`Backend server error (${apiErr.status}). Please verify the Django logs.`);
+      } else if (apiErr.detail) {
         setError(apiErr.detail);
       } else if (apiErr.message) {
         setError(apiErr.message);

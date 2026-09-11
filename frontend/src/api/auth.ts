@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { AuthTokens, LoginCredentials, RegisterPayload, User } from '../types/auth';
+import { AuthTokens, LoginCredentials, RegisterPayload, RegisterResponse } from '../types/auth';
 import { HealthResponse } from '../types/api';
 
 export const authApi = {
@@ -13,8 +13,8 @@ export const authApi = {
   /**
    * Registers a new account with Django REST Framework
    */
-  async register(payload: RegisterPayload): Promise<{ user?: User; message?: string; detail?: string } & Partial<AuthTokens>> {
-    return apiClient.post('auth/register/', payload, { skipAuth: true });
+  async register(payload: RegisterPayload): Promise<RegisterResponse> {
+    return apiClient.post<RegisterResponse>('auth/register/', payload, { skipAuth: true });
   },
 
   /**
