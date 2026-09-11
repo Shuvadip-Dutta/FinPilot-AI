@@ -9,6 +9,7 @@ export interface ApiError {
   errors?: Record<string, string[] | string>;
   isNetworkError?: boolean;
   isTimeout?: boolean;
+  [key: string]: unknown;
 }
 
 export interface HealthResponse {

@@ -351,6 +351,23 @@ export interface NewsResponse {
   [key: string]: unknown;
 }
 
+export interface HistoricalCandle {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  open_interest?: number | null;
+}
+
+export interface HistoricalResponse {
+  ticker: string;
+  market: string;
+  candles: HistoricalCandle[];
+  [key: string]: unknown;
+}
+
 export interface HistoricalBar {
   date: string;
   open: number;
@@ -366,6 +383,7 @@ export interface HistoricalDataResponse {
   market?: string;
   from_date?: string;
   to_date?: string;
+  candles?: HistoricalCandle[];
   data?: HistoricalBar[];
   prices?: HistoricalBar[];
   historical?: HistoricalBar[];

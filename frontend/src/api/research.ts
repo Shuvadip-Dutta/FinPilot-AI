@@ -13,6 +13,7 @@ import {
   KeyMetricsResponse,
   NewsResponse,
   HistoricalDataResponse,
+  HistoricalResponse,
 } from '../types/research';
 
 export const researchApi = {
@@ -118,17 +119,28 @@ export const researchApi = {
    */
   async getHistorical(
     ticker: string,
-    market: string = 'NSE',
+    market: string = 'IN',
     fromDate?: string,
     toDate?: string
-  ): Promise<HistoricalDataResponse> {
-    return apiClient.get<HistoricalDataResponse>('research/historical/', {
-      params: {
-        ticker: ticker.toUpperCase(),
-        market: market.toUpperCase(),
-        from_date: fromDate,
-        to_date: toDate,
-      },
+  ): Promise<HistoricalResponse> {
+    const rawMarket = (market || 'IN').trim().toUpperCase();
+    const normalizedMarket =
+      rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
+        ? 'US'
+        : 'IN';
+
+    const resolvedToDate = toDate || new Date().toISOString().split('T')[0];
+    const params: Record<string, string> = {
+      ticker: ticker.trim().toUpperCase(),
+      market: normalizedMarket,
+      to_date: resolvedToDate,
+    };
+    if (fromDate) {
+      params.from_date = fromDate;
+    }
+
+    return apiClient.get<HistoricalResponse>('research/historical/', {
+      params,
     });
   },
 };
