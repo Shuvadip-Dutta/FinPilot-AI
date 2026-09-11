@@ -1,0 +1,6 @@
+{
+  "name": "FinPilot AI",
+  "description": "An agentic financial research and portfolio optimization platform built with Django, LangGraph, RAG, and LLMs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
