@@ -105,34 +105,44 @@ export interface ChatResponse {
   [key: string]: unknown;
 }
 
+export interface ResearchEvidenceItem {
+  id: number;
+  agent_name: string;
+  response: string;
+  tools_used: string[];
+  structured_data?: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface ResearchSession {
-  id: string | number;
+  id: string; // UUID
+  thread_id: string;
+  user_message: string;
+  ticker: string | null;
+  market: string | null;
+  route: string;
+  status: 'COMPLETED' | 'FAILED' | 'RUNNING' | string;
+  final_synthesis: string | null;
+  latency_ms: number | null;
+  created_at: string;
+  // Optional client-side presentation helper fields
   title?: string;
   query?: string;
-  ticker?: string;
-  market?: string;
-  created_at: string;
-  updated_at?: string;
   summary?: string;
-  status?: string;
-  messages_count?: number;
   message_count?: number;
+  messages_count?: number;
   messages?: ChatMessage[];
   last_message?: string;
 }
 
 export interface ResearchSessionDetail extends ResearchSession {
+  evidence_items: ResearchEvidenceItem[];
   messages: ChatMessage[];
   evidence?: EvidenceItem[];
   provenance?: ProvenanceData;
 }
 
-export interface ResearchSessionListResponse {
-  count?: number;
-  next?: string | null;
-  previous?: string | null;
-  results?: ResearchSession[];
-}
+export type ResearchSessionListResponse = ResearchSession[];
 
 export interface CompanyInfo {
   ticker: string;

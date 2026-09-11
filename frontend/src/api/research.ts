@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import {
   ChatRequest,
   ChatResponse,
+  ChatMessage,
   ResearchSession,
   ResearchSessionDetail,
   ResearchSessionListResponse,
@@ -29,28 +30,28 @@ export const researchApi = {
 
   /**
    * GET /api/v1/research/sessions/
-   * Retrieves previous research sessions
+   * Retrieves previous research sessions for the authenticated user from Django.
+   * Note: Django sessions endpoint is not paginated; it returns the full array.
    */
-  async getSessions(params?: { page?: number; limit?: number; search?: string }): Promise<ResearchSession[]> {
-    const response = await apiClient.get<ResearchSessionListResponse | ResearchSession[]>('research/sessions/', {
-      params,
-    });
+  async getSessions(): Promise<ResearchSession[]> {
+    const response = await apiClient.get<ResearchSessionListResponse | ResearchSession[]>('research/sessions/');
 
-    // Normalize if backend returns paginated object { results: [...] } or direct array [...]
+    // Normalize if backend returns direct array [...] or wrapped object
     if (Array.isArray(response)) {
       return response;
     }
-    if (response && Array.isArray(response.results)) {
-      return response.results;
+    const anyResp = response as unknown as { results?: ResearchSession[] };
+    if (anyResp && Array.isArray(anyResp.results)) {
+      return anyResp.results;
     }
     return [];
   },
 
   /**
    * GET /api/v1/research/sessions/<id>/
-   * Retrieves full details, chat messages, evidence, and provenance for a session
+   * Retrieves full details, evidence items, and execution metadata for a session
    */
-  async getSession(id: string | number): Promise<ResearchSessionDetail> {
+  async getSession(id: string): Promise<ResearchSessionDetail> {
     const raw = await apiClient.get<ResearchSessionDetail | Record<string, unknown>>(`research/sessions/${id}/`);
     return normalizeSessionDetail(raw, id);
   },
@@ -152,42 +153,134 @@ export const researchApi = {
 };
 
 /**
- * Normalizes raw session detail to prevent runtime UI errors across different DRF serializers
+ * Normalizes raw session detail to match Django's ResearchSessionDetailSerializer
  */
-function normalizeSessionDetail(raw: unknown, fallbackId: string | number): ResearchSessionDetail {
+function normalizeSessionDetail(raw: unknown, fallbackId: string): ResearchSessionDetail {
   if (!raw || typeof raw !== 'object') {
     return {
       id: fallbackId,
+      thread_id: '',
+      user_message: '',
+      ticker: null,
+      market: null,
+      route: 'general',
+      status: 'COMPLETED',
+      final_synthesis: null,
+      latency_ms: null,
       created_at: new Date().toISOString(),
+      evidence_items: [],
       messages: [],
     };
   }
 
   const obj = raw as Record<string, unknown>;
-  const rawMessages = (obj.messages || obj.history || obj.chat || []) as Array<Record<string, unknown>>;
+  const id = String(obj.id || fallbackId);
+  const threadId = String(obj.thread_id || '');
+  const userMessage = String(obj.user_message || obj.query || obj.prompt || '');
+  const ticker = (obj.ticker as string) || null;
+  const market = (obj.market as string) || null;
+  const route = String(obj.route || 'general');
+  const status = String(obj.status || 'COMPLETED');
+  const finalSynthesis = (obj.final_synthesis as string) || null;
+  const latencyMs = typeof obj.latency_ms === 'number' ? obj.latency_ms : null;
+  const createdAt = (obj.created_at as string) || new Date().toISOString();
 
-  const messages = rawMessages.map((msg, idx) => ({
-    id: (msg.id as string | number) || `msg-${idx}`,
-    role: (msg.role as 'user' | 'assistant' | 'system') || (msg.is_user ? 'user' : 'assistant'),
-    content: (msg.content as string) || (msg.message as string) || (msg.text as string) || '',
-    timestamp: (msg.timestamp as string) || (msg.created_at as string) || new Date().toISOString(),
-    ticker: (msg.ticker as string) || (obj.ticker as string),
-    market: (msg.market as string) || (obj.market as string),
-    evidence: (msg.evidence || msg.sources || obj.evidence) as any,
-    provenance: (msg.provenance || msg.agent_trace || obj.provenance) as any,
-    sentiment: (msg.sentiment || obj.sentiment) as any,
+  // Extract raw evidence items from Django ResearchEvidence model
+  const rawEvidenceItems = Array.isArray(obj.evidence_items) ? (obj.evidence_items as Record<string, unknown>[]) : [];
+  const evidenceItems = rawEvidenceItems.map((item, idx) => ({
+    id: typeof item.id === 'number' ? item.id : idx + 1,
+    agent_name: String(item.agent_name || 'agent'),
+    response: String(item.response || ''),
+    tools_used: Array.isArray(item.tools_used) ? (item.tools_used as string[]) : [],
+    structured_data: (item.structured_data as Record<string, unknown>) || null,
+    created_at: String(item.created_at || createdAt),
   }));
 
+  // Map to UI EvidenceItem format for EvidencePanel
+  const mappedEvidence = evidenceItems.map((item) => ({
+    id: item.id,
+    title: `Specialist Agent: ${item.agent_name.toUpperCase()}`,
+    source: item.agent_name,
+    source_type: item.agent_name,
+    snippet: item.response ? (item.response.length > 250 ? item.response.slice(0, 250) + '...' : item.response) : (item.tools_used.length > 0 ? `Tools used: ${item.tools_used.join(', ')}` : ''),
+    content: item.response,
+    published_at: item.created_at,
+    metadata: item.structured_data || undefined,
+  }));
+
+  // Map to UI Provenance format for ProvenancePanel
+  const mappedProvenance = {
+    workflow: `Workflow: ${route.toUpperCase()}`,
+    model: 'LangGraph Multi-Agent Synthesizer',
+    execution_time_ms: latencyMs ? Math.round(latencyMs) : undefined,
+    agents: evidenceItems.map((item) => ({
+      agent: item.agent_name,
+      name: item.agent_name.toUpperCase(),
+      status: 'completed',
+      tools_called: item.tools_used,
+      timestamp: item.created_at,
+    })),
+    timestamp: createdAt,
+  };
+
+  // Construct conversation stream messages
+  let messages: ChatMessage[] = [];
+  if (Array.isArray(obj.messages) && obj.messages.length > 0) {
+    messages = obj.messages as ChatMessage[];
+  } else {
+    // Message 1: User research prompt
+    if (userMessage) {
+      messages.push({
+        id: `${id}-user`,
+        role: 'user',
+        content: userMessage,
+        timestamp: createdAt,
+        ticker: ticker || undefined,
+        market: market || undefined,
+      });
+    }
+
+    // Message 2: FinPilot AI synthesized answer
+    if (finalSynthesis) {
+      messages.push({
+        id: `${id}-assistant`,
+        role: 'assistant',
+        content: finalSynthesis,
+        timestamp: createdAt,
+        ticker: ticker || undefined,
+        market: market || undefined,
+        evidence: mappedEvidence,
+        provenance: mappedProvenance,
+      });
+    } else if (status === 'FAILED') {
+      messages.push({
+        id: `${id}-failed`,
+        role: 'assistant',
+        content: 'Workflow execution encountered an error during processing.',
+        timestamp: createdAt,
+        ticker: ticker || undefined,
+        market: market || undefined,
+      });
+    }
+  }
+
   return {
-    id: (obj.id as string | number) || fallbackId,
-    title: (obj.title as string) || (obj.query as string) || (obj.topic as string) || 'Research Session',
-    ticker: obj.ticker as string | undefined,
-    market: obj.market as string | undefined,
-    created_at: (obj.created_at as string) || new Date().toISOString(),
-    updated_at: obj.updated_at as string | undefined,
-    summary: (obj.summary as string) || (obj.description as string),
+    id,
+    thread_id: threadId,
+    user_message: userMessage,
+    ticker,
+    market,
+    route,
+    status,
+    final_synthesis: finalSynthesis,
+    latency_ms: latencyMs,
+    created_at: createdAt,
+    title: userMessage || `Session #${id.slice(0, 8)}`,
+    query: userMessage,
+    summary: finalSynthesis ? (finalSynthesis.slice(0, 160) + '...') : undefined,
+    evidence_items: evidenceItems,
     messages,
-    evidence: (obj.evidence || obj.sources) as any,
-    provenance: (obj.provenance || obj.agent_trace) as any,
+    evidence: mappedEvidence,
+    provenance: mappedProvenance,
   };
 }

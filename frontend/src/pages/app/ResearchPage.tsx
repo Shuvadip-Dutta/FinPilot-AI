@@ -79,7 +79,7 @@ export const ResearchPage: React.FC = () => {
   const fetchRecentSessions = async () => {
     setLoadingSessions(true);
     try {
-      const sessions = await researchApi.getSessions({ limit: 5 });
+      const sessions = await researchApi.getSessions();
       setRecentSessions(sessions.slice(0, 5));
     } catch (err) {
       console.warn('Unable to load recent sessions:', err);
@@ -531,25 +531,29 @@ export const ResearchPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {recentSessions.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => navigate(`/app/research/${s.id}`)}
-                      className="w-full p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-cyan-500/40 text-left transition-colors cursor-pointer group space-y-1 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-cyan-400 text-[11px] font-semibold">
-                          #{s.id} {s.ticker ? `• ${s.ticker}` : ''}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {formatDate(s.created_at, { format: 'relative' })}
-                        </span>
-                      </div>
-                      <p className="text-slate-200 group-hover:text-cyan-300 font-medium truncate">
-                        {s.title || s.query || 'Research Session'}
-                      </p>
-                    </button>
-                  ))}
+                  {recentSessions.map((s) => {
+                    const shortId = s.id.length > 8 ? s.id.slice(0, 8) : s.id;
+                    const sessionLabel = s.user_message || s.title || s.query || 'Research Session';
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => navigate(`/app/research/${s.id}`)}
+                        className="w-full p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-cyan-500/40 text-left transition-colors cursor-pointer group space-y-1 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-cyan-400 text-[11px] font-semibold">
+                            #{shortId} {s.ticker ? `• ${s.ticker}` : ''}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {formatDate(s.created_at, { format: 'relative' })}
+                          </span>
+                        </div>
+                        <p className="text-slate-200 group-hover:text-cyan-300 font-medium truncate">
+                          {sessionLabel}
+                        </p>
+                      </button>
+                    );
+                  })}
 
                   <div className="pt-2 text-center">
                     <button

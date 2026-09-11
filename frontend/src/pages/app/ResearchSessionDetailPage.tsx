@@ -8,7 +8,6 @@ import {
   EvidenceItem,
   ProvenanceData,
 } from '../../types/research';
-import { PageHeader } from '../../components/layout/PageHeader';
 import { AiResponseView } from '../../components/research/AiResponseView';
 import { ResearchComposer } from '../../components/research/ResearchComposer';
 import { ResearchLoadingState } from '../../components/research/ResearchLoadingState';
@@ -25,10 +24,13 @@ import {
   GitCommit,
   Clock,
   MessageSquare,
-  Sparkles,
-  ExternalLink,
   PlusCircle,
   RefreshCw,
+  Activity,
+  Cpu,
+  Wrench,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -44,27 +46,49 @@ export const ResearchSessionDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'conversation' | 'evidence' | 'provenance'>('conversation');
+  const [expandedAgentData, setExpandedAgentData] = useState<Record<number, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchSessionDetail = async () => {
+  // Stale-data & race-condition protected fetch
+  const fetchSessionDetail = () => {
     if (!sessionId) return;
+    let isCurrent = true;
+    setSession(null);
+    setMessages([]);
     setIsLoading(true);
     setError(null);
-    try {
-      const data = await researchApi.getSession(sessionId);
-      setSession(data);
-      setMessages(data.messages || []);
-    } catch (err: unknown) {
-      const apiErr = err as { message?: string };
-      setError(apiErr.message || `Failed to load session #${sessionId}.`);
-    } finally {
-      setIsLoading(false);
-    }
+
+    researchApi
+      .getSession(sessionId)
+      .then((data) => {
+        if (isCurrent) {
+          setSession(data);
+          setMessages(data.messages || []);
+          setIsLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (isCurrent) {
+          const apiErr = err as { message?: string };
+          setError(
+            apiErr.message ||
+              `Session #${sessionId} was not found or you do not have permission to view it.`
+          );
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
   };
 
   useEffect(() => {
-    fetchSessionDetail();
+    const cancel = fetchSessionDetail();
+    return () => {
+      if (cancel) cancel();
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -73,7 +97,6 @@ export const ResearchSessionDetailPage: React.FC = () => {
     }
   }, [messages, isSubmitting, activeView]);
 
-  // Submit follow-up message in this session
   const handleFollowupSubmit = async (prompt: string, ticker: string, market: string) => {
     if (!sessionId) return;
     setIsSubmitting(true);
@@ -130,6 +153,13 @@ export const ResearchSessionDetailPage: React.FC = () => {
     }
   };
 
+  const toggleExpandAgent = (id: number) => {
+    setExpandedAgentData((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -155,15 +185,16 @@ export const ResearchSessionDetailPage: React.FC = () => {
         </Button>
         <ErrorState
           title="Unable to load research session"
-          message={error || `Session #${sessionId} was not found.`}
+          message={error || `Session #${sessionId} was not found or is inaccessible.`}
           onRetry={fetchSessionDetail}
         />
       </div>
     );
   }
 
-  const ticker = session.ticker || 'RELIANCE';
-  const market = session.market || 'NSE';
+  const ticker = session.ticker || '';
+  const market = session.market || '';
+  const shortId = session.id.length > 8 ? session.id.slice(0, 8) : session.id;
   const allEvidence: EvidenceItem[] = [
     ...(session.evidence || []),
     ...messages.flatMap((m) => m.evidence || []),
@@ -171,6 +202,29 @@ export const ResearchSessionDetailPage: React.FC = () => {
   const allProvenance =
     session.provenance ||
     [...messages].reverse().find((m) => m.provenance)?.provenance;
+
+  const getStatusBadge = (status?: string) => {
+    const s = (status || 'COMPLETED').toUpperCase();
+    if (s === 'COMPLETED') {
+      return (
+        <Badge variant="success" size="sm" className="font-mono text-[10px]">
+          COMPLETED
+        </Badge>
+      );
+    }
+    if (s === 'FAILED') {
+      return (
+        <Badge variant="danger" size="sm" className="font-mono text-[10px]">
+          FAILED
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="info" size="sm" className="font-mono text-[10px]">
+        {s}
+      </Badge>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -189,26 +243,42 @@ export const ResearchSessionDetailPage: React.FC = () => {
             </Button>
             <span className="text-slate-600">/</span>
             <span className="font-mono text-cyan-400 text-xs font-semibold">
-              Session #{session.id}
+              Session #{shortId}
             </span>
-            {session.ticker && (
+            {ticker && (
               <Badge variant="info" size="sm" className="font-mono">
-                {session.ticker} {session.market ? `(${session.market})` : ''}
+                {ticker} {market ? `(${market})` : ''}
               </Badge>
             )}
+            {getStatusBadge(session.status)}
+            {session.route && (
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                Route: {session.route}
+              </span>
+            )}
           </div>
+
           <h1 className="text-xl font-bold text-white tracking-tight">
-            {session.title || 'Research Session Detail'}
+            {session.user_message || session.title || 'Research Session Detail'}
           </h1>
-          <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+
+          <div className="flex items-center gap-4 text-xs text-slate-400 font-mono flex-wrap">
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-500" />
               Created {formatDate(session.created_at, { includeTime: true })}
             </span>
-            <span className="flex items-center gap-1">
-              <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
-              {messages.length} messages
-            </span>
+            {session.latency_ms && (
+              <span className="flex items-center gap-1 text-slate-400">
+                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                Latency: {session.latency_ms > 1000 ? `${(session.latency_ms / 1000).toFixed(2)}s` : `${Math.round(session.latency_ms)}ms`}
+              </span>
+            )}
+            {session.evidence_items && (
+              <span className="flex items-center gap-1 text-slate-400">
+                <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                {session.evidence_items.length} specialist {session.evidence_items.length === 1 ? 'agent' : 'agents'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -243,7 +313,7 @@ export const ResearchSessionDetailPage: React.FC = () => {
           }`}
         >
           <MessageSquare className="w-3.5 h-3.5" />
-          <span>Conversation Stream ({messages.length})</span>
+          <span>Investigation & Synthesis ({messages.length})</span>
         </button>
 
         <button
@@ -255,7 +325,7 @@ export const ResearchSessionDetailPage: React.FC = () => {
           }`}
         >
           <BookOpen className="w-3.5 h-3.5" />
-          <span>Evidence Sources ({allEvidence.length})</span>
+          <span>Specialist Evidence ({session.evidence_items?.length || allEvidence.length})</span>
         </button>
 
         <button
@@ -315,15 +385,119 @@ export const ResearchSessionDetailPage: React.FC = () => {
 
       {/* Evidence View */}
       {activeView === 'evidence' && (
-        <EvidencePanel
-          evidence={allEvidence}
-          title={`All Citations in Session #${session.id}`}
-        />
+        <div className="space-y-6">
+          {session.evidence_items && session.evidence_items.length > 0 ? (
+            <Card
+              title={
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-cyan-400" />
+                  <span>Specialist Agent Evidence ({session.evidence_items.length})</span>
+                </div>
+              }
+              subtitle="Detailed analytical outputs and tools used by each specialist agent in this session"
+            >
+              <div className="space-y-4">
+                {session.evidence_items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-800/80">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="info" size="sm" className="font-mono uppercase">
+                          {item.agent_name}
+                        </Badge>
+                        {item.tools_used && item.tools_used.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-slate-500 text-[11px]">Tools:</span>
+                            {item.tools_used.map((t) => (
+                              <span
+                                key={t}
+                                className="font-mono text-[10px] bg-slate-900 border border-slate-800 text-cyan-400 px-1.5 py-0.5 rounded"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        {formatDate(item.created_at, { includeTime: true })}
+                      </span>
+                    </div>
+
+                    {item.response && (
+                      <div className="text-slate-300 leading-relaxed whitespace-pre-line font-sans text-xs">
+                        {item.response}
+                      </div>
+                    )}
+
+                    {item.structured_data && Object.keys(item.structured_data).length > 0 && (
+                      <div className="pt-2">
+                        <button
+                          onClick={() => toggleExpandAgent(item.id)}
+                          className="flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                        >
+                          <Wrench className="w-3 h-3" />
+                          <span>
+                            {expandedAgentData[item.id] ? 'Hide Structured Data' : 'View Structured Data JSON'}
+                          </span>
+                          {expandedAgentData[item.id] ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </button>
+
+                        {expandedAgentData[item.id] && (
+                          <pre className="mt-2 p-3 rounded-lg bg-slate-900 border border-slate-800 font-mono text-[11px] text-slate-300 overflow-x-auto max-h-72">
+                            {JSON.stringify(item.structured_data, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : (
+            <EvidencePanel
+              evidence={allEvidence}
+              title={`All Citations in Session #${shortId}`}
+            />
+          )}
+        </div>
       )}
 
       {/* Provenance View */}
       {activeView === 'provenance' && (
-        <ProvenancePanel provenance={allProvenance} />
+        <div className="space-y-4">
+          <ProvenancePanel provenance={allProvenance} />
+          <Card
+            title={
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-indigo-400" />
+                <span>Session Thread Metadata</span>
+              </div>
+            }
+            subtitle="Underlying database persistence identifiers"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block text-[10px] uppercase">Session ID</span>
+                <span className="text-slate-200 break-all">{session.id}</span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block text-[10px] uppercase">Thread ID</span>
+                <span className="text-cyan-400 break-all">{session.thread_id || '—'}</span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block text-[10px] uppercase">Route</span>
+                <span className="text-indigo-400">{session.route || 'general'}</span>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );
