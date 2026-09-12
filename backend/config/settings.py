@@ -38,6 +38,10 @@ UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
 )
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+SEC_EDGAR_USER_AGENT = os.getenv(
+    "SEC_EDGAR_USER_AGENT",
+    "FinPilot-AI research-admin@finpilot.ai",
+)
 
 # Frozen benchmark per-agent model assignments (quota-aware)
 FINANCIAL_MODEL = os.getenv("FINANCIAL_MODEL", "qwen/qwen3.6-27b")
