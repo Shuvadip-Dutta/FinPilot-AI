@@ -91,3 +91,26 @@ class ToolSchemaTestCase(SimpleTestCase):
             limit_schema["maximum"],
             20,
         )
+
+    def test_search_financial_documents_sec_schema(self):
+        tool = next(
+            tool
+            for tool in RESEARCH_TOOLS
+            if tool["function"]["name"] == "search_financial_documents"
+        )
+        props = tool["function"]["parameters"]["properties"]
+
+        # Ensure all Phase 4 SEC filters are declared
+        self.assertIn("source_type", props)
+        self.assertIn("sec_form", props)
+        self.assertIn("sec_cik", props)
+        self.assertIn("sec_accession_number", props)
+        self.assertIn("document_id", props)
+        self.assertIn("filing_date_from", props)
+        self.assertIn("filing_date_to", props)
+        self.assertIn("report_date_from", props)
+        self.assertIn("report_date_to", props)
+
+        # Ensure user_id is NOT exposed to LLM function calling schema
+        self.assertNotIn("user_id", props)
+        self.assertFalse(tool["function"]["parameters"]["additionalProperties"])

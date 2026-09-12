@@ -169,6 +169,7 @@ class RAGFoundationTestCase(SimpleTestCase):
             document_type="annual_report",
             fiscal_year=2024,
             top_k=3,
+            user_id="user-1",
         )
 
         self.assertEqual(result["documents"][0]["text"], "Revenue grew 12% in FY2024.")
@@ -192,6 +193,7 @@ class RAGFoundationTestCase(SimpleTestCase):
                 "market": "IN",
                 "document_type": "annual_report",
                 "fiscal_year": 2024,
+                "user_id": "user-1",
             },
         )
 
@@ -201,12 +203,12 @@ class RAGFoundationTestCase(SimpleTestCase):
         pipeline.retrieve.return_value = []
         mock_build_pipeline.return_value = pipeline
 
-        search_financial_documents(query="revenue", ticker="tcs")
+        search_financial_documents(query="revenue", ticker="tcs", user_id="user-1")
 
         pipeline.retrieve.assert_called_once_with(
             query="revenue",
             top_k=5,
-            filters={"ticker": "TCS"},
+            filters={"ticker": "TCS", "user_id": "user-1"},
         )
 
     @patch("apps.ai.services.rag_tools.build_rag_pipeline")
@@ -215,12 +217,12 @@ class RAGFoundationTestCase(SimpleTestCase):
         pipeline.retrieve.return_value = []
         mock_build_pipeline.return_value = pipeline
 
-        search_financial_documents(query="revenue", document_type="annual_report")
+        search_financial_documents(query="revenue", document_type="annual_report", user_id="user-1")
 
         pipeline.retrieve.assert_called_once_with(
             query="revenue",
             top_k=5,
-            filters={"document_type": "annual_report"},
+            filters={"document_type": "annual_report", "user_id": "user-1"},
         )
 
     @patch("apps.ai.services.rag_tools.build_rag_pipeline")
@@ -229,28 +231,44 @@ class RAGFoundationTestCase(SimpleTestCase):
         pipeline.retrieve.return_value = []
         mock_build_pipeline.return_value = pipeline
 
-        search_financial_documents(query="revenue", fiscal_year=2024)
+        search_financial_documents(query="revenue", fiscal_year=2024, user_id="user-1")
 
         pipeline.retrieve.assert_called_once_with(
             query="revenue",
             top_k=5,
-            filters={"fiscal_year": 2024},
+            filters={"fiscal_year": 2024, "user_id": "user-1"},
         )
 
     @patch("apps.ai.services.rag_tools.build_rag_pipeline")
     def test_search_financial_documents_rejects_invalid_top_k(self, mock_build_pipeline):
         with self.assertRaises(ValueError):
-            search_financial_documents(query="revenue", top_k=0)
+            search_financial_documents(query="revenue", top_k=0, user_id="user-1")
 
         with self.assertRaises(ValueError):
-            search_financial_documents(query="revenue", top_k=11)
+            search_financial_documents(query="revenue", top_k=11, user_id="user-1")
 
         mock_build_pipeline.assert_not_called()
 
     @patch("apps.ai.services.rag_tools.build_rag_pipeline")
     def test_search_financial_documents_rejects_empty_query(self, mock_build_pipeline):
         with self.assertRaises(ValueError):
-            search_financial_documents(query="   ")
+            search_financial_documents(query="   ", user_id="user-1")
+
+        mock_build_pipeline.assert_not_called()
+
+    @patch("apps.ai.services.rag_tools.build_rag_pipeline")
+    def test_search_financial_documents_requires_user_id(self, mock_build_pipeline):
+        with self.assertRaises(ValueError) as ctx:
+            search_financial_documents(query="revenue", user_id=None)
+        self.assertIn("user_id is required", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            search_financial_documents(query="revenue", user_id="")
+        self.assertIn("user_id is required", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            search_financial_documents(query="revenue", user_id="   ")
+        self.assertIn("user_id is required", str(ctx.exception))
 
         mock_build_pipeline.assert_not_called()
 

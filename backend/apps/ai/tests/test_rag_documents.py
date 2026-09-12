@@ -1,5 +1,6 @@
 """Comprehensive tests for Module 11 — RAG Financial Document Intelligence."""
 
+import datetime
 import io
 import uuid
 from unittest.mock import MagicMock, patch
@@ -497,3 +498,368 @@ class RAGDocumentsTestSuite(TestCase):
 
         self.assertEqual(result.response, "Standard financial analysis without RAG.")
         self.assertEqual(result.tools_used, ["get_financials", "get_key_metrics"])
+
+    # -------------------------------------------------------------------------
+    # 20. SEC Filing Metadata Filtering & Normalization
+    # -------------------------------------------------------------------------
+    def test_sec_metadata_search_and_normalization(self):
+        doc_uuid = uuid.uuid4()
+        chunk_sec = DocumentChunk(
+            document_id=str(doc_uuid),
+            chunk_id="sec-chunk-1",
+            text="Apple Inc. reports record iPhone revenue of $65 billion in FY23 Q4.",
+            metadata={
+                "user_id": str(self.user_a.id),
+                "document_id": str(doc_uuid),
+                "source_type": "SEC_EDGAR",
+                "ticker": "AAPL",
+                "market": "US",
+                "sec_form": "10-K",
+                "sec_cik": "0000320193",
+                "sec_accession_number": "0000320193-23-000106",
+                "sec_filing_date": "2023-11-03",
+                "sec_report_date": "2023-09-30",
+            },
+        )
+        chunk_upload = DocumentChunk(
+            document_id=str(uuid.uuid4()),
+            chunk_id="up-chunk-1",
+            text="Apple broker research note on iPad growth.",
+            metadata={
+                "user_id": str(self.user_a.id),
+                "source_type": "UPLOAD",
+                "ticker": "AAPL",
+                "market": "US",
+            },
+        )
+        self.vector_store.add(
+            [chunk_sec, chunk_upload],
+            [self.embedding_provider.embed(["Apple revenue"])[0], self.embedding_provider.embed(["Apple research note"])[0]],
+        )
+
+        with patch("apps.ai.services.rag_tools.build_rag_pipeline", return_value=self.rag_pipeline):
+            # Form normalization: "10k" -> "10-K"
+            res1 = search_financial_documents(
+                query="iPhone revenue",
+                ticker="aapl",
+                sec_form="10k",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res1["documents"]), 1)
+            self.assertEqual(res1["documents"][0]["metadata"]["sec_form"], "10-K")
+
+            # Form normalization: "FORM 10-K" -> "10-K"
+            res2 = search_financial_documents(
+                query="iPhone revenue",
+                sec_form="FORM 10-K",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res2["documents"]), 1)
+
+            # Filter by source_type="SEC_EDGAR"
+            res3 = search_financial_documents(
+                query="Apple",
+                source_type="SEC_EDGAR",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res3["documents"]), 1)
+            self.assertEqual(res3["documents"][0]["metadata"]["source_type"], "SEC_EDGAR")
+
+            # Filter by source_type="UPLOAD"
+            res4 = search_financial_documents(
+                query="Apple",
+                source_type="UPLOAD",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res4["documents"]), 1)
+            self.assertEqual(res4["documents"][0]["metadata"]["source_type"], "UPLOAD")
+
+            # Filter by sec_accession_number
+            res5 = search_financial_documents(
+                query="revenue",
+                sec_accession_number="0000320193-23-000106",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res5["documents"]), 1)
+
+            # Filter by sec_cik
+            res6 = search_financial_documents(
+                query="revenue",
+                sec_cik="0000320193",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res6["documents"]), 1)
+
+            # Filter by document_id
+            res7 = search_financial_documents(
+                query="revenue",
+                document_id=str(doc_uuid),
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res7["documents"]), 1)
+
+    # -------------------------------------------------------------------------
+    # 21. Date Range and Exact Date Filtering
+    # -------------------------------------------------------------------------
+    def test_sec_date_range_filtering(self):
+        chunk_sec1 = DocumentChunk(
+            document_id="doc-2023",
+            chunk_id="chunk-1",
+            text="2023 10-K text.",
+            metadata={
+                "user_id": str(self.user_a.id),
+                "ticker": "AAPL",
+                "sec_form": "10-K",
+                "sec_filing_date": "2023-11-03",
+                "sec_report_date": "2023-09-30",
+            },
+        )
+        chunk_sec2 = DocumentChunk(
+            document_id="doc-2024",
+            chunk_id="chunk-1",
+            text="2024 10-K text.",
+            metadata={
+                "user_id": str(self.user_a.id),
+                "ticker": "AAPL",
+                "sec_form": "10-K",
+                "sec_filing_date": "2024-11-01",
+                "sec_report_date": "2024-09-28",
+            },
+        )
+        self.vector_store.add(
+            [chunk_sec1, chunk_sec2],
+            [self.embedding_provider.embed(["2023 10-K text"])[0], self.embedding_provider.embed(["2024 10-K text"])[0]],
+        )
+
+        with patch("apps.ai.services.rag_tools.build_rag_pipeline", return_value=self.rag_pipeline):
+            # Filing date range matching only 2023
+            res_2023 = search_financial_documents(
+                query="10-K text",
+                filing_date_from="2023-01-01",
+                filing_date_to="2023-12-31",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res_2023["documents"]), 1)
+            self.assertEqual(res_2023["documents"][0]["document_id"], "doc-2023")
+
+            # Exact filing date matching 2024 (from == to)
+            res_exact = search_financial_documents(
+                query="10-K text",
+                filing_date_from="2024-11-01",
+                filing_date_to="2024-11-01",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res_exact["documents"]), 1)
+            self.assertEqual(res_exact["documents"][0]["document_id"], "doc-2024")
+
+            # Report date range matching both
+            res_both = search_financial_documents(
+                query="10-K text",
+                report_date_from="2023-01-01",
+                report_date_to="2024-12-31",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res_both["documents"]), 2)
+
+            # Combined filing and report date filters
+            res_comb = search_financial_documents(
+                query="10-K text",
+                filing_date_from="2024-01-01",
+                report_date_from="2024-01-01",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res_comb["documents"]), 1)
+            self.assertEqual(res_comb["documents"][0]["document_id"], "doc-2024")
+
+    # -------------------------------------------------------------------------
+    # 22. Date Validation & Range Error Handling
+    # -------------------------------------------------------------------------
+    def test_date_validation_errors(self):
+        with patch("apps.ai.services.rag_tools.build_rag_pipeline", return_value=self.rag_pipeline):
+            # Invalid date format
+            with self.assertRaises(ValueError) as ctx:
+                search_financial_documents(
+                    query="revenue",
+                    filing_date_from="11/03/2023",
+                    user_id=self.user_a.id,
+                )
+            self.assertIn("must be a valid ISO date", str(ctx.exception))
+
+            # Invalid range from > to
+            with self.assertRaises(ValueError) as ctx:
+                search_financial_documents(
+                    query="revenue",
+                    filing_date_from="2024-12-31",
+                    filing_date_to="2024-01-01",
+                    user_id=self.user_a.id,
+                )
+            self.assertIn("must be before or equal to", str(ctx.exception))
+
+            with self.assertRaises(ValueError) as ctx:
+                search_financial_documents(
+                    query="revenue",
+                    report_date_from="2024-12-31",
+                    report_date_to="2024-01-01",
+                    user_id=self.user_a.id,
+                )
+            self.assertIn("must be before or equal to", str(ctx.exception))
+
+            # Invalid UUID
+            with self.assertRaises(ValueError) as ctx:
+                search_financial_documents(
+                    query="revenue",
+                    document_id="not-a-valid-uuid",
+                    user_id=self.user_a.id,
+                )
+            self.assertIn("must be a valid UUID", str(ctx.exception))
+
+    # -------------------------------------------------------------------------
+    # 23. Cross-User Isolation for SEC Filings
+    # -------------------------------------------------------------------------
+    def test_cross_user_isolation_sec_filings(self):
+        chunk_user_a = DocumentChunk(
+            document_id="sec-a",
+            chunk_id="chunk-1",
+            text="User A confidential SEC note on AAPL.",
+            metadata={
+                "user_id": str(self.user_a.id),
+                "ticker": "AAPL",
+                "sec_form": "10-K",
+                "sec_accession_number": "0000320193-23-000106",
+            },
+        )
+        chunk_user_b = DocumentChunk(
+            document_id="sec-b",
+            chunk_id="chunk-1",
+            text="User B confidential SEC note on AAPL.",
+            metadata={
+                "user_id": str(self.user_b.id),
+                "ticker": "AAPL",
+                "sec_form": "10-K",
+                "sec_accession_number": "0000320193-23-000106",
+            },
+        )
+        self.vector_store.add(
+            [chunk_user_a, chunk_user_b],
+            [self.embedding_provider.embed(["User A note"])[0], self.embedding_provider.embed(["User B note"])[0]],
+        )
+
+        with patch("apps.ai.services.rag_tools.build_rag_pipeline", return_value=self.rag_pipeline):
+            # User A searching must only get User A documents
+            res_a = search_financial_documents(
+                query="confidential note",
+                ticker="AAPL",
+                sec_form="10-K",
+                user_id=self.user_a.id,
+            )
+            self.assertEqual(len(res_a["documents"]), 1)
+            self.assertEqual(res_a["documents"][0]["document_id"], "sec-a")
+
+            # User B searching must only get User B documents
+            res_b = search_financial_documents(
+                query="confidential note",
+                ticker="AAPL",
+                sec_form="10-K",
+                user_id=self.user_b.id,
+            )
+            self.assertEqual(len(res_b["documents"]), 1)
+            self.assertEqual(res_b["documents"][0]["document_id"], "sec-b")
+
+    # -------------------------------------------------------------------------
+    # 24. REST Search View Forwards SEC Metadata
+    # -------------------------------------------------------------------------
+    def test_search_api_forwards_sec_filters(self):
+        self.client.force_authenticate(user=self.user_a)
+
+        with patch("apps.research.document_views.search_financial_documents") as mock_search:
+            mock_search.return_value = {
+                "documents": [
+                    {
+                        "text": "SEC filing sample snippet",
+                        "score": 0.95,
+                        "document_id": "doc-sec-1",
+                        "chunk_id": "chunk-1",
+                        "metadata": {
+                            "document_name": "AAPL 10-K (2023-11-03)",
+                            "ticker": "AAPL",
+                            "sec_form": "10-K",
+                            "page_start": 1,
+                            "page_count": 50,
+                        },
+                    }
+                ]
+            }
+
+            payload = {
+                "query": "operating margin expansion",
+                "ticker": "AAPL",
+                "market": "US",
+                "source_type": "SEC_EDGAR",
+                "sec_form": "10-K",
+                "sec_cik": "0000320193",
+                "sec_accession_number": "0000320193-23-000106",
+                "filing_date_from": "2023-01-01",
+                "filing_date_to": "2023-12-31",
+                "report_date_from": "2023-01-01",
+                "report_date_to": "2023-12-31",
+                "top_k": 3,
+            }
+
+            response = self.client.post("/api/v1/research/documents/search/", payload, format="json")
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            data = response.json()
+            self.assertEqual(data["count"], 1)
+            self.assertEqual(data["results"][0]["document_name"], "AAPL 10-K (2023-11-03)")
+
+            mock_search.assert_called_once()
+            call_kwargs = mock_search.call_args[1]
+            self.assertEqual(call_kwargs["user_id"], self.user_a.id)
+            self.assertEqual(call_kwargs["ticker"], "AAPL")
+            self.assertEqual(call_kwargs["source_type"], "SEC_EDGAR")
+            self.assertEqual(call_kwargs["sec_form"], "10-K")
+            self.assertEqual(call_kwargs["sec_accession_number"], "0000320193-23-000106")
+            self.assertEqual(call_kwargs["filing_date_from"], datetime.date(2023, 1, 1))
+            self.assertEqual(call_kwargs["filing_date_to"], datetime.date(2023, 12, 31))
+
+    # -------------------------------------------------------------------------
+    # 25. Tenant ID Requirement & CIK Normalization
+    # -------------------------------------------------------------------------
+    def test_search_financial_documents_requires_valid_user_id(self):
+        with self.assertRaises(ValueError) as ctx:
+            search_financial_documents(query="revenue", user_id=None)
+        self.assertIn("user_id is required", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            search_financial_documents(query="revenue", user_id="")
+        self.assertIn("user_id is required", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            search_financial_documents(query="revenue", user_id="   ")
+        self.assertIn("user_id is required", str(ctx.exception))
+
+    def test_sec_cik_zero_padding_normalization(self):
+        with patch("apps.ai.services.rag_tools.build_rag_pipeline") as mock_build_pipeline:
+            mock_pipeline = MagicMock()
+            mock_pipeline.retrieve.return_value = []
+            mock_build_pipeline.return_value = mock_pipeline
+
+            # 6-digit unpadded CIK -> normalized to 10-digit
+            search_financial_documents(
+                query="revenue",
+                sec_cik="320193",
+                user_id=self.user_a.id,
+            )
+            mock_pipeline.retrieve.assert_called_once()
+            filters = mock_pipeline.retrieve.call_args[1]["filters"]
+            self.assertEqual(filters["sec_cik"], "0000320193")
+
+            mock_pipeline.reset_mock()
+
+            # Already 10-digit CIK -> kept as is
+            search_financial_documents(
+                query="revenue",
+                sec_cik="0000320193",
+                user_id=self.user_a.id,
+            )
+            filters = mock_pipeline.retrieve.call_args[1]["filters"]
+            self.assertEqual(filters["sec_cik"], "0000320193")

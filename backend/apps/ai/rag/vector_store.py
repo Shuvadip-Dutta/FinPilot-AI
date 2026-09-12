@@ -1,11 +1,12 @@
-"""In-memory vector storage with deterministic cosine-similarity ranking."""
-
+import logging
 import math
 from typing import Protocol
 from uuid import NAMESPACE_URL, uuid5
 from apps.ai.rag.schemas import DocumentChunk, RetrievalResult
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStore(Protocol):
@@ -79,10 +80,33 @@ class InMemoryVectorStore:
             self._entries
         ):
             if filters:
-                if any(
-                    chunk.metadata.get(key) != value
-                    for key, value in filters.items()
-                ):
+                match = True
+                for key, value in filters.items():
+                    if key == "filing_date_from":
+                        doc_date = chunk.metadata.get("sec_filing_date")
+                        if not doc_date or str(doc_date) < str(value):
+                            match = False
+                            break
+                    elif key == "filing_date_to":
+                        doc_date = chunk.metadata.get("sec_filing_date")
+                        if not doc_date or str(doc_date) > str(value):
+                            match = False
+                            break
+                    elif key == "report_date_from":
+                        doc_date = chunk.metadata.get("sec_report_date")
+                        if not doc_date or str(doc_date) < str(value):
+                            match = False
+                            break
+                    elif key == "report_date_to":
+                        doc_date = chunk.metadata.get("sec_report_date")
+                        if not doc_date or str(doc_date) > str(value):
+                            match = False
+                            break
+                    else:
+                        if chunk.metadata.get(key) != value:
+                            match = False
+                            break
+                if not match:
                     continue
 
             score = self._cosine_similarity(
@@ -165,6 +189,19 @@ class InMemoryVectorStore:
 class QdrantVectorStore:
     """Persistent Qdrant-backed vector store."""
 
+    PAYLOAD_INDEXES = {
+        "metadata.user_id": models.PayloadSchemaType.KEYWORD,
+        "metadata.document_id": models.PayloadSchemaType.KEYWORD,
+        "metadata.source_type": models.PayloadSchemaType.KEYWORD,
+        "metadata.ticker": models.PayloadSchemaType.KEYWORD,
+        "metadata.market": models.PayloadSchemaType.KEYWORD,
+        "metadata.sec_form": models.PayloadSchemaType.KEYWORD,
+        "metadata.sec_cik": models.PayloadSchemaType.KEYWORD,
+        "metadata.sec_accession_number": models.PayloadSchemaType.KEYWORD,
+        "metadata.sec_filing_date": models.PayloadSchemaType.DATETIME,
+        "metadata.sec_report_date": models.PayloadSchemaType.DATETIME,
+    }
+
     def __init__(
         self,
         url: str = "http://localhost:6333",
@@ -201,6 +238,26 @@ class QdrantVectorStore:
                     distance=models.Distance.COSINE,
                 ),
             )
+        self._ensure_payload_indexes()
+
+    def _ensure_payload_indexes(self) -> None:
+        for field_name, field_schema in self.PAYLOAD_INDEXES.items():
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name=field_name,
+                    field_schema=field_schema,
+                )
+            except Exception as exc:
+                err_msg = str(exc).lower()
+                if "already exists" in err_msg or "already indexed" in err_msg:
+                    continue
+                logger.warning(
+                    "Could not ensure payload index for %s on %s: %s",
+                    field_name,
+                    self.collection_name,
+                    exc,
+                )
 
     def add(
         self,
@@ -309,7 +366,38 @@ class QdrantVectorStore:
 
         conditions = []
 
+        # Handle filing date range
+        filing_from = filters.get("filing_date_from")
+        filing_to = filters.get("filing_date_to")
+        if filing_from or filing_to:
+            conditions.append(
+                models.FieldCondition(
+                    key="metadata.sec_filing_date",
+                    range=models.DatetimeRange(
+                        gte=str(filing_from) if filing_from else None,
+                        lte=str(filing_to) if filing_to else None,
+                    ),
+                )
+            )
+
+        # Handle report date range
+        report_from = filters.get("report_date_from")
+        report_to = filters.get("report_date_to")
+        if report_from or report_to:
+            conditions.append(
+                models.FieldCondition(
+                    key="metadata.sec_report_date",
+                    range=models.DatetimeRange(
+                        gte=str(report_from) if report_from else None,
+                        lte=str(report_to) if report_to else None,
+                    ),
+                )
+            )
+
+        date_keys = {"filing_date_from", "filing_date_to", "report_date_from", "report_date_to"}
         for key, value in filters.items():
+            if key in date_keys:
+                continue
             conditions.append(
                 models.FieldCondition(
                     key=f"metadata.{key}",

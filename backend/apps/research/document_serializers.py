@@ -83,6 +83,15 @@ class DocumentSearchSerializer(serializers.Serializer):
     top_k = serializers.IntegerField(required=False, default=5, min_value=1, max_value=10)
     ticker = serializers.CharField(required=False, allow_blank=True, max_length=20)
     market = serializers.CharField(required=False, allow_blank=True, max_length=10)
+    source_type = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    sec_form = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    sec_cik = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    sec_accession_number = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    document_id = serializers.UUIDField(required=False, allow_null=True)
+    filing_date_from = serializers.DateField(required=False, allow_null=True)
+    filing_date_to = serializers.DateField(required=False, allow_null=True)
+    report_date_from = serializers.DateField(required=False, allow_null=True)
+    report_date_to = serializers.DateField(required=False, allow_null=True)
 
     def validate_query(self, value):
         cleaned = value.strip()
@@ -101,3 +110,44 @@ class DocumentSearchSerializer(serializers.Serializer):
             cleaned = value.strip().upper()
             return cleaned if cleaned else None
         return None
+
+    def validate_source_type(self, value):
+        if value:
+            cleaned = value.strip().upper()
+            return cleaned if cleaned else None
+        return None
+
+    def validate_sec_form(self, value):
+        if value:
+            cleaned = value.strip()
+            return cleaned if cleaned else None
+        return None
+
+    def validate_sec_cik(self, value):
+        if value:
+            cleaned = value.strip()
+            return cleaned if cleaned else None
+        return None
+
+    def validate_sec_accession_number(self, value):
+        if value:
+            cleaned = value.strip()
+            return cleaned if cleaned else None
+        return None
+
+    def validate(self, attrs):
+        filing_from = attrs.get("filing_date_from")
+        filing_to = attrs.get("filing_date_to")
+        if filing_from and filing_to and filing_from > filing_to:
+            raise serializers.ValidationError(
+                {"filing_date_from": "filing_date_from must be before or equal to filing_date_to."}
+            )
+
+        report_from = attrs.get("report_date_from")
+        report_to = attrs.get("report_date_to")
+        if report_from and report_to and report_from > report_to:
+            raise serializers.ValidationError(
+                {"report_date_from": "report_date_from must be before or equal to report_date_to."}
+            )
+
+        return attrs

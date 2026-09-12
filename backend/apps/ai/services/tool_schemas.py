@@ -236,6 +236,42 @@ RESEARCH_TOOLS = [
                         "type": ["integer", "null"],
                         "description": "Optional fiscal year filter.",
                     },
+                    "source_type": {
+                        "type": ["string", "null"],
+                        "description": "Optional document source type filter ('UPLOAD' or 'SEC_EDGAR').",
+                    },
+                    "sec_form": {
+                        "type": ["string", "null"],
+                        "description": "Optional SEC filing form filter (e.g. '10-K', '10-Q', '8-K').",
+                    },
+                    "sec_cik": {
+                        "type": ["string", "null"],
+                        "description": "Optional SEC CIK number filter.",
+                    },
+                    "sec_accession_number": {
+                        "type": ["string", "null"],
+                        "description": "Optional SEC filing accession number filter.",
+                    },
+                    "document_id": {
+                        "type": ["string", "null"],
+                        "description": "Optional document UUID filter.",
+                    },
+                    "filing_date_from": {
+                        "type": ["string", "null"],
+                        "description": "Optional start of SEC filing date range (YYYY-MM-DD).",
+                    },
+                    "filing_date_to": {
+                        "type": ["string", "null"],
+                        "description": "Optional end of SEC filing date range (YYYY-MM-DD).",
+                    },
+                    "report_date_from": {
+                        "type": ["string", "null"],
+                        "description": "Optional start of SEC report/period date range (YYYY-MM-DD).",
+                    },
+                    "report_date_to": {
+                        "type": ["string", "null"],
+                        "description": "Optional end of SEC report/period date range (YYYY-MM-DD).",
+                    },
                     "top_k": {
                         "type": "integer",
                         "minimum": 1,

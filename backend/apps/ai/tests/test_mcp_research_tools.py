@@ -408,3 +408,65 @@ class MCPResearchToolsTestCase(SimpleTestCase):
         )
 
         mock_service.get_news.assert_called_once()
+
+    @patch("apps.ai.mcp.tools.research.search_financial_documents_tool")
+    def test_search_financial_documents_mcp_trusted_tenant_forwarding(self, mock_rag_tool):
+        from apps.ai.mcp.tools.research import search_financial_documents as mcp_search_docs
+
+        mock_rag_tool.return_value = {"documents": []}
+
+        with self.settings(MCP_TENANT_USER_ID="trusted-tenant-123"):
+            result = mcp_search_docs(
+                query="net sales growth",
+                ticker="AAPL",
+                market="US",
+                document_type="sec_filing",
+                fiscal_year=2023,
+                top_k=3,
+                source_type="SEC_EDGAR",
+                sec_form="10-K",
+                sec_cik="0000320193",
+                sec_accession_number="0000320193-23-000106",
+                document_id="550e8400-e29b-41d4-a716-446655440000",
+                filing_date_from="2023-01-01",
+                filing_date_to="2023-12-31",
+                report_date_from="2023-01-01",
+                report_date_to="2023-12-31",
+            )
+
+        mock_rag_tool.assert_called_once_with(
+            query="net sales growth",
+            ticker="AAPL",
+            market="US",
+            document_type="sec_filing",
+            fiscal_year=2023,
+            top_k=3,
+            user_id="trusted-tenant-123",
+            source_type="SEC_EDGAR",
+            sec_form="10-K",
+            sec_cik="0000320193",
+            sec_accession_number="0000320193-23-000106",
+            document_id="550e8400-e29b-41d4-a716-446655440000",
+            filing_date_from="2023-01-01",
+            filing_date_to="2023-12-31",
+            report_date_from="2023-01-01",
+            report_date_to="2023-12-31",
+        )
+        self.assertEqual(result, {"documents": []})
+
+    def test_search_financial_documents_mcp_rejects_caller_supplied_user_id(self):
+        from apps.ai.mcp.tools.research import search_financial_documents as mcp_search_docs
+
+        with self.assertRaises(TypeError):
+            mcp_search_docs(
+                query="revenue",
+                user_id="attacker-supplied-user-id",
+            )
+
+    def test_search_financial_documents_mcp_rejects_missing_tenant_context(self):
+        from apps.ai.mcp.tools.research import search_financial_documents as mcp_search_docs
+
+        with self.settings(MCP_TENANT_USER_ID=None):
+            with self.assertRaises(PermissionError) as ctx:
+                mcp_search_docs(query="revenue")
+            self.assertIn("No trusted tenant context", str(ctx.exception))

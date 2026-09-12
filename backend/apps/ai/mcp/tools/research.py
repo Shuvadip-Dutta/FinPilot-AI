@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from apps.ai.mcp.server import mcp
 
 from apps.ai.services.rag_tools import search_financial_documents as search_financial_documents_tool
@@ -9,6 +11,20 @@ from apps.ai.services.research_tools import (
     get_historical_data as get_historical_data_tool,
     get_news as get_news_tool,
 )
+
+
+def _resolve_trusted_mcp_user_id() -> str | int:
+    """Resolve trusted tenant identity from configuration or context.
+
+    Raises PermissionError if no trusted tenant context is configured.
+    """
+    configured_id = getattr(settings, "MCP_TENANT_USER_ID", None)
+    if configured_id is not None and str(configured_id).strip():
+        return str(configured_id).strip()
+    raise PermissionError(
+        "No trusted tenant context available for MCP document search. "
+        "Tenant context must be established via authenticated session or configuration."
+    )
 
 
 @mcp.tool()
@@ -142,6 +158,15 @@ def search_financial_documents(
     document_type: str | None = None,
     fiscal_year: int | None = None,
     top_k: int = 5,
+    source_type: str | None = None,
+    sec_form: str | None = None,
+    sec_cik: str | None = None,
+    sec_accession_number: str | None = None,
+    document_id: str | None = None,
+    filing_date_from: str | None = None,
+    filing_date_to: str | None = None,
+    report_date_from: str | None = None,
+    report_date_to: str | None = None,
 ) -> dict:
     """
     Search indexed financial documents for the most relevant text chunks.
@@ -153,7 +178,17 @@ def search_financial_documents(
         document_type: Optional document category filter.
         fiscal_year: Optional fiscal year filter.
         top_k: Maximum number of relevant chunks to return.
+        source_type: Optional document source type ('UPLOAD' or 'SEC_EDGAR').
+        sec_form: Optional SEC form type (e.g. '10-K', '10-Q', '8-K').
+        sec_cik: Optional SEC CIK filter.
+        sec_accession_number: Optional SEC accession number filter.
+        document_id: Optional document UUID filter.
+        filing_date_from: Optional filing date range start (YYYY-MM-DD).
+        filing_date_to: Optional filing date range end (YYYY-MM-DD).
+        report_date_from: Optional report period date range start (YYYY-MM-DD).
+        report_date_to: Optional report period date range end (YYYY-MM-DD).
     """
+    trusted_user_id = _resolve_trusted_mcp_user_id()
 
     return search_financial_documents_tool(
         query=query,
@@ -162,4 +197,14 @@ def search_financial_documents(
         document_type=document_type,
         fiscal_year=fiscal_year,
         top_k=top_k,
+        user_id=trusted_user_id,
+        source_type=source_type,
+        sec_form=sec_form,
+        sec_cik=sec_cik,
+        sec_accession_number=sec_accession_number,
+        document_id=document_id,
+        filing_date_from=filing_date_from,
+        filing_date_to=filing_date_to,
+        report_date_from=report_date_from,
+        report_date_to=report_date_to,
     )

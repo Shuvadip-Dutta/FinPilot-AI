@@ -77,6 +77,15 @@ class FinancialDocumentSearchView(APIView):
         top_k = serializer.validated_data.get("top_k", 5)
         ticker = serializer.validated_data.get("ticker")
         market = serializer.validated_data.get("market")
+        source_type = serializer.validated_data.get("source_type")
+        sec_form = serializer.validated_data.get("sec_form")
+        sec_cik = serializer.validated_data.get("sec_cik")
+        sec_accession_number = serializer.validated_data.get("sec_accession_number")
+        document_id = str(serializer.validated_data["document_id"]) if serializer.validated_data.get("document_id") else None
+        filing_date_from = serializer.validated_data.get("filing_date_from")
+        filing_date_to = serializer.validated_data.get("filing_date_to")
+        report_date_from = serializer.validated_data.get("report_date_from")
+        report_date_to = serializer.validated_data.get("report_date_to")
 
         try:
             raw_results = search_financial_documents(
@@ -85,6 +94,15 @@ class FinancialDocumentSearchView(APIView):
                 market=market,
                 top_k=top_k,
                 user_id=request.user.id,
+                source_type=source_type,
+                sec_form=sec_form,
+                sec_cik=sec_cik,
+                sec_accession_number=sec_accession_number,
+                document_id=document_id,
+                filing_date_from=filing_date_from,
+                filing_date_to=filing_date_to,
+                report_date_from=report_date_from,
+                report_date_to=report_date_to,
             )
 
             doc_items = raw_results.get("documents", [])

@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -269,4 +270,140 @@ class QdrantVectorStoreTestCase(SimpleTestCase):
         finally:
             store.client.delete_collection(
                 collection_name
+            )
+
+    def test_sec_metadata_and_date_range_filtering(self):
+        chunks = [
+            DocumentChunk(
+                document_id="sec-doc-1",
+                chunk_id="chunk-1",
+                text="Apple 10-K filing text with strong revenue.",
+                metadata={
+                    "user_id": "1",
+                    "source_type": "SEC_EDGAR",
+                    "ticker": "AAPL",
+                    "market": "US",
+                    "sec_form": "10-K",
+                    "sec_cik": "0000320193",
+                    "sec_accession_number": "0000320193-23-000106",
+                    "sec_filing_date": "2023-11-03",
+                    "sec_report_date": "2023-09-30",
+                },
+            ),
+            DocumentChunk(
+                document_id="sec-doc-2",
+                chunk_id="chunk-1",
+                text="Apple 10-Q filing text for Q2.",
+                metadata={
+                    "user_id": "1",
+                    "source_type": "SEC_EDGAR",
+                    "ticker": "AAPL",
+                    "market": "US",
+                    "sec_form": "10-Q",
+                    "sec_cik": "0000320193",
+                    "sec_accession_number": "0000320193-23-000070",
+                    "sec_filing_date": "2023-05-05",
+                    "sec_report_date": "2023-04-01",
+                },
+            ),
+            DocumentChunk(
+                document_id="upload-doc-1",
+                chunk_id="chunk-1",
+                text="Uploaded PDF on Apple.",
+                metadata={
+                    "user_id": "1",
+                    "source_type": "UPLOAD",
+                    "ticker": "AAPL",
+                    "market": "US",
+                },
+            ),
+        ]
+
+        embeddings = [
+            [1.0, 0.0, 0.0],
+            [0.9, 0.1, 0.0],
+            [0.8, 0.2, 0.0],
+        ]
+
+        self.store.add(chunks, embeddings)
+
+        # 1. Filter by source_type and sec_form
+        res = self.store.search(
+            query_embedding=[1.0, 0.0, 0.0],
+            top_k=10,
+            filters={"source_type": "SEC_EDGAR", "sec_form": "10-K"},
+        )
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0].chunk.document_id, "sec-doc-1")
+
+        # 2. Filter by accession number
+        res_acc = self.store.search(
+            query_embedding=[1.0, 0.0, 0.0],
+            top_k=10,
+            filters={"sec_accession_number": "0000320193-23-000070"},
+        )
+        self.assertEqual(len(res_acc), 1)
+        self.assertEqual(res_acc[0].chunk.document_id, "sec-doc-2")
+
+        # 3. Filter by filing date range
+        res_date = self.store.search(
+            query_embedding=[1.0, 0.0, 0.0],
+            top_k=10,
+            filters={
+                "filing_date_from": "2023-06-01",
+                "filing_date_to": "2023-12-31",
+            },
+        )
+        self.assertEqual(len(res_date), 1)
+        self.assertEqual(res_date[0].chunk.document_id, "sec-doc-1")
+
+        # 4. Filter by exact filing date
+        res_exact = self.store.search(
+            query_embedding=[1.0, 0.0, 0.0],
+            top_k=10,
+            filters={
+                "filing_date_from": "2023-11-03",
+                "filing_date_to": "2023-11-03",
+            },
+        )
+        self.assertEqual(len(res_exact), 1)
+        self.assertEqual(res_exact[0].chunk.document_id, "sec-doc-1")
+
+    def test_payload_indexes_created_and_idempotent(self):
+        col_info = self.store.client.get_collection(self.collection_name)
+        schema = col_info.payload_schema
+
+        expected_indexes = {
+            "metadata.user_id": "keyword",
+            "metadata.document_id": "keyword",
+            "metadata.source_type": "keyword",
+            "metadata.ticker": "keyword",
+            "metadata.market": "keyword",
+            "metadata.sec_form": "keyword",
+            "metadata.sec_cik": "keyword",
+            "metadata.sec_accession_number": "keyword",
+            "metadata.sec_filing_date": "datetime",
+            "metadata.sec_report_date": "datetime",
+        }
+
+        for field_path, expected_type in expected_indexes.items():
+            self.assertIn(field_path, schema, f"Missing payload index for {field_path}")
+            actual_type = str(schema[field_path].data_type).lower()
+            self.assertIn(expected_type, actual_type)
+
+        # Idempotent call: re-running _ensure_payload_indexes must not raise
+        self.store._ensure_payload_indexes()
+
+    def test_payload_index_failure_is_logged(self):
+        with patch.object(
+            self.store.client,
+            "create_payload_index",
+            side_effect=RuntimeError("Simulated index connection failure"),
+        ):
+            with self.assertLogs("apps.ai.rag.vector_store", level="WARNING") as cm:
+                self.store._ensure_payload_indexes()
+
+            self.assertTrue(
+                any("Could not ensure payload index" in msg for msg in cm.output),
+                f"Expected warning log in output: {cm.output}",
             )
