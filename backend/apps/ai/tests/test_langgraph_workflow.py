@@ -1556,3 +1556,131 @@ class Phase53LangGraphDocumentEvidenceTests(TestCase):
         self.assertEqual(len(synth_in.research_context.document_evidence), 1)
         self.assertEqual(synth_in.research_context.document_evidence[0]["document_id"], "sec-aapl-10k")
         self.assertEqual(synth_in.research_context.provenance["financials"].primary_provider, "sec_edgar")
+
+    def test_e2e_sec_financial_workflow_persistence_and_reconstruction(self):
+        """Phase 5.4: Full end-to-end regression covering trusted user -> financial agent -> SEC RAG -> ResearchContext.document_evidence -> LangGraph merge -> synthesis -> save_workflow_result -> DB persistence -> reload/reconstruction."""
+        from django.contrib.auth.models import User
+        from apps.ai.agents.financial import FinancialAnalysisAgent
+        from apps.ai.agents.synthesis import FinalSynthesisAgent
+        from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
+        from apps.research.services.session_service import ResearchSessionService
+
+        trusted_user = User.objects.create_user(
+            username="sec_e2e_analyst",
+            email="sec_analyst@finpilot.local",
+            password="password123",
+        )
+
+        sec_rag_docs = [
+            {
+                "chunk_id": "sec-aapl-chunk-01",
+                "document_id": "doc-aapl-10k-2023",
+                "source_type": "SEC_EDGAR",
+                "sec_form": "10-K",
+                "sec_accession_number": "0000320193-23-000106",
+                "sec_filing_date": "2023-11-03",
+                "sec_report_date": "2023-09-30",
+                "sec_cik": "0000320193",
+                "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+                "score": 0.94,
+                "page": 28,
+                "text": "Total net sales were $383,285 million in fiscal year 2023.",
+                "metadata": {"section": "Item 7", "fiscal_year": 2023},
+            }
+        ]
+
+        mock_rag_search = MagicMock(return_value={"documents": sec_rag_docs})
+        mock_fin_llm = MagicMock(return_value="According to Apple's Form 10-K filed on 2023-11-03 [SEC Form 10-K, Accession: 0000320193-23-000106], total net sales were $383,285M.")
+        mock_synth_llm = MagicMock(return_value="Apple demonstrates strong financial execution. [SEC Form 10-K, Accession: 0000320193-23-000106]")
+
+        financial_agent = FinancialAnalysisAgent(
+            rag_search_tool=mock_rag_search,
+            llm_service=mock_fin_llm,
+        )
+
+        synthesis_agent = FinalSynthesisAgent(
+            llm_service=mock_synth_llm,
+        )
+
+        router = MagicMock()
+        router.route.return_value = "financial"
+
+        workflow = LangGraphResearchWorkflow(
+            router=router,
+            financial_agent=financial_agent,
+            market_agent=MagicMock(),
+            news_agent=MagicMock(),
+            synthesis_agent=synthesis_agent,
+            checkpointer=_test_checkpointer(),
+        )
+
+        thread_id = "sec-e2e-regression-thread"
+        state = workflow.run(
+            "Analyze AAPL Form 10-K filing",
+            user=trusted_user,
+            ticker="AAPL",
+            market="US",
+            thread_id=thread_id,
+        )
+
+        # 1. Verify in-memory workflow execution
+        self.assertIsInstance(state, AgentState)
+        self.assertEqual(state.ticker, "AAPL")
+        self.assertEqual(state.market, "US")
+        self.assertIsNotNone(state.research_context)
+        self.assertEqual(len(state.research_context.document_evidence), 1)
+        self.assertEqual(state.research_context.document_evidence[0]["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(state.research_context.provenance["financials"].primary_provider, "sec_edgar")
+        self.assertIn("financial", state.results)
+        self.assertIn("synthesis", state.results)
+
+        # 2. Verify DB session persistence
+        session = ResearchSession.objects.get(thread_id=thread_id)
+        self.assertEqual(session.user, trusted_user)
+        self.assertEqual(session.status, "COMPLETED")
+        self.assertEqual(session.ticker, "AAPL")
+        self.assertEqual(session.market, "US")
+        self.assertIn("0000320193-23-000106", session.final_synthesis)
+
+        evidence_items = ResearchEvidence.objects.filter(session=session)
+        self.assertGreaterEqual(evidence_items.count(), 2)
+
+        fin_ev = ResearchEvidence.objects.get(session=session, agent_name="financial")
+        self.assertIsInstance(fin_ev.structured_data, dict)
+        self.assertIn("document_evidence", fin_ev.structured_data)
+        doc = fin_ev.structured_data["document_evidence"][0]
+        self.assertEqual(doc["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(doc["sec_form"], "10-K")
+        self.assertEqual(doc["source_url"], "https://www.sec.gov/ix?doc=/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm")
+        self.assertEqual(doc["score"], 0.94)
+        self.assertEqual(doc["chunk_id"], "sec-aapl-chunk-01")
+
+        synth_ev = ResearchEvidence.objects.get(session=session, agent_name="synthesis")
+        self.assertIsInstance(synth_ev.structured_data, dict)
+        self.assertIn("document_evidence", synth_ev.structured_data)
+        self.assertEqual(synth_ev.structured_data["document_evidence"][0]["sec_accession_number"], "0000320193-23-000106")
+
+        # 3. Verify typed reload and reconstruction from session
+        reconstructed = ResearchSessionService.reconstruct_research_context(session.id)
+        self.assertIsNotNone(reconstructed)
+        self.assertIsInstance(reconstructed, ResearchContext)
+        self.assertEqual(reconstructed.ticker, "AAPL")
+        self.assertEqual(reconstructed.market, "US")
+        self.assertEqual(len(reconstructed.document_evidence), 1)
+        self.assertEqual(reconstructed.document_evidence[0]["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(reconstructed.document_evidence[0]["sec_form"], "10-K")
+        self.assertEqual(reconstructed.document_evidence[0]["source_url"], "https://www.sec.gov/ix?doc=/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm")
+        self.assertEqual(reconstructed.provenance["financials"].primary_provider, "sec_edgar")
+        self.assertEqual(reconstructed.provenance["financials"].source, "sec_edgar")
+        self.assertEqual(reconstructed.provenance["financials"].data_status, "complete")
+
+        # 4. Verify chatbot context reconstruction
+        cb_context = ResearchSessionService.build_chatbot_context(session.id)
+        self.assertEqual(cb_context["ticker"], "AAPL")
+        self.assertEqual(cb_context["market"], "US")
+        self.assertIn("0000320193-23-000106", cb_context["final_synthesis"])
+        self.assertIn("financial", cb_context["evidence"])
+        self.assertEqual(
+            cb_context["evidence"]["financial"]["structured_data"]["document_evidence"][0]["sec_accession_number"],
+            "0000320193-23-000106",
+        )

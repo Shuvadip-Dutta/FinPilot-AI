@@ -1,9 +1,11 @@
 from datetime import timedelta
+import json
 import uuid
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
 from apps.ai.graph.state import AgentState
 from apps.ai.services.schemas import AgentResult
 from apps.research.models import ResearchEvidence, ResearchSession
@@ -586,3 +588,364 @@ class ResearchSessionServiceTestCase(TestCase):
 
         mkt_ev = ResearchEvidence.objects.get(session=session, agent_name="market")
         self.assertIsNone(mkt_ev.structured_data)
+
+    def test_sec_evidence_round_trip_persistence_and_reconstruction(self):
+        """Phase 5.4: Verify SEC document evidence and provenance round-trip through session persistence."""
+        session = ResearchSessionService.create_session(
+            user_message="Analyze AAPL Form 10-K filing",
+            ticker="AAPL",
+            market="US",
+            route="financial",
+            thread_id="aapl-sec-persist-thread",
+        )
+
+        sec_evidence_item = {
+            "chunk_id": "sec-chunk-001",
+            "document_id": "d1c2b3a4-1234-5678-90ab-cdef12345678",
+            "source_type": "SEC_EDGAR",
+            "sec_form": "10-K",
+            "sec_accession_number": "0000320193-23-000106",
+            "sec_filing_date": "2023-11-03",
+            "sec_report_date": "2023-09-30",
+            "sec_cik": "0000320193",
+            "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+            "score": 0.92,
+            "page": 24,
+            "text": "Total net sales were $383,285 million in fiscal year 2023 compared to $394,328 million in 2022.",
+            "metadata": {
+                "section": "Item 7",
+                "fiscal_year": 2023,
+            },
+            "citation": "SEC Form 10-K (0000320193-23-000106), p.24",
+        }
+
+        provenance_item = ProviderProvenance(
+            primary_provider="sec_edgar",
+            source="sec_edgar",
+            fallback_used=False,
+            data_status="complete",
+            fallback_reason=None,
+        )
+
+        state = AgentState(
+            user_message="Analyze AAPL Form 10-K filing",
+            ticker="AAPL",
+            market="US",
+            route="financial",
+            research_context=ResearchContext(
+                ticker="AAPL",
+                market="US",
+                document_evidence=[sec_evidence_item],
+                provenance={"financials": provenance_item},
+            ),
+            results={
+                "financial": AgentResult(
+                    response="According to Apple's Form 10-K filed on 2023-11-03 [SEC Form 10-K, Accession: 0000320193-23-000106], total net sales were $383,285 million.",
+                    tools_used=["search_financial_documents"],
+                    data={
+                        "ticker": "AAPL",
+                        "market": "US",
+                        "document_evidence": [sec_evidence_item],
+                        "provenance": {"financials": provenance_item},
+                    },
+                ),
+                "synthesis": AgentResult(
+                    response="Apple demonstrates robust profitability based on its SEC Form 10-K filing.",
+                    tools_used=["llm_synthesis"],
+                    data={
+                        "document_evidence": [sec_evidence_item],
+                        "provenance": {"financials": provenance_item},
+                    },
+                ),
+            },
+        )
+
+        saved_session = ResearchSessionService.save_workflow_result(
+            session_id=session.id,
+            agent_state=state,
+            latency_ms=850.0,
+            status="COMPLETED",
+        )
+
+        self.assertEqual(saved_session.status, "COMPLETED")
+        self.assertEqual(saved_session.ticker, "AAPL")
+        self.assertEqual(saved_session.market, "US")
+
+        # 1. Verify ResearchEvidence persistence in DB
+        fin_ev = ResearchEvidence.objects.get(session=session, agent_name="financial")
+        self.assertIsInstance(fin_ev.structured_data, dict)
+        self.assertIn("document_evidence", fin_ev.structured_data)
+        self.assertIn("provenance", fin_ev.structured_data)
+
+        # Confirm document evidence survives cleanly
+        persisted_docs = fin_ev.structured_data["document_evidence"]
+        self.assertIsInstance(persisted_docs, list)
+        self.assertEqual(len(persisted_docs), 1)
+        doc = persisted_docs[0]
+        self.assertEqual(doc["sec_form"], "10-K")
+        self.assertEqual(doc["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(doc["sec_cik"], "0000320193")
+        self.assertEqual(doc["sec_filing_date"], "2023-11-03")
+        self.assertEqual(doc["score"], 0.92)
+        self.assertEqual(doc["chunk_id"], "sec-chunk-001")
+        self.assertEqual(doc["source_url"], "https://www.sec.gov/ix?doc=/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm")
+        self.assertEqual(doc["page"], 24)
+        self.assertEqual(doc["citation"], "SEC Form 10-K (0000320193-23-000106), p.24")
+
+        # Confirm provenance survives
+        prov = fin_ev.structured_data["provenance"]["financials"]
+        self.assertEqual(prov["primary_provider"], "sec_edgar")
+        self.assertEqual(prov["source"], "sec_edgar")
+        self.assertFalse(prov["fallback_used"])
+        self.assertEqual(prov["data_status"], "complete")
+
+        # 2. Verify typed ResearchContext reconstruction
+        reconstructed = ResearchSessionService.reconstruct_research_context(session.id)
+        self.assertIsNotNone(reconstructed)
+        self.assertIsInstance(reconstructed, ResearchContext)
+        self.assertEqual(reconstructed.ticker, "AAPL")
+        self.assertEqual(reconstructed.market, "US")
+        self.assertEqual(len(reconstructed.document_evidence), 1)
+        self.assertEqual(reconstructed.document_evidence[0]["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(reconstructed.document_evidence[0]["sec_form"], "10-K")
+        self.assertIn("financials", reconstructed.provenance)
+        self.assertIsInstance(reconstructed.provenance["financials"], ProviderProvenance)
+        self.assertEqual(reconstructed.provenance["financials"].primary_provider, "sec_edgar")
+        self.assertEqual(reconstructed.provenance["financials"].source, "sec_edgar")
+        self.assertEqual(reconstructed.provenance["financials"].data_status, "complete")
+
+        # 3. Verify chatbot context reconstruction
+        chatbot_context = ResearchSessionService.build_chatbot_context(session.id)
+        self.assertIn("financial", chatbot_context["evidence"])
+        self.assertIn("synthesis", chatbot_context["evidence"])
+        self.assertEqual(
+            chatbot_context["evidence"]["financial"]["structured_data"]["document_evidence"][0]["sec_accession_number"],
+            "0000320193-23-000106",
+        )
+
+    def test_sec_evidence_no_data_loss(self):
+        """Phase 5.4: Verify saving workflow result does not reduce populated document_evidence to empty, None, or string blob."""
+        session = ResearchSessionService.create_session(
+            user_message="Test no data loss",
+            ticker="MSFT",
+            market="US",
+            route="financial",
+        )
+
+        populated_evidence = [
+            {
+                "chunk_id": f"chunk-{i}",
+                "document_id": f"doc-{i}",
+                "sec_form": "10-Q",
+                "sec_accession_number": f"0000789019-24-00000{i}",
+                "sec_filing_date": "2024-01-25",
+                "sec_cik": "0000789019",
+                "source_url": f"https://www.sec.gov/edgar/doc-{i}",
+                "score": 0.85 + (i * 0.02),
+                "page": i,
+                "text": f"Sample excerpt from Form 10-Q chunk {i}",
+                "metadata": {"item": "Part I Item 1"},
+            }
+            for i in range(1, 4)
+        ]
+
+        state = AgentState(
+            user_message="Test no data loss",
+            ticker="MSFT",
+            market="US",
+            research_context=ResearchContext(
+                ticker="MSFT",
+                market="US",
+                document_evidence=populated_evidence,
+            ),
+            results={
+                "financial": AgentResult(
+                    response="MSFT 10-Q analysis.",
+                    tools_used=["search_financial_documents"],
+                    data={"document_evidence": populated_evidence},
+                ),
+            },
+        )
+
+        ResearchSessionService.save_workflow_result(session.id, state)
+
+        fin_ev = ResearchEvidence.objects.get(session=session, agent_name="financial")
+        docs = fin_ev.structured_data.get("document_evidence")
+
+        # Crucial assertions against data loss:
+        self.assertIsNotNone(docs)
+        self.assertNotEqual(docs, [])
+        self.assertNotIsInstance(docs, str)
+        self.assertIsInstance(docs, list)
+        self.assertEqual(len(docs), 3)
+
+        # Check all identifiers retained
+        for i, doc in enumerate(docs, start=1):
+            self.assertEqual(doc["chunk_id"], f"chunk-{i}")
+            self.assertEqual(doc["document_id"], f"doc-{i}")
+            self.assertEqual(doc["sec_form"], "10-Q")
+            self.assertEqual(doc["sec_accession_number"], f"0000789019-24-00000{i}")
+            self.assertEqual(doc["sec_cik"], "0000789019")
+            self.assertEqual(doc["source_url"], f"https://www.sec.gov/edgar/doc-{i}")
+            self.assertAlmostEqual(doc["score"], 0.85 + (i * 0.02))
+
+    def test_backward_compatibility_legacy_and_india_session(self):
+        """Phase 5.4: Ensure existing historical/India sessions without SEC evidence load without error."""
+        # 1. Historical legacy session with no document_evidence
+        legacy_session = ResearchSessionService.create_session(
+            user_message="Legacy query",
+            ticker="INFY",
+            market="IN",
+            route="financial",
+        )
+        ResearchEvidence.objects.create(
+            session=legacy_session,
+            agent_name="financial",
+            response="Legacy financial analysis without SEC evidence.",
+            tools_used=["get_financials"],
+            structured_data={"revenue": 45000, "ebitda": 11000},
+        )
+
+        rc_legacy = ResearchSessionService.reconstruct_research_context(legacy_session.id)
+        self.assertIsNotNone(rc_legacy)
+        self.assertEqual(rc_legacy.ticker, "INFY")
+        self.assertEqual(rc_legacy.market, "IN")
+        self.assertEqual(rc_legacy.document_evidence, [])
+        self.assertEqual(rc_legacy.provenance, {})
+
+        # 2. India-market deterministic financial session
+        india_session = ResearchSessionService.create_session(
+            user_message="Analyze RELIANCE financial performance",
+            ticker="RELIANCE",
+            market="IN",
+            route="financial",
+        )
+
+        india_provenance = ProviderProvenance(
+            primary_provider="upstox",
+            source="upstox",
+            fallback_used=False,
+            data_status="complete",
+        )
+
+        state = AgentState(
+            user_message="Analyze RELIANCE financial performance",
+            ticker="RELIANCE",
+            market="IN",
+            route="financial",
+            results={
+                "financial": AgentResult(
+                    response="RELIANCE revenue grew 12% YoY.",
+                    tools_used=["get_financials", "get_key_metrics"],
+                    data={
+                        "revenue": 950000,
+                        "currency": "INR",
+                        "provenance": {"financials": india_provenance},
+                    },
+                ),
+            },
+        )
+
+        ResearchSessionService.save_workflow_result(india_session.id, state)
+        rc_india = ResearchSessionService.reconstruct_research_context(india_session.id)
+
+        self.assertIsNotNone(rc_india)
+        self.assertEqual(rc_india.ticker, "RELIANCE")
+        self.assertEqual(rc_india.market, "IN")
+        self.assertEqual(rc_india.document_evidence, [])
+        self.assertIn("financials", rc_india.provenance)
+        self.assertEqual(rc_india.provenance["financials"].primary_provider, "upstox")
+        self.assertEqual(rc_india.provenance["financials"].source, "upstox")
+        self.assertFalse(rc_india.provenance["financials"].fallback_used)
+
+    def test_citation_metadata_survives_persistence(self):
+        """Phase 5.4: Ensure SEC citation-related metadata needed for attribution survives persistence."""
+        session = ResearchSessionService.create_session(
+            user_message="Citation attribution test",
+            ticker="NVDA",
+            market="US",
+            route="financial",
+        )
+
+        sec_evidence = [
+            {
+                "chunk_id": "nvda-chunk-01",
+                "sec_form": "10-K",
+                "sec_accession_number": "0001045810-24-000029",
+                "sec_filing_date": "2024-02-21",
+                "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1045810/000104581024000029/nvda-20240128.htm",
+                "citation": "SEC Form 10-K (0001045810-24-000029), p.35",
+                "score": 0.95,
+            }
+        ]
+
+        state = AgentState(
+            user_message="Citation attribution test",
+            ticker="NVDA",
+            market="US",
+            results={
+                "financial": AgentResult(
+                    response="NVDA gross margin reached 72.7% per SEC Form 10-K (0001045810-24-000029).",
+                    tools_used=["search_financial_documents"],
+                    data={"document_evidence": sec_evidence},
+                ),
+                "synthesis": AgentResult(
+                    response="Synthesized attribution: NVDA reported stellar margins [SEC Form 10-K, Accession: 0001045810-24-000029].",
+                    tools_used=["llm_synthesis"],
+                    data={"document_evidence": sec_evidence},
+                ),
+            },
+        )
+
+        saved = ResearchSessionService.save_workflow_result(session.id, state)
+        self.assertIn("0001045810-24-000029", saved.final_synthesis)
+
+        evidence = ResearchSessionService.get_evidence(session.id)
+        synth_item = next(e for e in evidence if e.agent_name == "synthesis")
+        self.assertIn("0001045810-24-000029", synth_item.response)
+
+        reconstructed_rc = ResearchSessionService.reconstruct_research_context(session.id)
+        doc = reconstructed_rc.document_evidence[0]
+        self.assertEqual(doc["citation"], "SEC Form 10-K (0001045810-24-000029), p.35")
+        self.assertEqual(doc["sec_accession_number"], "0001045810-24-000029")
+        self.assertEqual(doc["sec_filing_date"], "2024-02-21")
+        self.assertEqual(doc["source_url"], "https://www.sec.gov/ix?doc=/Archives/edgar/data/1045810/000104581024000029/nvda-20240128.htm")
+
+    def test_json_safety_types_round_trip(self):
+        """Phase 5.4: Ensure structured_data handles Enum, float NaN/inf, UUID, date/datetime cleanly for JSONField."""
+        import datetime
+        import enum
+
+        class DummyStatus(str, enum.Enum):
+            ACTIVE = "active"
+
+        session = ResearchSessionService.create_session(user_message="JSON types test")
+        state = AgentState(
+            user_message="JSON types test",
+            results={
+                "financial": AgentResult(
+                    response="Types test",
+                    tools_used=[],
+                    data={
+                        "status_enum": DummyStatus.ACTIVE,
+                        "uuid_field": uuid.uuid4(),
+                        "date_field": datetime.date(2023, 11, 3),
+                        "nan_field": float("nan"),
+                        "inf_field": float("inf"),
+                        "nested_list": [{"score": 0.99}],
+                    },
+                )
+            },
+        )
+
+        ResearchSessionService.save_workflow_result(session.id, state)
+
+        ev = ResearchEvidence.objects.get(session=session, agent_name="financial")
+        self.assertEqual(ev.structured_data["status_enum"], "active")
+        self.assertIsInstance(ev.structured_data["uuid_field"], str)
+        self.assertEqual(ev.structured_data["date_field"], "2023-11-03")
+        self.assertIsNone(ev.structured_data["nan_field"])
+        self.assertIsNone(ev.structured_data["inf_field"])
+        self.assertEqual(ev.structured_data["nested_list"][0]["score"], 0.99)
+        # Ensure json.dumps works without error
+        json.dumps(ev.structured_data)

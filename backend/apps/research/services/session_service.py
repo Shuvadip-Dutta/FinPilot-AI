@@ -1,12 +1,24 @@
 import datetime
 import decimal
 import json
+import math
+from typing import Any
 import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from pydantic import ValidationError as PydanticValidationError
 
+from apps.ai.graph.contracts import ProviderProvenance, ResearchContext
 from apps.research.models import ResearchEvidence, ResearchSession
+from apps.research.services.schemas import (
+    CompanyProfile,
+    FinancialStatement,
+    HistoricalMarketData,
+    KeyMetric,
+    KeyMetricsResearch,
+    NewsResearch,
+)
 
 
 
@@ -65,14 +77,15 @@ class ResearchSessionService:
                 f"ResearchSession with id '{session_id}' does not exist."
             )
 
-    @staticmethod
+    @classmethod
     def save_workflow_result(
+        cls,
         session_id: object,
         agent_state: object,
         latency_ms: float | None = None,
         status: str = "COMPLETED",
     ) -> ResearchSession:
-        session = ResearchSessionService.get_session(session_id)
+        session = cls.get_session(session_id)
 
         results = {}
         if hasattr(agent_state, "results") and isinstance(agent_state.results, dict):
@@ -80,11 +93,38 @@ class ResearchSessionService:
         elif isinstance(agent_state, dict) and "results" in agent_state:
             results = agent_state["results"]
 
+        rc = getattr(agent_state, "research_context", None)
+        if rc is None and isinstance(agent_state, dict):
+            rc = agent_state.get("research_context")
+
         with transaction.atomic():
             for agent_name, raw_result in results.items():
                 response, tools_used, structured_data = (
-                    ResearchSessionService._coerce_agent_result(raw_result)
+                    cls._coerce_agent_result(raw_result)
                 )
+
+                # Ensure SEC document_evidence and provenance are preserved if present on research_context
+                if rc is not None and agent_name in ("synthesis", "financial"):
+                    if structured_data is None:
+                        structured_data = {}
+                    if isinstance(structured_data, dict):
+                        rc_docs = getattr(rc, "document_evidence", None) or (
+                            rc.get("document_evidence") if isinstance(rc, dict) else None
+                        )
+                        if rc_docs and not structured_data.get("document_evidence"):
+                            structured_data["document_evidence"] = cls._to_json_compatible(rc_docs)
+
+                        rc_prov = getattr(rc, "provenance", None) or (
+                            rc.get("provenance") if isinstance(rc, dict) else None
+                        )
+                        if rc_prov:
+                            current_prov = structured_data.get("provenance")
+                            if not isinstance(current_prov, dict):
+                                structured_data["provenance"] = cls._to_json_compatible(rc_prov)
+                            else:
+                                for k, v in cls._to_json_compatible(rc_prov).items():
+                                    if k not in current_prov:
+                                        current_prov[k] = v
 
                 ResearchEvidence.objects.update_or_create(
                     session=session,
@@ -111,6 +151,149 @@ class ResearchSessionService:
     def get_evidence(session_id: object) -> list[ResearchEvidence]:
         session = ResearchSessionService.get_session(session_id)
         return list(session.evidence_items.all())
+
+    @classmethod
+    def reconstruct_research_context(
+        cls,
+        session_id: object,
+    ) -> ResearchContext | None:
+        """Reconstruct canonical ResearchContext from persisted session evidence."""
+        session = cls.get_session(session_id)
+        evidence_items = cls.get_evidence(session.id)
+        if not evidence_items:
+            if session.ticker:
+                return ResearchContext(
+                    ticker=session.ticker,
+                    market=session.market or "IN",
+                )
+            return None
+
+        evidence_map = {item.agent_name: item for item in evidence_items}
+
+        # 1. Direct research_context evidence if explicitly stored
+        if "research_context" in evidence_map:
+            rc_raw = evidence_map["research_context"].structured_data
+            if isinstance(rc_raw, dict) and "ticker" in rc_raw:
+                try:
+                    return ResearchContext.model_validate(rc_raw)
+                except (PydanticValidationError, ValueError, TypeError):
+                    pass
+
+        ticker = session.ticker or ""
+        market = session.market or "IN"
+
+        # 2. Extract document evidence (prefer synthesis, fall back to financial)
+        document_evidence: list[dict[str, Any]] = []
+        synth_ev = evidence_map.get("synthesis")
+        if synth_ev and isinstance(synth_ev.structured_data, dict):
+            docs = synth_ev.structured_data.get("document_evidence")
+            if isinstance(docs, list) and docs:
+                document_evidence = [dict(d) for d in docs if isinstance(d, dict)]
+
+        fin_ev = evidence_map.get("financial")
+        if not document_evidence and fin_ev and isinstance(fin_ev.structured_data, dict):
+            docs = fin_ev.structured_data.get("document_evidence")
+            if isinstance(docs, list) and docs:
+                document_evidence = [dict(d) for d in docs if isinstance(d, dict)]
+
+        # 3. Extract section provenance
+        provenance_dict: dict[str, ProviderProvenance] = {}
+        if synth_ev and isinstance(synth_ev.structured_data, dict):
+            p_data = synth_ev.structured_data.get("provenance")
+            if isinstance(p_data, dict):
+                for k, v in p_data.items():
+                    if isinstance(v, dict):
+                        try:
+                            provenance_dict[k] = ProviderProvenance.model_validate(v)
+                        except (PydanticValidationError, ValueError, TypeError):
+                            pass
+                    elif isinstance(v, ProviderProvenance):
+                        provenance_dict[k] = v
+
+        for agent_name, item in evidence_map.items():
+            if not isinstance(item.structured_data, dict):
+                continue
+            p_data = item.structured_data.get("provenance")
+            if isinstance(p_data, dict):
+                for k, v in p_data.items():
+                    if k not in provenance_dict:
+                        if isinstance(v, dict):
+                            try:
+                                provenance_dict[k] = ProviderProvenance.model_validate(v)
+                            except (PydanticValidationError, ValueError, TypeError):
+                                pass
+                        elif isinstance(v, ProviderProvenance):
+                            provenance_dict[k] = v
+
+        # 4. Extract domain sections
+        financials = None
+        key_metrics = None
+        market_data = None
+        news = None
+        company_profile = None
+
+        if fin_ev and isinstance(fin_ev.structured_data, dict):
+            raw_fin = fin_ev.structured_data.get("financials") or fin_ev.structured_data.get("financial_statement_data")
+            if isinstance(raw_fin, list):
+                parsed_fin = []
+                for f in raw_fin:
+                    if isinstance(f, dict):
+                        try:
+                            parsed_fin.append(FinancialStatement.model_validate(f))
+                        except (PydanticValidationError, ValueError, TypeError):
+                            pass
+                if parsed_fin:
+                    financials = parsed_fin
+
+            raw_km = fin_ev.structured_data.get("key_metrics") or fin_ev.structured_data.get("key_metrics_data")
+            if isinstance(raw_km, dict):
+                try:
+                    key_metrics = KeyMetricsResearch.model_validate(raw_km)
+                except (PydanticValidationError, ValueError, TypeError):
+                    pass
+            elif isinstance(raw_km, list):
+                parsed_metrics = []
+                for m in raw_km:
+                    if isinstance(m, dict):
+                        try:
+                            parsed_metrics.append(KeyMetric.model_validate(m))
+                        except (PydanticValidationError, ValueError, TypeError):
+                            pass
+                if parsed_metrics:
+                    try:
+                        key_metrics = KeyMetricsResearch(ticker=ticker, metrics=parsed_metrics)
+                    except (PydanticValidationError, ValueError, TypeError):
+                        pass
+
+        mkt_ev = evidence_map.get("market")
+        if mkt_ev and isinstance(mkt_ev.structured_data, dict):
+            raw_mkt = mkt_ev.structured_data.get("market_data") or mkt_ev.structured_data.get("current_market_data")
+            if isinstance(raw_mkt, dict):
+                try:
+                    market_data = HistoricalMarketData.model_validate(raw_mkt)
+                except (PydanticValidationError, ValueError, TypeError):
+                    pass
+
+        news_ev = evidence_map.get("news")
+        if news_ev and isinstance(news_ev.structured_data, dict):
+            raw_news = news_ev.structured_data.get("news") or news_ev.structured_data.get("articles")
+            if isinstance(raw_news, dict):
+                try:
+                    news = NewsResearch.model_validate(raw_news)
+                except (PydanticValidationError, ValueError, TypeError):
+                    pass
+
+        return ResearchContext(
+            ticker=ticker,
+            market=market,
+            company_profile=company_profile,
+            financials=financials,
+            key_metrics=key_metrics,
+            market_data=market_data,
+            news=news,
+            document_evidence=document_evidence,
+            provenance=provenance_dict,
+        )
 
     @staticmethod
     def get_recent_sessions_for_ticker(
@@ -204,8 +387,14 @@ class ResearchSessionService:
 
     @classmethod
     def _to_json_compatible(cls, val: object) -> object:
-        if val is None or isinstance(val, (bool, int, float, str)):
+        if val is None or isinstance(val, (bool, int, str)):
             return val
+        if isinstance(val, float):
+            if math.isnan(val) or math.isinf(val):
+                return None
+            return val
+        if hasattr(val, "value") and not isinstance(val, type):
+            return cls._to_json_compatible(val.value)
         if hasattr(val, "model_dump") and callable(getattr(val, "model_dump")):
             try:
                 dumped = val.model_dump(mode="json")
