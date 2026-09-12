@@ -164,6 +164,14 @@ class FinancialDocument(models.Model):
         (STATUS_FAILED, "Failed"),
     ]
 
+    SOURCE_UPLOAD = "UPLOAD"
+    SOURCE_SEC_EDGAR = "SEC_EDGAR"
+
+    SOURCE_TYPE_CHOICES = [
+        (SOURCE_UPLOAD, "User Upload"),
+        (SOURCE_SEC_EDGAR, "SEC EDGAR Filing"),
+    ]
+
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
@@ -174,23 +182,49 @@ class FinancialDocument(models.Model):
         on_delete=models.CASCADE,
         related_name="financial_documents",
     )
+    source_type = models.CharField(
+        max_length=20,
+        choices=SOURCE_TYPE_CHOICES,
+        default=SOURCE_UPLOAD,
+        db_index=True,
+    )
     filename = models.CharField(max_length=255)
     content_type = models.CharField(max_length=100)
     file_size = models.PositiveBigIntegerField()
     file_path = models.CharField(max_length=512)
-    ticker = models.CharField(max_length=20, blank=True, null=True)
+    ticker = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     market = models.CharField(max_length=10, blank=True, null=True)
     ingestion_status = models.CharField(
         max_length=20,
         choices=INGESTION_STATUS_CHOICES,
         default=STATUS_PENDING,
+        db_index=True,
     )
     chunk_count = models.PositiveIntegerField(default=0)
     ingestion_error = models.TextField(blank=True, null=True)
+
+    # SEC EDGAR metadata fields
+    sec_form = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    sec_accession_number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
+    sec_filing_date = models.DateField(blank=True, null=True)
+    sec_report_date = models.DateField(blank=True, null=True)
+    sec_cik = models.CharField(max_length=20, blank=True, null=True)
+    source_url = models.URLField(max_length=1024, blank=True, null=True)
+    primary_doc_description = models.CharField(max_length=255, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "sec_accession_number"],
+                condition=models.Q(sec_accession_number__isnull=False),
+                name="unique_user_sec_accession",
+            )
+        ]
 
     def __str__(self):
-        return f"{self.filename} ({self.ingestion_status})"
+        source_label = f" [{self.source_type}]" if self.source_type != self.SOURCE_UPLOAD else ""
+        return f"{self.filename}{source_label} ({self.ingestion_status})"
+

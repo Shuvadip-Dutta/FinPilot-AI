@@ -200,9 +200,106 @@ class SecEdgarClient:
                 time.sleep(sleep_duration)
 
         if last_status_code == 429:
-            raise SecRateLimitError(f"SEC EDGAR request failed after {self.max_retries} attempts: {last_error_msg}")
+            raise SecRateLimitError(
+                f"SEC EDGAR request failed after {self.max_retries} attempts: {last_error_msg}"
+            )
 
-        raise SecNetworkError(f"SEC EDGAR request failed after {self.max_retries} attempts: {last_error_msg}")
+        raise SecNetworkError(
+            f"SEC EDGAR request failed after {self.max_retries} attempts: {last_error_msg}"
+        )
+
+    def download_filing_content(self, url: str) -> bytes:
+        """Download raw filing document (HTML/text/XML) from SEC Archives with compliant User-Agent and retries."""
+        if not url or not isinstance(url, str):
+            raise ValueError("URL must be a non-empty string.")
+
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept-Encoding": "gzip, deflate",
+            "Accept": "*/*",
+        }
+
+        last_status_code = None
+        last_error_msg = ""
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = self.session.get(
+                    url,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+                last_status_code = response.status_code
+
+                if response.status_code == 200:
+                    content = response.content
+                    if not content or not content.strip():
+                        raise SecResponseError(f"SEC filing document at {url} is empty.")
+                    return content
+
+                if response.status_code == 404:
+                    raise SecNotFoundError(f"SEC EDGAR filing document not found: {url}")
+
+                if response.status_code == 403:
+                    raise SecError(
+                        "SEC EDGAR returned 403 Forbidden. Ensure a valid and descriptive User-Agent is configured."
+                    )
+
+                if response.status_code == 429:
+                    last_error_msg = "SEC rate limit exceeded (HTTP 429)."
+                    logger.warning(
+                        "SEC EDGAR 429 rate limit hit on %s (attempt %d/%d)",
+                        url,
+                        attempt,
+                        self.max_retries,
+                    )
+
+                elif response.status_code >= 500:
+                    last_error_msg = f"SEC server error (HTTP {response.status_code})."
+                    logger.warning(
+                        "SEC EDGAR 5xx server error (%d) on %s (attempt %d/%d)",
+                        response.status_code,
+                        url,
+                        attempt,
+                        self.max_retries,
+                    )
+
+                else:
+                    raise SecResponseError(
+                        f"Unexpected HTTP {response.status_code} from SEC EDGAR: {response.text[:200]}"
+                    )
+
+            except requests.Timeout as exc:
+                last_error_msg = f"Timeout connecting to SEC EDGAR ({self.timeout}s)."
+                logger.warning(
+                    "SEC request timeout on %s (attempt %d/%d): %s",
+                    url,
+                    attempt,
+                    self.max_retries,
+                    exc,
+                )
+            except requests.ConnectionError as exc:
+                last_error_msg = f"Connection error connecting to SEC EDGAR: {exc}"
+                logger.warning(
+                    "SEC connection error on %s (attempt %d/%d): %s",
+                    url,
+                    attempt,
+                    self.max_retries,
+                    exc,
+                )
+
+            if attempt < self.max_retries:
+                sleep_duration = self.backoff_factor * (2 ** (attempt - 1))
+                time.sleep(sleep_duration)
+
+        if last_status_code == 429:
+            raise SecRateLimitError(
+                f"SEC EDGAR document download failed after {self.max_retries} attempts: {last_error_msg}"
+            )
+
+        raise SecNetworkError(
+            f"SEC EDGAR document download failed after {self.max_retries} attempts: {last_error_msg}"
+        )
 
     def get_company_tickers_directory(self) -> dict[str, dict[str, Any]]:
         """Fetch and cache the full SEC company ticker directory mapping uppercase ticker to metadata."""
