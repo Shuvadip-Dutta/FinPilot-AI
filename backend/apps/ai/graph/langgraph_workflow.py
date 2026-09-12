@@ -28,6 +28,69 @@ from apps.research.services.symbols import Market
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
+def _evidence_chunk_key(doc: dict[str, Any]) -> tuple[str, str]:
+    meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+    doc_id = str(doc.get("document_id") or meta.get("document_id") or "").strip()
+    chunk_id = str(doc.get("chunk_id") or meta.get("chunk_id") or "").strip()
+    sec_acc = str(doc.get("sec_accession_number") or meta.get("sec_accession_number") or "").strip()
+    page = str(doc.get("page") or meta.get("page_start") or meta.get("page") or "").strip()
+
+    # 1. document_id + chunk_id
+    if doc_id and chunk_id:
+        return (doc_id, chunk_id)
+
+    # 2. sec_accession_number + (page or chunk_id)
+    if sec_acc and page:
+        return (sec_acc, page)
+    if sec_acc and chunk_id:
+        return (sec_acc, chunk_id)
+
+    # 3. document_id + page
+    if doc_id and page:
+        return (doc_id, page)
+
+    if sec_acc:
+        return (sec_acc, "")
+
+    # 4. chunk_id only when no stronger identity exists
+    if chunk_id:
+        return ("", chunk_id)
+
+    # 5. stable text fallback
+    text_snippet = str(doc.get("text") or "")[:80]
+    return (doc_id or "unknown", text_snippet)
+
+
+def _merge_evidence_item(item_a: dict[str, Any], item_b: dict[str, Any]) -> dict[str, Any]:
+    """Merge two duplicate evidence items: prefer the one with the higher score, preserving missing metadata."""
+    def _get_score(item: dict[str, Any]) -> float:
+        score = item.get("score")
+        try:
+            return float(score) if score is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    score_a = _get_score(item_a)
+    score_b = _get_score(item_b)
+
+    primary, secondary = (item_a, item_b) if score_a >= score_b else (item_b, item_a)
+    merged = dict(primary)
+
+    primary_meta = dict(primary.get("metadata")) if isinstance(primary.get("metadata"), dict) else {}
+    secondary_meta = dict(secondary.get("metadata")) if isinstance(secondary.get("metadata"), dict) else {}
+    combined_meta = {**secondary_meta, **primary_meta}
+    if combined_meta:
+        merged["metadata"] = combined_meta
+
+    for k, v in secondary.items():
+        if k == "metadata":
+            continue
+        if (merged.get(k) is None or merged.get(k) == "") and v is not None and v != "":
+            merged[k] = v
+
+    return merged
+
+
 def _merge_research_context(
     base: ResearchContext | dict[str, Any] | None,
     patch: ResearchContext | dict[str, Any] | None,
@@ -64,6 +127,29 @@ def _merge_research_context(
     merged_prov = dict(base_rc.provenance)
     merged_prov.update(patch_rc.provenance)
 
+    # Merge document_evidence with deduplication and deterministic sorting
+    evidence_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for doc in (base_rc.document_evidence or []) + (patch_rc.document_evidence or []):
+        if not isinstance(doc, dict):
+            continue
+        key = _evidence_chunk_key(doc)
+        if key not in evidence_by_key:
+            evidence_by_key[key] = dict(doc)
+        else:
+            evidence_by_key[key] = _merge_evidence_item(evidence_by_key[key], doc)
+
+    def _evidence_sort_key(doc: dict[str, Any]) -> tuple[float, str]:
+        score = doc.get("score")
+        try:
+            s = float(score) if score is not None else 0.0
+        except (ValueError, TypeError):
+            s = 0.0
+        doc_id = str(doc.get("document_id") or doc.get("chunk_id") or "")
+        return (s, doc_id)
+
+    merged_evidence = list(evidence_by_key.values())
+    merged_evidence.sort(key=_evidence_sort_key, reverse=True)
+
     return ResearchContext(
         ticker=ticker,
         market=market,
@@ -72,6 +158,7 @@ def _merge_research_context(
         key_metrics=key_metrics,
         market_data=market_data,
         news=news,
+        document_evidence=merged_evidence,
         provenance=merged_prov,
     )
 
@@ -111,7 +198,21 @@ def _extract_research_context_from_result(
     market_data = data.get("market_data") if isinstance(data.get("market_data"), HistoricalMarketData) else None
     news = data.get("news") if isinstance(data.get("news"), NewsResearch) else None
 
-    if not provenance_dict and not any([company_profile, financials, key_metrics, market_data, news]):
+    # Extract document_evidence
+    document_evidence: list[dict[str, Any]] = []
+    raw_doc_ev = data.get("document_evidence")
+    if isinstance(raw_doc_ev, list):
+        document_evidence = [doc for doc in raw_doc_ev if isinstance(doc, dict)]
+    elif isinstance(data.get("research_context"), ResearchContext):
+        nested_ev = getattr(data["research_context"], "document_evidence", None)
+        if isinstance(nested_ev, list):
+            document_evidence = [doc for doc in nested_ev if isinstance(doc, dict)]
+
+    if (
+        not provenance_dict
+        and not document_evidence
+        and not any([company_profile, financials, key_metrics, market_data, news])
+    ):
         return None
 
     return ResearchContext(
@@ -122,6 +223,7 @@ def _extract_research_context_from_result(
         key_metrics=key_metrics,
         market_data=market_data,
         news=news,
+        document_evidence=document_evidence,
         provenance=provenance_dict,
     )
 
@@ -219,9 +321,20 @@ class LangGraphResearchWorkflow:
         except Exception:
             session = None
 
+        resolved_user_id: str | None = None
+        if user is not None:
+            if hasattr(user, "id") and getattr(user, "id") is not None:
+                resolved_user_id = str(user.id).strip() or None
+            elif hasattr(user, "pk") and getattr(user, "pk") is not None:
+                resolved_user_id = str(user.pk).strip() or None
+            elif isinstance(user, (str, int)) and str(user).strip():
+                resolved_user_id = str(user).strip()
+            elif isinstance(user, dict) and user.get("id"):
+                resolved_user_id = str(user["id"]).strip() or None
+
         initial_state = {
             "user_message": user_message,
-            "user_id": str(user.id) if user and getattr(user, "id", None) else None,
+            "user_id": resolved_user_id,
             "ticker": ticker,
             "market": market,
             "portfolio_input": portfolio_input,
@@ -363,7 +476,7 @@ class LangGraphResearchWorkflow:
         return graph.compile(
             checkpointer=self._checkpointer,
         )
-        
+
     def close(self) -> None:
         if self.persistence is not None:
             self.persistence.close()
@@ -517,7 +630,7 @@ class LangGraphResearchWorkflow:
                     message
                 ]
             }
-            
+
     def _execute_risk_node(
         self,
         state: dict[str, Any],
@@ -578,7 +691,7 @@ class LangGraphResearchWorkflow:
                     message
                 ]
             }
-            
+
     def _execute_portfolio_node(
         self,
         state: dict[str, Any],
@@ -655,8 +768,8 @@ class LangGraphResearchWorkflow:
                     message
                 ]
             }
-            
-            
+
+
     def _execute_portfolio_optimization_node(
         self,
         state: dict[str, Any],
@@ -1034,8 +1147,8 @@ class LangGraphResearchWorkflow:
             "benchmark_metrics": benchmark,
             "relative_metrics": relative,
         }
-            
-            
+
+
     def _optimization_decision(
         self,
         state: dict[str, Any],

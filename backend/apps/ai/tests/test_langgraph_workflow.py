@@ -468,11 +468,11 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             market,
             news,
         )
-        
+
     @staticmethod
     def _build_portfolio_workflow(
         route="portfolio",
-    ):  
+    ):
         checkpointer=_test_checkpointer()
         router = MagicMock()
         router.route.return_value = route
@@ -527,8 +527,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             optimization,
             synthesis,
         )
-        
-        
+
+
     @staticmethod
     def _portfolio_input(
         include_optimization=True,
@@ -574,7 +574,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             ),
             optimization_input=optimization_input,
         )
-        
+
     def test_portfolio_route_executes_portfolio_and_risk(self):
         (
             workflow,
@@ -612,8 +612,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             "risk",
             state.results,
         )
-        
-        
+
+
     def test_portfolio_optimization_executes_optimization_agent(self):
         (
             workflow,
@@ -648,8 +648,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             "portfolio_optimization",
             state.results,
         )
-        
-        
+
+
     def test_portfolio_analysis_skips_optimization(self):
         (
             workflow,
@@ -683,8 +683,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
             "risk",
             state.results,
         )
-        
-        
+
+
     def test_portfolio_optimization_runs_optimization_agent(self):
         (
             workflow,
@@ -715,8 +715,8 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         self.assertIn(
             "portfolio_optimization",
             state.results,
-        )  
-        
+        )
+
     def test_thread_id_creates_checkpoint(self):
         from langgraph.checkpoint.memory import MemorySaver
 
@@ -741,7 +741,7 @@ class LangGraphResearchWorkflowTestCase(TestCase):
         checkpoint = checkpointer.get_tuple(config)
 
         self.assertIsNotNone(checkpoint)
-        
+
     def test_thread_id_can_be_passed(self):
         workflow, _, _, _ = self._build_workflow(
             route="market",
@@ -1247,3 +1247,312 @@ class PortfolioBacktestNodeTestCase(TestCase):
         # Reject invalid in_sample_window_days
         with self.assertRaises(ValidationError):
             PortfolioWorkflowInput(portfolio=p, backtest_in_sample_window_days=1)
+
+
+class Phase53LangGraphDocumentEvidenceTests(TestCase):
+    """Module 13 Phase 5.3 tests: LangGraph workflow document evidence & provenance propagation."""
+
+    def test_extract_research_context_preserves_document_evidence(self):
+        """Test A: Specialist result containing document_evidence is preserved in ResearchContext."""
+        from apps.ai.graph.langgraph_workflow import _extract_research_context_from_result
+        from apps.ai.graph.contracts import ResearchContext, ProviderProvenance
+
+        doc_evidence = [
+            {
+                "document_id": "sec-doc-1",
+                "chunk_id": "chunk-100",
+                "score": 0.88,
+                "text": "Apple Inc. reported total net sales of $383,285 million.",
+                "sec_form": "10-K",
+                "sec_accession_number": "0000320193-23-000106",
+                "sec_filing_date": "2023-11-03",
+                "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+            }
+        ]
+        prov = {
+            "financials": {
+                "primary_provider": "sec_edgar",
+                "source": "sec_edgar",
+                "fallback_used": False,
+                "data_status": "complete",
+            }
+        }
+        res = AgentResult(
+            response="SEC filing analysis completed.",
+            tools_used=["rag_search_tool"],
+            data={
+                "ticker": "AAPL",
+                "market": "US",
+                "document_evidence": doc_evidence,
+                "provenance": prov,
+            },
+        )
+
+        rc = _extract_research_context_from_result("AAPL", "US", res)
+        self.assertIsNotNone(rc)
+        self.assertIsInstance(rc, ResearchContext)
+        self.assertEqual(len(rc.document_evidence), 1)
+        self.assertEqual(rc.document_evidence[0]["document_id"], "sec-doc-1")
+        self.assertEqual(rc.document_evidence[0]["sec_form"], "10-K")
+        self.assertEqual(rc.provenance["financials"].primary_provider, "sec_edgar")
+
+    def test_merge_research_context_preserves_and_deduplicates_document_evidence(self):
+        """Test B: _merge_research_context combines evidence, deduplicates by key, keeps highest score and merges metadata."""
+        from apps.ai.graph.langgraph_workflow import _merge_research_context
+        from apps.ai.graph.contracts import ResearchContext, ProviderProvenance
+
+        base = ResearchContext(
+            ticker="AAPL",
+            market="US",
+            document_evidence=[
+                {
+                    "document_id": "doc-1",
+                    "chunk_id": "c-1",
+                    "score": 0.75,
+                    "text": "Base chunk 1 text",
+                    "sec_form": "10-K",
+                    "source_url": "https://sec.gov/doc1",
+                },
+                {
+                    "document_id": "doc-2",
+                    "chunk_id": "c-2",
+                    "score": 0.60,
+                    "text": "Base chunk 2 unique",
+                },
+            ],
+            provenance={
+                "base_prov": ProviderProvenance(
+                    primary_provider="upstox",
+                    source="upstox",
+                    fallback_used=False,
+                    data_status="complete",
+                )
+            },
+        )
+
+        patch_ctx = ResearchContext(
+            ticker="AAPL",
+            market="US",
+            document_evidence=[
+                {
+                    # Duplicate chunk with higher score and additional metadata
+                    "document_id": "doc-1",
+                    "chunk_id": "c-1",
+                    "score": 0.95,
+                    "text": "Patch chunk 1 text with higher score",
+                    "sec_accession_number": "0000320193-23-000106",
+                    # Note: source_url is missing here, should be preserved from base!
+                },
+                {
+                    "document_id": "doc-3",
+                    "chunk_id": "c-3",
+                    "score": 0.85,
+                    "text": "Patch chunk 3 unique",
+                },
+            ],
+            provenance={
+                "financials": ProviderProvenance(
+                    primary_provider="sec_edgar",
+                    source="sec_edgar",
+                    fallback_used=False,
+                    data_status="complete",
+                )
+            },
+        )
+
+        merged = _merge_research_context(base, patch_ctx)
+        self.assertEqual(len(merged.document_evidence), 3)
+
+        # Sorted by score descending: 0.95, 0.85, 0.60
+        scores = [d.get("score") for d in merged.document_evidence]
+        self.assertEqual(scores, [0.95, 0.85, 0.60])
+
+        # Verify duplicate chunk doc-1: chunk_id c-1 preserved higher score and merged metadata
+        doc1 = next(d for d in merged.document_evidence if d.get("document_id") == "doc-1")
+        self.assertEqual(doc1["score"], 0.95)
+        self.assertEqual(doc1["text"], "Patch chunk 1 text with higher score")
+        self.assertEqual(doc1["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(doc1["source_url"], "https://sec.gov/doc1")
+        self.assertEqual(doc1["sec_form"], "10-K")
+
+    def test_distinct_sec_filings_sharing_chunk_id_not_deduplicated(self):
+        """Test B.2: Two distinct SEC filings are NOT deduplicated merely because they share the same chunk_id."""
+        from apps.ai.graph.langgraph_workflow import _merge_research_context
+        from apps.ai.graph.contracts import ResearchContext
+
+        doc_a = {
+            "chunk_id": "chunk-1",
+            "sec_accession_number": "ACC-A",
+            "page": "1",
+            "score": 0.90,
+            "text": "Text from filing A",
+        }
+        doc_b = {
+            "chunk_id": "chunk-1",
+            "sec_accession_number": "ACC-B",
+            "page": "1",
+            "score": 0.85,
+            "text": "Text from filing B",
+        }
+
+        base = ResearchContext(
+            ticker="AAPL",
+            market="US",
+            document_evidence=[doc_a],
+        )
+        patch_ctx = ResearchContext(
+            ticker="AAPL",
+            market="US",
+            document_evidence=[doc_b],
+        )
+
+        merged = _merge_research_context(base, patch_ctx)
+        self.assertEqual(len(merged.document_evidence), 2)
+        accessions = {d.get("sec_accession_number") for d in merged.document_evidence}
+        self.assertEqual(accessions, {"ACC-A", "ACC-B"})
+
+    def test_sec_provenance_propagation_in_graph(self):
+        """Test C: sec_edgar provenance survives extraction and merge."""
+        from apps.ai.graph.langgraph_workflow import _extract_research_context_from_result, _merge_research_context
+        from apps.ai.graph.contracts import ResearchContext, ProviderProvenance
+
+        res = AgentResult(
+            response="Financial analysis.",
+            tools_used=["rag_search_tool"],
+            data={
+                "ticker": "MSFT",
+                "market": "US",
+                "document_evidence": [{"document_id": "d1", "chunk_id": "c1", "score": 0.9}],
+                "provenance": {
+                    "financials": {
+                        "primary_provider": "sec_edgar",
+                        "source": "sec_edgar",
+                        "fallback_used": False,
+                        "data_status": "complete",
+                    }
+                },
+            },
+        )
+        extracted = _extract_research_context_from_result("MSFT", "US", res)
+        self.assertIn("financials", extracted.provenance)
+        self.assertEqual(extracted.provenance["financials"].primary_provider, "sec_edgar")
+
+        merged = _merge_research_context(None, extracted)
+        self.assertIn("financials", merged.provenance)
+        self.assertEqual(merged.provenance["financials"].primary_provider, "sec_edgar")
+        self.assertEqual(merged.provenance["financials"].data_status, "complete")
+
+    def test_trusted_tenant_propagation_to_specialist_node(self):
+        """Test D: LangGraphResearchWorkflow.run passes trusted user_id from user object to specialist node."""
+        from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
+        from unittest.mock import MagicMock
+
+        router = MagicMock()
+        router.route.return_value = "financial"
+
+        captured_states = []
+
+        financial = MagicMock()
+        def mock_financial_run(state):
+            captured_states.append(state)
+            return AgentResult(response="Financial done", tools_used=[], data={})
+        financial.run.side_effect = mock_financial_run
+
+        market = MagicMock()
+        news = MagicMock()
+        synthesis = MagicMock()
+        synthesis.run.return_value = AgentResult(response="Synthesis done", tools_used=[], data={})
+
+        workflow = LangGraphResearchWorkflow(
+            router=router,
+            financial_agent=financial,
+            market_agent=market,
+            news_agent=news,
+            synthesis_agent=synthesis,
+            checkpointer=_test_checkpointer(),
+        )
+
+        user_mock = MagicMock()
+        user_mock.id = 42
+
+        workflow.run(
+            "Analyze AAPL financials",
+            ticker="AAPL",
+            market="US",
+            user=user_mock,
+        )
+
+        self.assertTrue(len(captured_states) > 0)
+        self.assertEqual(captured_states[0].user_id, "42")
+
+    def test_end_to_end_sec_evidence_flow_to_synthesis(self):
+        """Test E: End-to-end evidence flow: financial specialist produces SEC evidence -> graph merges it -> synthesis receives SEC evidence in state."""
+        from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
+        from unittest.mock import MagicMock
+
+        router = MagicMock()
+        router.route.return_value = "financial"
+
+        sec_evidence = [
+            {
+                "document_id": "sec-aapl-10k",
+                "chunk_id": "c-42",
+                "score": 0.92,
+                "text": "iPhone revenue reached $200B.",
+                "sec_form": "10-K",
+                "sec_accession_number": "0000320193-23-000106",
+                "sec_filing_date": "2023-11-03",
+                "source_url": "https://sec.gov/aapl",
+            }
+        ]
+
+        financial = MagicMock()
+        financial.run.return_value = AgentResult(
+            response="Financial specialist analyzed SEC filings.",
+            tools_used=["rag_search_tool"],
+            data={
+                "ticker": "AAPL",
+                "market": "US",
+                "document_evidence": sec_evidence,
+                "provenance": {
+                    "financials": {
+                        "primary_provider": "sec_edgar",
+                        "source": "sec_edgar",
+                        "fallback_used": False,
+                        "data_status": "complete",
+                    }
+                },
+            },
+        )
+
+        market = MagicMock()
+        news = MagicMock()
+        captured_synthesis_state = []
+        synthesis = MagicMock()
+        def mock_synthesis_run(state):
+            captured_synthesis_state.append(state)
+            return AgentResult(response="Final synthesis with SEC evidence.", tools_used=["llm_synthesis"], data={})
+        synthesis.run.side_effect = mock_synthesis_run
+
+        workflow = LangGraphResearchWorkflow(
+            router=router,
+            financial_agent=financial,
+            market_agent=market,
+            news_agent=news,
+            synthesis_agent=synthesis,
+            checkpointer=_test_checkpointer(),
+        )
+
+        workflow.run(
+            "Analyze AAPL financials",
+            ticker="AAPL",
+            market="US",
+            user="user-123",
+        )
+
+        self.assertTrue(len(captured_synthesis_state) > 0)
+        synth_in = captured_synthesis_state[0]
+        self.assertIsNotNone(synth_in.research_context)
+        self.assertEqual(len(synth_in.research_context.document_evidence), 1)
+        self.assertEqual(synth_in.research_context.document_evidence[0]["document_id"], "sec-aapl-10k")
+        self.assertEqual(synth_in.research_context.provenance["financials"].primary_provider, "sec_edgar")

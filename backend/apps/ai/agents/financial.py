@@ -70,6 +70,87 @@ class FinancialAnalysisContextBuilder:
         )
         self.max_chars = int(max_chars if max_chars is not None else configured_limit)
 
+    @staticmethod
+    def _format_document_evidence_item(doc: dict[str, object]) -> dict[str, object]:
+        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        source_type = doc.get("source_type") or meta.get("source_type")
+        sec_form = doc.get("sec_form") or meta.get("sec_form")
+        sec_cik = doc.get("sec_cik") or meta.get("sec_cik")
+        sec_accession_number = doc.get("sec_accession_number") or meta.get("sec_accession_number")
+        sec_filing_date = doc.get("sec_filing_date") or meta.get("sec_filing_date")
+        sec_report_date = doc.get("sec_report_date") or meta.get("sec_report_date")
+        source_url = doc.get("source_url") or meta.get("source_url")
+
+        is_sec = (source_type == "SEC_EDGAR") or bool(sec_form) or bool(sec_accession_number)
+        if is_sec:
+            parts = []
+            if sec_form:
+                parts.append(f"SEC Form {sec_form}")
+            else:
+                parts.append("SEC Filing")
+            if sec_accession_number:
+                parts.append(f"Accession: {sec_accession_number}")
+            if sec_filing_date:
+                parts.append(f"Filed: {sec_filing_date}")
+            if source_url:
+                parts.append(f"URL: {source_url}")
+            source_document = " | ".join(parts)
+            page = meta.get("page_start") or meta.get("page") or doc.get("page")
+        else:
+            source_document = (
+                doc.get("source_document")
+                or meta.get("document_name")
+                or meta.get("filename")
+                or doc.get("document_name")
+                or "User Uploaded Document"
+            )
+            page = meta.get("page_start") or meta.get("page") or doc.get("page") or 1
+
+        return {
+            "document_id": doc.get("document_id"),
+            "chunk_id": doc.get("chunk_id"),
+            "text": doc.get("text"),
+            "score": doc.get("score"),
+            "source_type": source_type,
+            "sec_form": sec_form,
+            "sec_cik": sec_cik,
+            "sec_accession_number": sec_accession_number,
+            "sec_filing_date": sec_filing_date,
+            "sec_report_date": sec_report_date,
+            "source_url": source_url,
+            "source_document": source_document,
+            "page": page,
+            "metadata": meta,
+        }
+
+    @staticmethod
+    def _reduce_document_evidence(
+        evidence: list[dict[str, object]],
+        max_chunks: int,
+        max_chars_per_chunk: int,
+    ) -> list[dict[str, object]]:
+        if not evidence:
+            return []
+
+        def sort_key(item: dict[str, object]) -> float:
+            score = item.get("score")
+            try:
+                return float(score) if score is not None else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
+        sorted_evidence = sorted(evidence, key=sort_key, reverse=True)
+        selected = sorted_evidence[:max_chunks]
+
+        reduced: list[dict[str, object]] = []
+        for item in selected:
+            new_item = dict(item)
+            text = new_item.get("text")
+            if isinstance(text, str) and len(text) > max_chars_per_chunk:
+                new_item["text"] = text[:max_chars_per_chunk] + "..."
+            reduced.append(new_item)
+        return reduced
+
     def prepare(
         self,
         message: str,
@@ -96,6 +177,9 @@ class FinancialAnalysisContextBuilder:
                 key_metrics_raw=key_metrics,
             )
 
+        if document_evidence is None and research_context is not None and research_context.document_evidence:
+            document_evidence = research_context.document_evidence
+
         fin_stmt_data = self._prepare_financial_statement_data(research_context.financials)
         key_met_data = self._prepare_key_metrics_data(research_context.key_metrics)
 
@@ -119,20 +203,11 @@ class FinancialAnalysisContextBuilder:
 
         if document_evidence:
             base_context["document_evidence"] = [
-                {
-                    "text": doc.get("text"),
-                    "score": doc.get("score"),
-                    "document_id": doc.get("document_id"),
-                    "chunk_id": doc.get("chunk_id"),
-                    "source_document": (doc.get("metadata", {}) or {}).get("document_name") or (doc.get("metadata", {}) or {}).get("filename") or doc.get("document_name") or "User Uploaded Document",
-                    "page": (doc.get("metadata", {}) or {}).get("page_start") or (doc.get("metadata", {}) or {}).get("page") or 1,
-                    "metadata": doc.get("metadata", {}),
-                }
+                self._format_document_evidence_item(doc)
                 for doc in document_evidence
             ]
 
         if tier == DegradationTier.CONSTRAINED:
-
             reduced_context = self._apply_structural_reduction(base_context)
             return {
                 **reduced_context,
@@ -193,8 +268,16 @@ class FinancialAnalysisContextBuilder:
                 "discarded before low-priority fields."
             ),
         }
+        if "company_profile" in base_context:
+            res["company_profile"] = base_context["company_profile"]
         if "provenance" in base_context:
             res["provenance"] = base_context["provenance"]
+        if "document_evidence" in base_context and isinstance(base_context["document_evidence"], list):
+            res["document_evidence"] = self._reduce_document_evidence(
+                base_context["document_evidence"],
+                max_chunks=1,
+                max_chars_per_chunk=300,
+            )
         return res
 
     def build_canonical_context(
@@ -470,6 +553,12 @@ class FinancialAnalysisContextBuilder:
             res["company_profile"] = context["company_profile"]
         if "provenance" in context:
             res["provenance"] = context["provenance"]
+        if "document_evidence" in context and isinstance(context["document_evidence"], list):
+            res["document_evidence"] = self._reduce_document_evidence(
+                context["document_evidence"],
+                max_chunks=2,
+                max_chars_per_chunk=800,
+            )
         return res
 
     def _apply_minimal_reduction(
@@ -499,6 +588,12 @@ class FinancialAnalysisContextBuilder:
             res["company_profile"] = context["company_profile"]
         if "provenance" in context:
             res["provenance"] = context["provenance"]
+        if "document_evidence" in context and isinstance(context["document_evidence"], list):
+            res["document_evidence"] = self._reduce_document_evidence(
+                context["document_evidence"],
+                max_chunks=1,
+                max_chars_per_chunk=500,
+            )
         return res
 
     def _select_recent_statements(
@@ -614,6 +709,7 @@ class FinancialAnalysisAgent(BaseAgent):
         ticker: str | None = None,
         market: str = "IN",
         llm_service: LLMCallable | None = None,
+        user_id: str | int | None = None,
     ):
         self.financials_tool = (
             financials_tool or research_tools.get_financials
@@ -630,24 +726,63 @@ class FinancialAnalysisAgent(BaseAgent):
             getattr(settings, "FINANCIAL_ANALYSIS_CONTEXT_CHAR_LIMIT", 18000)
         )
         self.llm_service = llm_service or LLMService(model="financial")
+        self.user_id = str(user_id).strip() if user_id is not None and str(user_id).strip() else None
 
     @property
     def name(self) -> str:
         return "financial"
 
+    def _retrieve_sec_filings(
+        self,
+        ticker: str,
+        user_id: str,
+        user_message: str,
+    ) -> tuple[list[dict[str, object]], bool, str | None]:
+        """Retrieve SEC EDGAR filings for US equities using canonical metadata filters."""
+        lower_msg = user_message.lower() if user_message else ""
+        quarterly_keywords = ("10-q", "10q", "quarter", "quarterly", "q1", "q2", "q3", "q4")
+        if any(kw in lower_msg for kw in quarterly_keywords):
+            sec_form = "10-Q"
+        else:
+            sec_form = "10-K"
+
+        query = f"{ticker} revenue profitability operating performance balance sheet cash flow financial condition"
+
+        if self.rag_search_tool is None:
+            return [], False, "RAG search tool is not configured"
+
+        try:
+            rag_results = self.rag_search_tool(
+                query=query,
+                ticker=ticker,
+                market="US",
+                source_type="SEC_EDGAR",
+                sec_form=sec_form,
+                user_id=user_id,
+                top_k=3,
+            )
+            tool_called = True
+            docs = []
+            if isinstance(rag_results, dict) and "documents" in rag_results:
+                docs = rag_results.get("documents") or []
+            return docs, tool_called, None
+        except Exception as exc:
+            return [], True, str(exc)
+
     def run(self, message: str | AgentState | ResearchContext) -> AgentResult:
         """Return a deterministic financial-data summary interpreted by LLM."""
         research_context: ResearchContext | None = None
-        user_id: str | int | None = None
 
         if isinstance(message, ResearchContext):
             research_context = message
             user_message = f"Analyze financials for {research_context.ticker}"
             ticker = research_context.ticker
             market = research_context.market
+            trusted_user_id = self.user_id
         elif isinstance(message, AgentState):
             user_message = message.user_message
-            user_id = message.user_id
+            state_uid = str(message.user_id).strip() if message.user_id is not None and str(message.user_id).strip() else None
+            trusted_user_id = state_uid or self.user_id
             ticker = (
                 self.ticker
                 or (message.ticker.upper() if message.ticker else None)
@@ -659,6 +794,7 @@ class FinancialAnalysisAgent(BaseAgent):
             )
         else:
             user_message = message
+            trusted_user_id = self.user_id
             ticker = self.ticker or self._extract_ticker(message)
             market = self.market
 
@@ -671,66 +807,123 @@ class FinancialAnalysisAgent(BaseAgent):
             )
 
         tools_used: list[str] = []
-
-        if research_context is None or (not research_context.financials and not research_context.key_metrics):
-            try:
-                financials = self.financials_tool(
-                    ticker=ticker,
-                    market=market,
-                )
-                tools_used.append("get_financials")
-
-                key_metrics = self.key_metrics_tool(
-                    ticker=ticker,
-                    market=market,
-                )
-                tools_used.append("get_key_metrics")
-            except (ToolExecutionError, ValueError, TypeError) as exc:
-                return AgentResult(
-                    response=(
-                        f"Unable to retrieve financial analysis for {ticker}: {exc}"
-                    ),
-                    tools_used=tools_used,
-                )
-            
-            context_builder = FinancialAnalysisContextBuilder(max_chars=self.max_context_chars)
-            research_context = context_builder.build_canonical_context(
-                ticker=ticker,
-                market=market,
-                financials_raw=financials,
-                key_metrics_raw=key_metrics,
-            )
-
-        # Supplementary RAG document retrieval (failure must not break financial analysis)
         document_evidence: list[dict[str, object]] = []
-        if self.rag_search_tool is not None and ticker:
-            try:
+
+        if market == "US":
+            if not research_context or not research_context.document_evidence:
+                if not trusted_user_id:
+                    return AgentResult(
+                        response=(
+                            f"Unable to retrieve financial analysis for {ticker}: "
+                            "trusted tenant context (user_id) is required for SEC document retrieval."
+                        ),
+                        tools_used=tools_used,
+                    )
+
+                docs, tool_called, err = self._retrieve_sec_filings(
+                    ticker=ticker,
+                    user_id=trusted_user_id,
+                    user_message=user_message,
+                )
+                if tool_called:
+                    tools_used.append("search_financial_documents")
+
+                if err is not None:
+                    return AgentResult(
+                        response=(
+                            f"Unable to retrieve financial analysis for {ticker}: "
+                            f"SEC document retrieval failed: {err}"
+                        ),
+                        tools_used=tools_used,
+                    )
+
+                if not docs:
+                    return AgentResult(
+                        response=(
+                            f"Unable to retrieve financial analysis for {ticker}: "
+                            "no SEC document evidence was found."
+                        ),
+                        tools_used=tools_used,
+                    )
+
+                document_evidence = docs
+                if research_context is None:
+                    context_builder = FinancialAnalysisContextBuilder(max_chars=self.max_context_chars)
+                    research_context = context_builder.build_canonical_context(
+                        ticker=ticker,
+                        market="US",
+                    )
+                research_context.document_evidence = docs
+                research_context.provenance["financials"] = ProviderProvenance(
+                    primary_provider="sec_edgar",
+                    source="sec_edgar",
+                    fallback_used=False,
+                    data_status="complete",
+                )
+            else:
+                document_evidence = research_context.document_evidence
+        else:
+            if research_context is None or (not research_context.financials and not research_context.key_metrics):
                 try:
-                    rag_results = self.rag_search_tool(
-                        query=f"{ticker} financial results quarterly annual revenue profit earnings",
+                    financials = self.financials_tool(
                         ticker=ticker,
                         market=market,
-                        top_k=3,
-                        user_id=user_id,
                     )
-                except TypeError:
+                    tools_used.append("get_financials")
+
+                    key_metrics = self.key_metrics_tool(
+                        ticker=ticker,
+                        market=market,
+                    )
+                    tools_used.append("get_key_metrics")
+                except (ToolExecutionError, ValueError, TypeError) as exc:
+                    return AgentResult(
+                        response=(
+                            f"Unable to retrieve financial analysis for {ticker}: {exc}"
+                        ),
+                        tools_used=tools_used,
+                    )
+
+                context_builder = FinancialAnalysisContextBuilder(max_chars=self.max_context_chars)
+                research_context = context_builder.build_canonical_context(
+                    ticker=ticker,
+                    market=market,
+                    financials_raw=financials,
+                    key_metrics_raw=key_metrics,
+                )
+
+            # Supplementary RAG document retrieval for non-US (failure must not break financial analysis)
+            if self.rag_search_tool is not None and ticker:
+                try:
                     try:
                         rag_results = self.rag_search_tool(
-                            query=f"{ticker} financials",
+                            query=f"{ticker} financial results quarterly annual revenue profit earnings",
                             ticker=ticker,
+                            market=market,
                             top_k=3,
+                            user_id=trusted_user_id,
                         )
                     except TypeError:
-                        rag_results = self.rag_search_tool(f"{ticker} financials")
+                        try:
+                            rag_results = self.rag_search_tool(
+                                query=f"{ticker} financials",
+                                ticker=ticker,
+                                top_k=3,
+                            )
+                        except TypeError:
+                            rag_results = self.rag_search_tool(f"{ticker} financials")
 
-                if isinstance(rag_results, dict) and "documents" in rag_results:
-                    docs = rag_results.get("documents") or []
-                    if docs:
-                        document_evidence = docs
-                        tools_used.append("search_financial_documents")
-            except Exception:
-                # Non-fatal: continue with normal financial path
-                pass
+                    if isinstance(rag_results, dict) and "documents" in rag_results:
+                        docs = rag_results.get("documents") or []
+                        if docs:
+                            document_evidence = docs
+                            research_context.document_evidence = docs
+                            tools_used.append("search_financial_documents")
+                except Exception:
+                    # Non-fatal: continue with normal financial path
+                    pass
+            elif research_context and research_context.document_evidence:
+                document_evidence = research_context.document_evidence
 
         tier = self._get_degradation_tier()
         context_builder = FinancialAnalysisContextBuilder(max_chars=self.max_context_chars)
