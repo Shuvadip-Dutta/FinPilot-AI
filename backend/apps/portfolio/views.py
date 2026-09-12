@@ -11,6 +11,7 @@ from apps.portfolio.models import Holding, Portfolio
 from apps.portfolio.serializers import (
     HoldingSerializer,
     PortfolioBacktestRequestSerializer,
+    PortfolioOptimizationRequestSerializer,
     PortfolioSerializer,
 )
 
@@ -286,3 +287,161 @@ class PortfolioRiskView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class PortfolioOptimizationView(APIView):
+    """Execute deterministic mean-variance portfolio optimization for an authenticated user's portfolio."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, portfolio_id):
+        portfolio = get_object_or_404(Portfolio, pk=portfolio_id, user=request.user)
+
+        serializer = PortfolioOptimizationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+
+        if not portfolio.holdings.exists():
+            return Response(
+                {"error": "Optimization requires at least two unique assets, portfolio has none."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.ai.portfolio.adapters import create_portfolio_market_data_adapter
+        from apps.ai.portfolio.intelligence import PortfolioIntelligenceService
+        from apps.ai.portfolio.optimization import PortfolioOptimizationEngine
+        from apps.ai.portfolio.risk import calculate_current_weights
+        from apps.portfolio.builder import PortfolioWorkflowInputBuilder
+
+        builder = PortfolioWorkflowInputBuilder()
+        try:
+            optimization_input = builder.build_optimization_input(
+                portfolio=portfolio,
+                risk_free_rate=validated_data.get("risk_free_rate", 0.0),
+                min_weight=validated_data.get("min_weight", 0.0),
+                max_weight=validated_data.get("max_weight", 1.0),
+                from_date=validated_data.get("from_date"),
+                to_date=validated_data.get("to_date"),
+            )
+        except (ValueError, TypeError) as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Execute deterministic optimization
+        engine = PortfolioOptimizationEngine()
+        opt_result = engine.optimize(optimization_input)
+
+        if not opt_result.success:
+            return Response(
+                {"error": opt_result.message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calculate current portfolio weights using live/latest market prices
+        canonical_portfolio = portfolio.to_pydantic()
+        intel_service = PortfolioIntelligenceService(
+            market_data_tool=create_portfolio_market_data_adapter()
+        )
+        try:
+            last_prices = intel_service.get_last_prices(canonical_portfolio)
+        except Exception:
+            last_prices = {}
+
+        for holding in canonical_portfolio.holdings:
+            t = holding.ticker.strip().upper()
+            if t not in last_prices or last_prices[t] <= 0:
+                if t in optimization_input.historical_prices and optimization_input.historical_prices[t]:
+                    last_prices[t] = float(optimization_input.historical_prices[t][-1])
+                else:
+                    last_prices[t] = float(holding.average_price)
+
+        try:
+            current_weights_map = calculate_current_weights(canonical_portfolio, last_prices)
+        except Exception:
+            asset_count = len(optimization_input.tickers)
+            current_weights_map = {t: 1.0 / asset_count for t in optimization_input.tickers}
+
+        # Compute current portfolio metrics using existing deterministic formulas
+        returns = engine.calculate_returns(optimization_input)
+        expected_returns = engine.calculate_annualized_expected_returns(returns)
+        covariance = engine.calculate_annualized_covariance(returns)
+
+        current_weights_list = [current_weights_map.get(t, 0.0) for t in optimization_input.tickers]
+        total_curr = sum(current_weights_list)
+        if total_curr > 0:
+            current_weights_list = [w / total_curr for w in current_weights_list]
+
+        try:
+            cur_ret, cur_vol, cur_sharpe = engine.calculate_portfolio_metrics(
+                weights=current_weights_list,
+                expected_returns=expected_returns,
+                covariance=covariance,
+                risk_free_rate=optimization_input.risk_free_rate,
+            )
+        except Exception:
+            cur_ret, cur_vol, cur_sharpe = 0.0, 0.0, 0.0
+
+        current_metrics = {
+            "expected_return": cur_ret,
+            "volatility": cur_vol,
+            "sharpe_ratio": cur_sharpe,
+        }
+
+        optimized_metrics = {
+            "expected_return": opt_result.expected_return,
+            "volatility": opt_result.volatility,
+            "sharpe_ratio": opt_result.sharpe_ratio,
+        }
+
+        # Build weight comparisons
+        weight_comparisons = []
+        for ticker in optimization_input.tickers:
+            cur_w = current_weights_map.get(ticker, 0.0) * 100.0
+            tgt_w = opt_result.optimized_weights.get(ticker, 0.0) * 100.0
+            diff = tgt_w - cur_w
+            direction = "hold"
+            if diff > 0.25:
+                direction = "increase"
+            elif diff < -0.25:
+                direction = "decrease"
+
+            h_obj = portfolio.holdings.filter(ticker__iexact=ticker).first()
+            h_name = getattr(h_obj, "name", None) or ticker
+
+            weight_comparisons.append({
+                "ticker": ticker,
+                "name": h_name,
+                "current_weight": round(cur_w, 2),
+                "target_weight": round(tgt_w, 2),
+                "weight_difference": round(diff, 2),
+                "direction": direction,
+            })
+
+        response_data = {
+            "portfolio_id": str(portfolio.id),
+            "portfolio_name": portfolio.name,
+            "status": "success",
+            "objective": validated_data.get("objective", "max_sharpe"),
+            "current_weights": current_weights_map,
+            "optimized_weights": opt_result.optimized_weights,
+            "current_metrics": current_metrics,
+            "optimized_metrics": optimized_metrics,
+            "metrics": {
+                "current_expected_return": cur_ret,
+                "optimized_expected_return": opt_result.expected_return,
+                "current_volatility": cur_vol,
+                "optimized_volatility": opt_result.volatility,
+                "current_sharpe": cur_sharpe,
+                "optimized_sharpe": opt_result.sharpe_ratio,
+                "expected_return": opt_result.expected_return,
+                "volatility": opt_result.volatility,
+                "sharpe_ratio": opt_result.sharpe_ratio,
+            },
+            "weight_comparisons": weight_comparisons,
+            "comparisons": weight_comparisons,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+

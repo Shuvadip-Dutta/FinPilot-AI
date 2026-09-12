@@ -51,7 +51,6 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
   const [maxWeight, setMaxWeight] = useState<number>(35); // 35% cap
   const [minWeight, setMinWeight] = useState<number>(0); // 0% floor
   const [riskFreeRate, setRiskFreeRate] = useState<number>(6.5); // 6.5% RBI / treasury benchmark
-  const [allowShort, setAllowShort] = useState<boolean>(false);
 
   const portfolioValue = getPortfolioCurrentValue(portfolio);
   const currency = portfolio?.currency || 'INR';
@@ -63,7 +62,6 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
       max_weight: maxWeight / 100,
       min_weight: minWeight / 100,
       risk_free_rate: riskFreeRate / 100,
-      allow_short: allowShort,
     };
     await onRunOptimization(payload);
   };
@@ -267,19 +265,22 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
         {/* Short Selling Warning / Long-Only Guard */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
           <div className="flex items-center gap-2">
-            <label className="inline-flex items-center gap-2 cursor-pointer">
+            <label className="inline-flex items-center gap-2 opacity-60 cursor-not-allowed">
               <input
                 type="checkbox"
-                checked={allowShort}
-                onChange={(e) => setAllowShort(e.target.checked)}
-                className="rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-0 w-3.5 h-3.5"
+                checked={false}
+                disabled
+                className="rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-0 w-3.5 h-3.5 cursor-not-allowed"
               />
-              <span className="text-slate-300">Allow Short Selling (Unconstrained Weights)</span>
+              <span className="text-slate-400">Allow Short Selling (Unconstrained Weights)</span>
             </label>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-950/60 text-amber-400 border border-amber-800/40">
+              Unsupported (Long-Only Only)
+            </span>
           </div>
 
           <span className="text-[11px] text-slate-400 italic">
-            Default: Long-Only Portfolio (0% ≤ w_i ≤ Cap, Σ w_i = 100%)
+            Deterministic Long-Only Portfolio (0% ≤ w_i ≤ Cap, Σ w_i = 100%)
           </span>
         </div>
       </div>

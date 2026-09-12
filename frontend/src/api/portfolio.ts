@@ -132,21 +132,13 @@ export const portfolioApi = {
 
   /**
    * POST /api/v1/portfolio/<id>/optimize/
-   * Executes mathematical portfolio optimization (Max Sharpe, Min Volatility, etc.)
+   * Executes mathematical portfolio optimization (Max Sharpe under bounded simplex)
    */
   async optimizePortfolio(
     portfolioId: string | number,
     payload?: OptimizePortfolioPayload
   ): Promise<PortfolioOptimizationResponse> {
-    try {
-      return await apiClient.post<PortfolioOptimizationResponse>(`portfolio/${portfolioId}/optimize/`, payload);
-    } catch (err: any) {
-      try {
-        return await apiClient.post<PortfolioOptimizationResponse>(`portfolio/${portfolioId}/optimization/`, payload);
-      } catch {
-        throw err;
-      }
-    }
+    return apiClient.post<PortfolioOptimizationResponse>(`portfolio/${portfolioId}/optimize/`, payload);
   },
 
   /**

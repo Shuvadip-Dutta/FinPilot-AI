@@ -201,17 +201,35 @@ export const PortfolioRiskPage: React.FC = () => {
     if (!selectedPortfolioId) return;
     setIsOptimizing(true);
     setError(null);
+    setOptimizationData(null); // Clear previous results before running a new optimization
 
     try {
       const optRes = await portfolioApi.optimizePortfolio(selectedPortfolioId, payload);
       setOptimizationData(optRes);
     } catch (err: any) {
       console.error('Optimization execution error:', err);
-      setError(
-        err?.response?.data?.detail ||
-          err?.message ||
-          'Failed to solve mathematical portfolio optimization. Please verify constraints.'
-      );
+      const errPayload = err?.response?.data;
+      const errMsg =
+        errPayload?.error ||
+        errPayload?.detail ||
+        (typeof errPayload === 'string' ? errPayload : null) ||
+        err?.message;
+
+      if (holdings.length === 0 || (errMsg && String(errMsg).toLowerCase().includes('no holdings'))) {
+        setError('This portfolio currently has no holdings. Add assets to your ledger to calculate optimization targets.');
+      } else if (holdings.length < 2 || (errMsg && String(errMsg).toLowerCase().includes('at least two'))) {
+        setError('Portfolio optimization requires at least two unique assets. Please add more holdings to your portfolio.');
+      } else if (errMsg && String(errMsg).toLowerCase().includes('mixed market')) {
+        setError('Mixed-market portfolios (containing both Indian and US assets) cannot be optimized by the single-market optimization engine.');
+      } else if (errMsg && String(errMsg).toLowerCase().includes('insufficient historical')) {
+        setError('Insufficient historical market data available for the portfolio assets to run optimization.');
+      } else if (errMsg && (String(errMsg).toLowerCase().includes('infeasible') || String(errMsg).toLowerCase().includes('bounds') || String(errMsg).toLowerCase().includes('sum of bounds'))) {
+        setError(`Optimization failed: ${errMsg}`);
+      } else if (errMsg) {
+        setError(String(errMsg));
+      } else {
+        setError('Failed to solve mathematical portfolio optimization. Please verify constraints.');
+      }
     } finally {
       setIsOptimizing(false);
     }

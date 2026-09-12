@@ -105,3 +105,24 @@ class PortfolioBacktestRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError({"min_weight": "min_weight cannot exceed max_weight."})
         return attrs
 
+
+class PortfolioOptimizationRequestSerializer(serializers.Serializer):
+    objective = serializers.ChoiceField(
+        choices=["max_sharpe"],
+        required=False,
+        default="max_sharpe",
+    )
+    risk_free_rate = serializers.FloatField(required=False, default=0.0)
+    min_weight = serializers.FloatField(required=False, default=0.0, min_value=0.0, max_value=1.0)
+    max_weight = serializers.FloatField(required=False, default=1.0, min_value=0.0, max_value=1.0)
+    from_date = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
+    to_date = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
+
+    def validate(self, attrs: dict) -> dict:
+        min_w = attrs.get("min_weight", 0.0)
+        max_w = attrs.get("max_weight", 1.0)
+        if min_w > max_w:
+            raise serializers.ValidationError({"min_weight": "min_weight cannot exceed max_weight."})
+        return attrs
+
+

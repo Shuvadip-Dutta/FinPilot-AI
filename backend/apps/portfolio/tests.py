@@ -1717,6 +1717,238 @@ class PortfolioRiskViewTestCase(TestCase):
         self.assertIn("error", response.json())
 
 
+class PortfolioOptimizationViewTestCase(TestCase):
+    """Test suite for POST /api/v1/portfolio/<portfolio_id>/optimize/ endpoint."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="optinvestor1",
+            email="optinvestor1@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="optinvestor2",
+            email="optinvestor2@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Optimization Test Portfolio",
+        )
+        self.holding_a = Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="ASSET_A",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("100.0"),
+        )
+        self.holding_b = Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="ASSET_B",
+            market="IN",
+            quantity=Decimal("30.0"),
+            average_price=Decimal("50.0"),
+        )
+        self.dates = [f"2025-01-{i:02d}" for i in range(1, 20)]
+        self.client = APIClient()
+
+    def _mock_get_historical_data(self, ticker, to_date, from_date=None, market="IN"):
+        norm_ticker = ticker.upper()
+        if norm_ticker == "ASSET_A":
+            candles = [
+                {"timestamp": d, "close": 100.0 + (5.0 if i % 2 == 0 else -3.0) + i * 1.5}
+                for i, d in enumerate(self.dates)
+            ]
+            return {"candles": candles}
+        elif norm_ticker == "ASSET_B":
+            candles = [
+                {"timestamp": d, "close": 50.0 + (2.0 if i % 2 == 0 else -1.0) + i * 0.8}
+                for i, d in enumerate(self.dates)
+            ]
+            return {"candles": candles}
+        return {"candles": []}
+
+    def test_unauthenticated_request_rejected(self):
+        """1. Unauthenticated request rejected with 401 Unauthorized."""
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_another_user_portfolio_rejected(self):
+        """2. Accessing another user's portfolio rejected with 404 Not Found."""
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_valid_owner_optimization_success(self, mock_fetch):
+        """3. Valid owner receives 200 OK with authoritative weights, metrics, and comparisons."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        self.client.force_authenticate(user=self.user)
+
+        payload = {
+            "objective": "max_sharpe",
+            "risk_free_rate": 0.05,
+            "min_weight": 0.10,
+            "max_weight": 0.90,
+        }
+
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Contract assertions
+        self.assertEqual(data["portfolio_id"], str(self.portfolio.id))
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["objective"], "max_sharpe")
+
+        # Weights assertions
+        opt_weights = data["optimized_weights"]
+        self.assertIn("ASSET_A", opt_weights)
+        self.assertIn("ASSET_B", opt_weights)
+        self.assertAlmostEqual(sum(opt_weights.values()), 1.0, places=3)
+        self.assertGreaterEqual(opt_weights["ASSET_A"], 0.10 - 1e-4)
+        self.assertLessEqual(opt_weights["ASSET_A"], 0.90 + 1e-4)
+        self.assertGreaterEqual(opt_weights["ASSET_B"], 0.10 - 1e-4)
+        self.assertLessEqual(opt_weights["ASSET_B"], 0.90 + 1e-4)
+
+        # Current weights assertions
+        curr_weights = data["current_weights"]
+        self.assertIn("ASSET_A", curr_weights)
+        self.assertIn("ASSET_B", curr_weights)
+        self.assertAlmostEqual(sum(curr_weights.values()), 1.0, places=3)
+
+        # Metrics assertions
+        curr_m = data["current_metrics"]
+        opt_m = data["optimized_metrics"]
+        for key in ["expected_return", "volatility", "sharpe_ratio"]:
+            self.assertIn(key, curr_m)
+            self.assertIn(key, opt_m)
+            self.assertIsInstance(curr_m[key], (int, float))
+            self.assertIsInstance(opt_m[key], (int, float))
+
+        # Comparisons assertions
+        comparisons = data["weight_comparisons"]
+        self.assertEqual(len(comparisons), 2)
+        for comp in comparisons:
+            self.assertIn("ticker", comp)
+            self.assertIn("current_weight", comp)
+            self.assertIn("target_weight", comp)
+            self.assertIn("weight_difference", comp)
+            self.assertIn("direction", comp)
+
+        # Holding mutation assertion - ensure no holdings were modified
+        self.holding_a.refresh_from_db()
+        self.holding_b.refresh_from_db()
+        self.assertEqual(self.holding_a.quantity, Decimal("10.0"))
+        self.assertEqual(self.holding_a.average_price, Decimal("100.0"))
+        self.assertEqual(self.holding_b.quantity, Decimal("30.0"))
+        self.assertEqual(self.holding_b.average_price, Decimal("50.0"))
+
+    def test_empty_portfolio_returns_400(self):
+        """4. Portfolio with no holdings returns 400 Bad Request."""
+        empty_portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Empty Optimization Portfolio",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": empty_portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+
+    def test_single_asset_portfolio_returns_400(self):
+        """5. Portfolio with only one asset returns 400 Bad Request."""
+        single_portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Single Asset Portfolio",
+        )
+        Holding.objects.create(
+            portfolio=single_portfolio,
+            ticker="ONLY_ONE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("100.0"),
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": single_portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+        self.assertIn("at least two", response.json()["error"].lower())
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_mixed_market_portfolio_returns_400(self, mock_fetch):
+        """6. Mixed-market portfolio returns 400 Bad Request."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="AAPL",
+            market="US",
+            quantity=Decimal("5.0"),
+            average_price=Decimal("150.0"),
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+        self.assertIn("mixed markets", response.json()["error"].lower())
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_infeasible_bounds_returns_400(self, mock_fetch):
+        """7. Infeasible bounds (min_weight * N > 1.0) returns 400 Bad Request."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        self.client.force_authenticate(user=self.user)
+
+        # 2 assets with min_weight=0.6 requires sum >= 1.2, which violates sum=1.0
+        payload = {
+            "min_weight": 0.60,
+            "max_weight": 0.90,
+        }
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+
+    def test_invalid_parameters_returns_400(self):
+        """8. Invalid parameters (min_weight > max_weight, invalid objective) return 400 Bad Request."""
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+
+        # min_weight > max_weight
+        res1 = self.client.post(url, {"min_weight": 0.8, "max_weight": 0.2}, format="json")
+        self.assertEqual(res1.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Unsupported objective
+        res2 = self.client.post(url, {"objective": "min_variance"}, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_insufficient_historical_data_returns_400(self, mock_fetch):
+        """9. Insufficient historical price data returns 400 Bad Request."""
+        mock_fetch.return_value = {"candles": [{"timestamp": "2025-01-01", "close": 100.0}]}
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+
+
+
 
 
 

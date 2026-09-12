@@ -202,6 +202,8 @@ export interface OptimizePortfolioPayload {
   min_weight?: number;
   allow_short?: boolean;
   benchmark?: string;
+  from_date?: string | null;
+  to_date?: string | null;
 }
 
 export interface OptimizedAssetWeight {
