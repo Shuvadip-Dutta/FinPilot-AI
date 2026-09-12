@@ -19,6 +19,14 @@ class FinancialDocumentSerializer(serializers.ModelSerializer):
             "ingestion_status",
             "chunk_count",
             "ingestion_error",
+            "source_type",
+            "sec_form",
+            "sec_filing_date",
+            "sec_report_date",
+            "sec_cik",
+            "sec_accession_number",
+            "primary_doc_description",
+            "source_url",
             "created_at",
         ]
         read_only_fields = fields

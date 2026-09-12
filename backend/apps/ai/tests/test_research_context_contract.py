@@ -197,3 +197,158 @@ class ResearchContextContractTestCase(SimpleTestCase):
             )
 
         self.assertIn("Invalid data_status", str(err.exception))
+
+    def test_backward_compatibility_document_evidence_default(self):
+        """Verify ResearchContext defaults document_evidence to empty list when omitted."""
+        ctx = ResearchContext(ticker="AAPL", market="US")
+        self.assertEqual(ctx.document_evidence, [])
+        dump = ctx.model_dump()
+        self.assertIn("document_evidence", dump)
+        self.assertEqual(dump["document_evidence"], [])
+
+    def test_sec_evidence_serialization_and_deserialization(self):
+        """Verify ResearchContext with SEC document evidence serializes and deserializes successfully."""
+        sec_evidence = {
+            "document_id": "11111111-2222-3333-4444-555555555555",
+            "chunk_id": "sec-chunk-001",
+            "text": "Apple Inc. reports record quarterly revenue of $89.5 billion for Q4 2023.",
+            "score": 0.92,
+            "source_type": "SEC_EDGAR",
+            "sec_form": "10-K",
+            "sec_cik": "0000320193",
+            "sec_accession_number": "0000320193-23-000106",
+            "sec_filing_date": "2023-11-03",
+            "sec_report_date": "2023-09-30",
+            "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+            "metadata": {
+                "document_name": "AAPL 10-K (2023-11-03)",
+                "ticker": "AAPL",
+                "market": "US",
+                "page_start": 1,
+                "page_count": 120,
+            },
+        }
+
+        ctx = ResearchContext(
+            ticker="AAPL",
+            market="US",
+            document_evidence=[sec_evidence],
+        )
+
+        self.assertEqual(len(ctx.document_evidence), 1)
+        self.assertEqual(ctx.document_evidence[0]["sec_form"], "10-K")
+        self.assertEqual(ctx.document_evidence[0]["sec_accession_number"], "0000320193-23-000106")
+
+        dump = ctx.model_dump()
+        json_str = json.dumps(dump, default=str)
+        self.assertIn("0000320193-23-000106", json_str)
+        self.assertIn("SEC_EDGAR", json_str)
+
+        # Deserialize back to ResearchContext
+        reloaded = ResearchContext.model_validate(json.loads(json_str))
+        self.assertEqual(len(reloaded.document_evidence), 1)
+        self.assertEqual(reloaded.document_evidence[0]["chunk_id"], "sec-chunk-001")
+        self.assertEqual(reloaded.document_evidence[0]["score"], 0.92)
+        self.assertEqual(reloaded.document_evidence[0]["source_type"], "SEC_EDGAR")
+        self.assertEqual(reloaded.document_evidence[0]["sec_cik"], "0000320193")
+
+    def test_sec_provenance_acceptance(self):
+        """Verify sec_edgar is accepted as the canonical SEC provider identifier in ProviderProvenance."""
+        prov = ProviderProvenance(
+            primary_provider="sec_edgar",
+            source="sec_edgar",
+            fallback_used=False,
+            data_status="complete",
+        )
+        ctx = ResearchContext(
+            ticker="MSFT",
+            market="US",
+            provenance={"sec_filings": prov},
+        )
+
+        self.assertEqual(ctx.provenance["sec_filings"].primary_provider, "sec_edgar")
+        self.assertEqual(ctx.provenance["sec_filings"].source, "sec_edgar")
+        self.assertFalse(ctx.provenance["sec_filings"].fallback_used)
+        self.assertEqual(ctx.provenance["sec_filings"].data_status, "complete")
+
+        dump = ctx.model_dump()
+        self.assertEqual(dump["provenance"]["sec_filings"]["primary_provider"], "sec_edgar")
+
+    def test_financial_document_serializer_exposes_sec_fields(self):
+        """Verify FinancialDocumentSerializer includes all 8 SEC metadata fields for an SEC filing."""
+        import datetime
+        import uuid
+        from apps.research.document_serializers import FinancialDocumentSerializer
+        from apps.research.models import FinancialDocument
+
+        doc = FinancialDocument(
+            id=uuid.uuid4(),
+            filename="AAPL_0000320193-23-000106_filing.htm",
+            content_type="text/html",
+            file_size=2048576,
+            file_path="/media/documents/sec/filing.htm",
+            ticker="AAPL",
+            market="US",
+            ingestion_status=FinancialDocument.STATUS_COMPLETED,
+            chunk_count=85,
+            ingestion_error=None,
+            source_type=FinancialDocument.SOURCE_SEC_EDGAR,
+            sec_form="10-K",
+            sec_filing_date=datetime.date(2023, 11, 3),
+            sec_report_date=datetime.date(2023, 9, 30),
+            sec_cik="0000320193",
+            sec_accession_number="0000320193-23-000106",
+            primary_doc_description="Annual Report for Year Ended September 30, 2023",
+            source_url="https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+        )
+
+        serializer = FinancialDocumentSerializer(doc)
+        data = serializer.data
+
+        # Verify all 8 SEC fields are present and accurate
+        self.assertEqual(data["source_type"], "SEC_EDGAR")
+        self.assertEqual(data["sec_form"], "10-K")
+        self.assertEqual(data["sec_filing_date"], "2023-11-03")
+        self.assertEqual(data["sec_report_date"], "2023-09-30")
+        self.assertEqual(data["sec_cik"], "0000320193")
+        self.assertEqual(data["sec_accession_number"], "0000320193-23-000106")
+        self.assertEqual(data["primary_doc_description"], "Annual Report for Year Ended September 30, 2023")
+        self.assertEqual(data["source_url"], "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm")
+
+        # Verify base fields are still present
+        self.assertEqual(data["ticker"], "AAPL")
+        self.assertEqual(data["market"], "US")
+        self.assertEqual(data["chunk_count"], 85)
+        self.assertEqual(data["ingestion_status"], "COMPLETED")
+
+    def test_financial_document_serializer_uploaded_document_defaults(self):
+        """Verify FinancialDocumentSerializer retains null/default SEC fields for uploaded documents."""
+        import uuid
+        from apps.research.document_serializers import FinancialDocumentSerializer
+        from apps.research.models import FinancialDocument
+
+        doc = FinancialDocument(
+            id=uuid.uuid4(),
+            filename="quarterly_report.pdf",
+            content_type="application/pdf",
+            file_size=512000,
+            file_path="/media/documents/upload.pdf",
+            ticker="INFY",
+            market="IN",
+            ingestion_status=FinancialDocument.STATUS_COMPLETED,
+            chunk_count=12,
+            ingestion_error=None,
+            source_type=FinancialDocument.SOURCE_UPLOAD,
+        )
+
+        serializer = FinancialDocumentSerializer(doc)
+        data = serializer.data
+
+        self.assertEqual(data["source_type"], "UPLOAD")
+        self.assertIsNone(data["sec_form"])
+        self.assertIsNone(data["sec_filing_date"])
+        self.assertIsNone(data["sec_report_date"])
+        self.assertIsNone(data["sec_cik"])
+        self.assertIsNone(data["sec_accession_number"])
+        self.assertIsNone(data["primary_doc_description"])
+        self.assertIsNone(data["source_url"])

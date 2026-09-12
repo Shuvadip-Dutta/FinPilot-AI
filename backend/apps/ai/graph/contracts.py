@@ -1,6 +1,6 @@
 """Typed contracts shared by graph workflow components."""
 
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apps.research.services.schemas import (
@@ -59,4 +59,5 @@ class ResearchContext(BaseModel):
     market_data: Optional[HistoricalMarketData] = None
     news: Optional[NewsResearch] = None
 
+    document_evidence: List[Dict[str, Any]] = Field(default_factory=list)
     provenance: Dict[str, ProviderProvenance] = Field(default_factory=dict)
