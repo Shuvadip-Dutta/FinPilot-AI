@@ -283,6 +283,11 @@ class FinalSynthesisAgent(BaseAgent):
             "Synthesize specialist findings rather than merely repeating their raw text. "
             "Prioritize evidence provided by the specialists, preserve important supplied numerical values exactly, and reconcile conflicting findings when present. "
             "Structured specialist evidence is authoritative for numerical values and deterministic outputs (including PORTFOLIO QUANTITATIVE RISK EVIDENCE and PORTFOLIO BACKTEST EVIDENCE); use it over prose when they differ. "
+            "Currency and Denomination Rules: "
+            "Preserve the authoritative currency context supplied in the evidence and NEVER assume USD ($). "
+            "For Indian (market: IN) holdings and portfolios, all monetary figures are strictly denominated in Indian Rupees (INR / ₹); use the '₹' symbol or 'INR' consistently (e.g. ₹48,000, ₹23,579, -₹24,421) and NEVER use '$' or refer to dollars. "
+            "For US (market: US) holdings and portfolios, use '$' or 'USD'. "
+            "For multi-market portfolios with mixed currencies, explicitly distinguish currencies by holding (₹ for Indian assets, $ for US assets). Do not assume a single currency or perform automated currency conversions unless exchange rates are explicitly provided in the evidence. "
             "Clearly distinguish Current Portfolio Risk from Optimized Portfolio Risk when both are present. "
             "When PORTFOLIO BACKTEST EVIDENCE is supplied: present strategy metrics, buy-and-hold comparison, and benchmark comparison (when available) using the exact values provided. "
             "The LLM must treat PortfolioRiskMetrics and backtest metric values as authoritative deterministic evidence and must not recalculate or modify these metrics. "
@@ -298,26 +303,64 @@ class FinalSynthesisAgent(BaseAgent):
             "Remain concise but useful."
         )
 
+        portfolio_intel = state.results.get("portfolio")
+        currency = None
+        if hasattr(portfolio_intel, "currency"):
+            currency = getattr(portfolio_intel, "currency", None)
+        elif isinstance(portfolio_intel, dict):
+            currency = portfolio_intel.get("currency")
+
+        synth_instructions = [
+            "Answer the user's original request directly.",
+            "Synthesize specialist outputs rather than restating them verbatim.",
+            "Use only the evidence supplied by specialists and workflow metadata.",
+            "Preserve important numerical values exactly as provided.",
+            "Preserve the supplied currency: use ₹ / INR for Indian assets, $ / USD for US assets, and never assume USD.",
+            "Reconcile inconsistencies and note uncertainty or disagreement.",
+            "Highlight missing information and workflow errors when relevant.",
+            "Distinguish facts from interpretation.",
+            "Do not invent unsupported facts or metrics.",
+            "Do not claim future performance certainty or provide unconditional recommendations.",
+        ]
+
+        user_content: dict[str, object] = {
+            "USER REQUEST": state.user_message,
+        }
+
+        if currency == "INR":
+            user_content["PORTFOLIO CURRENCY"] = (
+                "INR (₹) - All monetary amounts are strictly in Indian Rupees (₹). NEVER use '$' or refer to dollars."
+            )
+            synth_instructions.insert(
+                4,
+                "CRITICAL CURRENCY INSTRUCTION: The portfolio contains Indian assets strictly denominated in Indian Rupees (INR / ₹). Format every monetary amount using '₹' or 'INR' (e.g. ₹48,000, ₹23,579, -₹24,421). NEVER use '$' or refer to dollars.",
+            )
+        elif currency == "USD":
+            user_content["PORTFOLIO CURRENCY"] = (
+                "USD ($) - All monetary amounts are in US Dollars ($)."
+            )
+            synth_instructions.insert(
+                4,
+                "Format monetary amounts using '$' or 'USD'.",
+            )
+        elif currency == "MIXED":
+            user_content["PORTFOLIO CURRENCY"] = (
+                "MIXED - Indian assets in INR (₹), US assets in USD ($)."
+            )
+            synth_instructions.insert(
+                4,
+                "Multi-market portfolio: Distinguish currencies by asset (₹ for Indian assets, $ for US assets). Do not assume USD for Indian assets.",
+            )
+
+        user_content["SPECIALIST EVIDENCE"] = context
+        user_content["SYNTHESIS INSTRUCTIONS"] = synth_instructions
+
         return [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": json.dumps(
-                    {
-                        "USER REQUEST": state.user_message,
-                        "SPECIALIST EVIDENCE": context,
-                        "SYNTHESIS INSTRUCTIONS": [
-                            "Answer the user's original request directly.",
-                            "Synthesize specialist outputs rather than restating them verbatim.",
-                            "Use only the evidence supplied by specialists and workflow metadata.",
-                            "Preserve important numerical values exactly as provided.",
-                            "Reconcile inconsistencies and note uncertainty or disagreement.",
-                            "Highlight missing information and workflow errors when relevant.",
-                            "Distinguish facts from interpretation.",
-                            "Do not invent unsupported facts or metrics.",
-                            "Do not claim future performance certainty or provide unconditional recommendations.",
-                        ],
-                    },
+                    user_content,
                     ensure_ascii=False,
                     default=str,
                 ),
@@ -389,11 +432,54 @@ class FinalSynthesisAgent(BaseAgent):
                     }
             elif hasattr(value, "model_dump") or hasattr(value, "dict"):
                 dumped = value.model_dump() if hasattr(value, "model_dump") else value.dict()
-                sections[title] = {
-                    "response": f"Portfolio intelligence: invested_value={dumped.get('invested_value')}, current_value={dumped.get('current_value')}, profit_loss={dumped.get('profit_loss')} ({dumped.get('profit_loss_percentage')}%), holdings_count={dumped.get('holdings_count')}.",
-                    "tools_used": ["portfolio_intelligence"] if result_key == "portfolio" else [],
-                    "data": dumped,
-                }
+                if result_key == "portfolio":
+                    currency = dumped.get("currency")
+                    invested = dumped.get("invested_value", 0.0)
+                    current = dumped.get("current_value", 0.0)
+                    pnl = dumped.get("profit_loss", 0.0)
+                    pnl_pct = dumped.get("profit_loss_percentage", 0.0)
+                    count = dumped.get("holdings_count", 0)
+
+                    if currency == "INR":
+                        curr_desc = (
+                            f"All portfolio figures are strictly denominated in Indian Rupees (INR / ₹). "
+                            f"Invested capital: ₹{invested:,.2f}, Current market value: ₹{current:,.2f}, "
+                            f"Unrealized P/L: ₹{pnl:,.2f} ({pnl_pct:.2f}%), Holdings count: {count}. "
+                            f"You must use the '₹' symbol or 'INR' for all monetary amounts; NEVER use '$' or 'USD'."
+                        )
+                    elif currency == "USD":
+                        curr_desc = (
+                            f"All portfolio figures are strictly denominated in US Dollars (USD / $). "
+                            f"Invested capital: ${invested:,.2f}, Current market value: ${current:,.2f}, "
+                            f"Unrealized P/L: ${pnl:,.2f} ({pnl_pct:.2f}%), Holdings count: {count}. "
+                            f"Use the '$' symbol or 'USD' for all monetary amounts."
+                        )
+                    elif currency == "MIXED":
+                        curr_desc = (
+                            f"This is a multi-market portfolio with mixed currencies (Indian holdings in INR ₹, US holdings in USD $) "
+                            f"without automated currency conversion. "
+                            f"Nominal unweighted sum: invested_value={invested:,.2f}, current_value={current:,.2f}, "
+                            f"P/L={pnl:,.2f} ({pnl_pct:.2f}%), Holdings count: {count}. "
+                            f"Holdings currency detail: {dumped.get('market_currency_context')}. "
+                            f"CRITICAL: Always use '₹' / INR for Indian holdings and '$' / USD for US holdings. "
+                            f"Do NOT assume the portfolio is denominated in USD, and do not invent exchange rates."
+                        )
+                    else:
+                        curr_desc = (
+                            f"invested_value={invested}, current_value={current}, profit_loss={pnl} ({pnl_pct}%), holdings_count={count}."
+                        )
+
+                    sections[title] = {
+                        "response": f"Portfolio intelligence: {curr_desc}",
+                        "tools_used": ["portfolio_intelligence"],
+                        "data": dumped,
+                    }
+                else:
+                    sections[title] = {
+                        "response": f"Portfolio intelligence: invested_value={dumped.get('invested_value')}, current_value={dumped.get('current_value')}, profit_loss={dumped.get('profit_loss')} ({dumped.get('profit_loss_percentage')}%), holdings_count={dumped.get('holdings_count')}.",
+                        "tools_used": ["portfolio_intelligence"] if result_key == "portfolio" else [],
+                        "data": dumped,
+                    }
             elif value is not None:
                 sections[title] = {
                     "response": str(value),
@@ -427,7 +513,7 @@ class FinalSynthesisAgent(BaseAgent):
                 if isinstance(section, dict) and "response" in section:
                     section["response"] = FinalSynthesisAgent._bounded_text(
                         section["response"],
-                        150 if title != "PORTFOLIO ANALYSIS" else 300,
+                        150 if title not in ("PORTFOLIO ANALYSIS", "PORTFOLIO INTELLIGENCE") else 400,
                     )
                 if isinstance(section, dict) and "data" in section:
                     section["data"] = FinalSynthesisAgent._minimum_data(section["data"])
@@ -441,7 +527,7 @@ class FinalSynthesisAgent(BaseAgent):
                 if isinstance(section, dict) and "response" in section:
                     section["response"] = FinalSynthesisAgent._bounded_text(
                         section["response"],
-                        350 if title != "PORTFOLIO ANALYSIS" else 700,
+                        350 if title not in ("PORTFOLIO ANALYSIS", "PORTFOLIO INTELLIGENCE") else 700,
                     )
             sections["_CONTEXT_METADATA"] = {"missing_information": missing_information}
             if FinalSynthesisAgent._serialized_size(sections) <= FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
@@ -455,7 +541,7 @@ class FinalSynthesisAgent(BaseAgent):
             if isinstance(section, dict) and "response" in section:
                 section["response"] = FinalSynthesisAgent._bounded_text(
                     section["response"],
-                    350 if title != "PORTFOLIO ANALYSIS" else 700,
+                    350 if title not in ("PORTFOLIO ANALYSIS", "PORTFOLIO INTELLIGENCE") else 700,
                 )
         sections["_CONTEXT_METADATA"] = {"missing_information": []}
         if FinalSynthesisAgent._serialized_size(sections) > FinalSynthesisAgent.SYNTHESIS_CONTEXT_CHAR_LIMIT:
@@ -465,7 +551,7 @@ class FinalSynthesisAgent(BaseAgent):
                 if "response" in section:
                     section["response"] = FinalSynthesisAgent._bounded_text(
                         section["response"],
-                        150 if title != "PORTFOLIO ANALYSIS" else 300,
+                        150 if title not in ("PORTFOLIO ANALYSIS", "PORTFOLIO INTELLIGENCE") else 400,
                     )
                 if "data" in section:
                     section["data"] = FinalSynthesisAgent._minimum_data(section["data"])
@@ -476,8 +562,8 @@ class FinalSynthesisAgent(BaseAgent):
                 for title, section in sections.items()
                 if title in {
                     "FINANCIAL ANALYSIS", "MARKET ANALYSIS", "NEWS INTELLIGENCE",
-                    "RISK ANALYSIS", "PORTFOLIO ANALYSIS", "PORTFOLIO QUANTITATIVE RISK EVIDENCE",
-                    "PORTFOLIO BACKTEST EVIDENCE",
+                    "RISK ANALYSIS", "PORTFOLIO INTELLIGENCE", "PORTFOLIO ANALYSIS",
+                    "PORTFOLIO QUANTITATIVE RISK EVIDENCE", "PORTFOLIO BACKTEST EVIDENCE",
                 }
             }
         return sections
@@ -574,7 +660,19 @@ class FinalSynthesisAgent(BaseAgent):
             return data
         minimum = {
             key: data[key]
-            for key in ("ticker", "market", "aggregated_sentiment")
+            for key in (
+                "ticker",
+                "market",
+                "aggregated_sentiment",
+                "currency",
+                "currency_context",
+                "market_currency_context",
+                "invested_value",
+                "current_value",
+                "profit_loss",
+                "profit_loss_percentage",
+                "holdings_count",
+            )
             if key in data
         }
         for key in ("market_data", "current_market_data"):

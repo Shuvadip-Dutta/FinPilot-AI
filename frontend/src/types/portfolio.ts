@@ -4,89 +4,85 @@
  */
 
 export interface Portfolio {
-  id: string | number;
+  id: string;
   name: string;
-  description?: string;
-  currency?: string; // 'INR' | 'USD' | 'EUR' | 'GBP' etc.
+  holdings?: Holding[];
   created_at?: string;
   updated_at?: string;
 
-  // Backend financial aggregations
-  invested_value?: number | string | null;
-  total_invested?: number | string | null;
-  current_value?: number | string | null;
-  total_value?: number | string | null;
-  total_current_value?: number | string | null;
-  pnl?: number | string | null;
-  total_pnl?: number | string | null;
-  profit_loss?: number | string | null;
-  unrealized_pnl?: number | string | null;
-  pnl_percentage?: number | string | null;
-  pnl_pct?: number | string | null;
-  return_percentage?: number | string | null;
-
-  // Cash balance if returned by backend
-  cash_balance?: number | string | null;
-  cash?: number | string | null;
-
-  // Holdings count or nested list
-  holdings_count?: number;
-  total_holdings?: number;
-  holdings?: Holding[];
-
-  // Allocation breakdown if returned by backend
-  allocation?: AllocationItem[] | Record<string, number>;
-  sector_allocation?: Record<string, number>;
-  asset_allocation?: Record<string, number>;
+  // Optional presentation / compatibility fields
+  currency?: string | null;
+  holdings_count?: number | null;
 }
 
 export interface Holding {
-  id: string | number;
-  portfolio: string | number;
+  id: string;
+  portfolio: string;
   ticker: string;
+  market: 'IN' | 'US';
+  quantity: string | number; // DRF returns decimal as string e.g. "10.0000"
+  average_price: string | number; // DRF returns decimal as string e.g. "2850.0000"
+  created_at?: string;
+  updated_at?: string;
+
+  // Optional presentation/AI evaluation fields
+  invested_value?: number | null;
+  current_price?: number | null;
+  current_value?: number | null;
+  pnl?: number | null;
+  pnl_percentage?: number | null;
+  weight?: number | null;
+
+  // Optional presentation / compatibility fields
   symbol?: string;
   name?: string;
   company_name?: string;
-  market?: string; // 'NSE' | 'BSE' | 'NASDAQ' | 'NYSE'
-
-  quantity: number | string;
-  shares?: number | string;
-
-  buy_price: number | string;
-  average_buy_price?: number | string;
-  avg_price?: number | string;
-  buy_date?: string;
-  purchase_date?: string;
-
-  // Valuation & P/L metrics computed strictly by backend
-  current_price?: number | string | null;
-  last_price?: number | string | null;
-  market_price?: number | string | null;
-
-  invested_value?: number | string | null;
-  total_invested?: number | string | null;
-
-  current_value?: number | string | null;
-  market_value?: number | string | null;
-
-  pnl?: number | string | null;
-  profit_loss?: number | string | null;
-  unrealized_pnl?: number | string | null;
-
-  pnl_percentage?: number | string | null;
-  pnl_pct?: number | string | null;
-  return_percentage?: number | string | null;
-
-  // Allocation metrics computed strictly by backend
-  allocation_percentage?: number | string | null;
   allocation?: number | string | null;
-  weight?: number | string | null;
+  allocation_percentage?: number | string | null;
+}
 
-  sector?: string | null;
-  asset_class?: string | null;
-  notes?: string | null;
-  created_at?: string;
-  updated_at?: string;
+export interface CreatePortfolioPayload {
+  name: string;
+}
+
+export interface UpdatePortfolioPayload {
+  name: string;
+}
+
+export interface CreateHoldingPayload {
+  ticker: string;
+  market: 'IN' | 'US';
+  quantity: number | string;
+  average_price: number | string;
+}
+
+export interface UpdateHoldingPayload {
+  ticker?: string;
+  market?: 'IN' | 'US';
+  quantity?: number | string;
+  average_price?: number | string;
+}
+
+export interface PortfolioStructuredValuation {
+  invested_value: number;
+  current_value: number;
+  profit_loss: number;
+  profit_loss_percentage: number;
+  holdings_count: number;
+  currency?: string | null;
+  currency_context?: string | null;
+  market_currency_context?: Record<string, { market: string; currency: string; currency_symbol: string }> | null;
+}
+
+export interface PortfolioAiAnalysisResponse {
+  response: string;
+  tools_used: string[];
+  session_id: string | null;
+  thread_id: string;
+  route: string;
+  structured_data?: {
+    portfolio?: PortfolioStructuredValuation;
+  };
 }
 
 /**
@@ -272,130 +268,83 @@ export interface HoldingsListResponse {
   results?: Holding[];
 }
 
-export interface CreatePortfolioPayload {
-  name: string;
-  description?: string;
-  currency?: string;
-  cash_balance?: number;
-}
-
-export interface UpdatePortfolioPayload {
-  name?: string;
-  description?: string;
-  currency?: string;
-  cash_balance?: number;
-}
-
-export interface CreateHoldingPayload {
-  ticker: string;
-  quantity: number;
-  buy_price: number;
-  market?: string;
-  buy_date?: string;
-  sector?: string;
-  asset_class?: string;
-  notes?: string;
-}
-
-export interface UpdateHoldingPayload {
-  ticker?: string;
-  quantity?: number;
-  buy_price?: number;
-  market?: string;
-  buy_date?: string;
-  sector?: string;
-  asset_class?: string;
-  notes?: string;
-}
-
 /**
  * Accessor helpers to safely read backend-computed metrics without recalculating
  */
 export function getPortfolioInvestedValue(p: Portfolio | null | undefined): number | null {
-  if (!p) return null;
-  const val = p.invested_value ?? p.total_invested;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  return isNaN(n) ? null : n;
+  if (!p || !p.holdings || p.holdings.length === 0) return null;
+  let total = 0;
+  for (const h of p.holdings) {
+    const inv = getHoldingInvestedValue(h);
+    if (inv !== null) {
+      total += inv;
+    }
+  }
+  return total;
 }
 
 export function getPortfolioCurrentValue(p: Portfolio | null | undefined): number | null {
+  // Current value is authoritatively returned by AI analysis or per-holding quote; return null if not computed
   if (!p) return null;
-  const val = p.current_value ?? p.total_current_value ?? p.total_value;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  return isNaN(n) ? null : n;
+  return null;
 }
 
 export function getPortfolioPnL(p: Portfolio | null | undefined): number | null {
   if (!p) return null;
-  const val = p.pnl ?? p.total_pnl ?? p.profit_loss ?? p.unrealized_pnl;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  return isNaN(n) ? null : n;
+  return null;
 }
 
 export function getPortfolioPnLPercent(p: Portfolio | null | undefined): number | null {
   if (!p) return null;
-  const val = p.pnl_percentage ?? p.pnl_pct ?? p.return_percentage;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  return isNaN(n) ? null : n;
+  return null;
 }
 
 export function getPortfolioCashBalance(p: Portfolio | null | undefined): number | null {
   if (!p) return null;
-  const val = p.cash_balance ?? p.cash;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  return isNaN(n) ? null : n;
+  return null;
 }
 
 export function getHoldingInvestedValue(h: Holding | null | undefined): number | null {
   if (!h) return null;
-  const val = h.invested_value ?? h.total_invested;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  return isNaN(n) ? null : n;
+  if (h.invested_value !== undefined && h.invested_value !== null) {
+    const n = typeof h.invested_value === 'string' ? parseFloat(h.invested_value) : h.invested_value;
+    return isNaN(n) ? null : n;
+  }
+  const qty = typeof h.quantity === 'string' ? parseFloat(h.quantity) : h.quantity;
+  const price = typeof h.average_price === 'string' ? parseFloat(h.average_price) : h.average_price;
+  if (qty !== undefined && qty !== null && !isNaN(qty) && price !== undefined && price !== null && !isNaN(price)) {
+    return qty * price;
+  }
+  return null;
 }
 
 export function getHoldingCurrentValue(h: Holding | null | undefined): number | null {
-  if (!h) return null;
-  const val = h.current_value ?? h.market_value;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
+  if (!h || h.current_value === undefined || h.current_value === null) return null;
+  const n = typeof h.current_value === 'string' ? parseFloat(h.current_value) : h.current_value;
   return isNaN(n) ? null : n;
 }
 
 export function getHoldingCurrentPrice(h: Holding | null | undefined): number | null {
-  if (!h) return null;
-  const val = h.current_price ?? h.last_price ?? h.market_price;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
+  if (!h || h.current_price === undefined || h.current_price === null) return null;
+  const n = typeof h.current_price === 'string' ? parseFloat(h.current_price) : h.current_price;
   return isNaN(n) ? null : n;
 }
 
 export function getHoldingPnL(h: Holding | null | undefined): number | null {
-  if (!h) return null;
-  const val = h.pnl ?? h.profit_loss ?? h.unrealized_pnl;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
+  if (!h || h.pnl === undefined || h.pnl === null) return null;
+  const n = typeof h.pnl === 'string' ? parseFloat(h.pnl) : h.pnl;
   return isNaN(n) ? null : n;
 }
 
 export function getHoldingPnLPercent(h: Holding | null | undefined): number | null {
-  if (!h) return null;
-  const val = h.pnl_percentage ?? h.pnl_pct ?? h.return_percentage;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
+  if (!h || h.pnl_percentage === undefined || h.pnl_percentage === null) return null;
+  const n = typeof h.pnl_percentage === 'string' ? parseFloat(h.pnl_percentage) : h.pnl_percentage;
   return isNaN(n) ? null : n;
 }
 
 export function getHoldingAllocation(h: Holding | null | undefined): number | null {
-  if (!h) return null;
-  const val = h.allocation_percentage ?? h.allocation ?? h.weight;
-  if (val === null || val === undefined || val === '') return null;
-  const n = typeof val === 'string' ? parseFloat(val) : val;
+  if (!h || h.weight === undefined || h.weight === null) return null;
+  const n = typeof h.weight === 'string' ? parseFloat(h.weight) : h.weight;
   return isNaN(n) ? null : n;
 }
 

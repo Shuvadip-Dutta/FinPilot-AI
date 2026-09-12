@@ -13,6 +13,7 @@ import {
   PortfolioOptimizationResponse,
   BacktestPayload,
   BacktestResponse,
+  PortfolioAiAnalysisResponse,
 } from '../types/portfolio';
 
 export const portfolioApi = {
@@ -20,10 +21,8 @@ export const portfolioApi = {
    * GET /api/v1/portfolio/
    * Retrieves all user portfolios
    */
-  async getPortfolios(params?: { search?: string; page?: number }): Promise<Portfolio[]> {
-    const response = await apiClient.get<PortfolioListResponse | Portfolio[]>('portfolio/', {
-      params,
-    });
+  async getPortfolios(): Promise<Portfolio[]> {
+    const response = await apiClient.get<PortfolioListResponse | Portfolio[]>('portfolio/');
 
     if (Array.isArray(response)) {
       return response;
@@ -44,7 +43,7 @@ export const portfolioApi = {
 
   /**
    * GET /api/v1/portfolio/<id>/
-   * Retrieves details and current valuation metrics for a specific portfolio
+   * Retrieves details and holdings for a specific portfolio
    */
   async getPortfolio(id: string | number): Promise<Portfolio> {
     return apiClient.get<Portfolio>(`portfolio/${id}/`);
@@ -52,7 +51,7 @@ export const portfolioApi = {
 
   /**
    * PUT/PATCH /api/v1/portfolio/<id>/
-   * Updates portfolio details (name, description, currency, cash balance)
+   * Updates portfolio name
    */
   async updatePortfolio(id: string | number, payload: UpdatePortfolioPayload): Promise<Portfolio> {
     return apiClient.patch<Portfolio>(`portfolio/${id}/`, payload);
@@ -179,6 +178,24 @@ export const portfolioApi = {
     return await apiClient.post<BacktestResponse>(
       `portfolio/${portfolioId}/backtest/`,
       formattedPayload
+    );
+  },
+
+  /**
+   * POST /api/v1/ai/chat/ with portfolio_id
+   * Executes multi-agent portfolio intelligence audit and authoritative live valuation
+   */
+  async analyzePortfolio(
+    portfolioId: string | number,
+    message?: string
+  ): Promise<PortfolioAiAnalysisResponse> {
+    return apiClient.post<PortfolioAiAnalysisResponse>(
+      'ai/chat/',
+      {
+        message: message || 'Perform a comprehensive institutional portfolio diagnostic and risk audit.',
+        portfolio_id: String(portfolioId),
+      },
+      { timeoutMs: 60000 }
     );
   },
 };

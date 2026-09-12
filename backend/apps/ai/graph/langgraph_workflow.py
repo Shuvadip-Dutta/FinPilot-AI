@@ -197,6 +197,12 @@ class LangGraphResearchWorkflow:
         start_time = time.perf_counter()
         route = "portfolio" if portfolio_input is not None else self.router.route(user_message)
         market = Market.normalize(market) or market
+        if portfolio_input is not None and not market and getattr(portfolio_input, "portfolio", None):
+            holding_markets = {h.market for h in portfolio_input.portfolio.holdings}
+            if holding_markets == {"IN"}:
+                market = "IN"
+            elif holding_markets == {"US"}:
+                market = "US"
 
         session = None
         try:
@@ -1061,6 +1067,7 @@ class LangGraphResearchWorkflow:
             user_message=root.get("user_message", ""),
             ticker=root.get("ticker"),
             market=root.get("market"),
+            portfolio_input=root.get("portfolio_input"),
             route=route,
             research_context=rc,
             results=results,

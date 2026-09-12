@@ -67,25 +67,12 @@ export const PortfolioAnalysisPage: React.FC = () => {
     loadPortfolio();
   }, [loadPortfolio]);
 
+  const [structuredValuation, setStructuredValuation] = useState<any | null>(null);
+
   const runAnalysis = async () => {
     if (!portfolio) return;
     setIsGenerating(true);
     setAnalysisError(null);
-
-    const holdingsSummary = holdings
-      .map((h, i) => {
-        const ticker = h.ticker || h.symbol || 'N/A';
-        const qty = h.quantity ?? h.shares ?? 'N/A';
-        const buyPrice = h.buy_price ?? h.average_buy_price ?? 'N/A';
-        const market = h.market || 'NSE';
-        return `${i + 1}. ${ticker} (${market}): ${qty} shares @ avg price ${buyPrice}`;
-      })
-      .join('\n');
-
-    const currVal = getPortfolioCurrentValue(portfolio);
-    const investedVal = getPortfolioInvestedValue(portfolio);
-    const pnl = getPortfolioPnL(portfolio);
-    const currency = portfolio.currency || 'INR';
 
     let promptFocus = '';
     if (analysisType === 'comprehensive') {
@@ -103,42 +90,21 @@ export const PortfolioAnalysisPage: React.FC = () => {
       promptFocus += ` Specific investor query: "${customQuery.trim()}".`;
     }
 
-    const fullPrompt = `You are FinPilot AI's Senior Quantitative Portfolio Strategist.
-Analyze the following active investor portfolio:
-Portfolio Name: ${portfolio.name}
-Base Currency: ${currency}
-${investedVal !== null ? `Total Cost Basis: ${currency} ${investedVal}` : ''}
-${currVal !== null ? `Current Market Valuation: ${currency} ${currVal}` : ''}
-${pnl !== null ? `Total Profit/Loss: ${currency} ${pnl}` : ''}
-
-Current Asset Holdings:
-${holdingsSummary || 'No holdings currently registered.'}
-
-Mandate:
-${promptFocus}
-
-Please structure your report clearly with:
-1. Executive Summary & Quality Score
-2. Sector & Thematic Exposure Breakdown
-3. Key Concentration & Macro Risks
-4. Tactical Recommendations & Rebalancing Ideas`;
-
     try {
-      const primaryMarket = holdings[0]?.market || 'NSE';
-      const response = await researchApi.chat({
-        message: fullPrompt,
-        market: primaryMarket,
-        ticker: holdings[0]?.ticker || undefined,
-      });
+      const response = await portfolioApi.analyzePortfolio(portfolio.id, promptFocus);
+      const responseText = response.response || 'Analysis generated successfully.';
+      setReport(responseText);
 
-      const responseText = response.message || response.content || response.response || (response as any).answer || 'Analysis generated successfully.';
-      setReport(typeof responseText === 'string' ? responseText : JSON.stringify(responseText));
+      if (response.structured_data?.portfolio) {
+        setStructuredValuation(response.structured_data.portfolio);
+      }
+
       if (response.session_id) {
         setSessionId(response.session_id);
       }
     } catch (err: any) {
       console.error('Analysis failed:', err);
-      setAnalysisError(err?.message || 'Failed to complete AI analysis.');
+      setAnalysisError(err?.response?.data?.error || err?.message || 'Failed to complete AI analysis.');
     } finally {
       setIsGenerating(false);
     }
@@ -302,8 +268,45 @@ Please structure your report clearly with:
 
       {/* Generated Report */}
       {!isGenerating && report && (
-        <div className="p-6 bg-slate-900/80 border border-slate-800/90 rounded-xl">
-          <MarkdownContent content={report} />
+        <div className="space-y-4">
+          {structuredValuation && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase">Invested Capital</span>
+                <div className="text-sm font-bold font-mono text-slate-100 mt-0.5">
+                  ₹{Number(structuredValuation.invested_value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase">Live Market Value</span>
+                <div className="text-sm font-bold font-mono text-cyan-400 mt-0.5">
+                  ₹{Number(structuredValuation.current_value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase">Live P/L</span>
+                <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  ₹{Number(structuredValuation.profit_loss).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase">Return (%)</span>
+                <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {structuredValuation.profit_loss_percentage >= 0 ? '+' : ''}
+                  {Number(structuredValuation.profit_loss_percentage).toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="p-6 bg-slate-900/80 border border-slate-800/90 rounded-xl">
+            <MarkdownContent content={report} />
+          </div>
+
+          <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-lg text-[11px] text-slate-400 flex items-center justify-between">
+            <span>FinPilot AI quantitative portfolio diagnostic. For informational purposes only.</span>
+            <span className="text-slate-500 font-mono">Route: portfolio</span>
+          </div>
         </div>
       )}
 

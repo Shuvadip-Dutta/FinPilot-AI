@@ -38,6 +38,9 @@ class PortfolioIntelligence(BaseModel):
     profit_loss: float
     profit_loss_percentage: float
     holdings_count: int
+    currency: str | None = None
+    currency_context: str | None = None
+    market_currency_context: dict[str, dict[str, str]] | None = None
 
 
 class PortfolioRiskMetrics(BaseModel):

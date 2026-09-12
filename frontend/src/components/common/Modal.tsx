@@ -51,7 +51,7 @@ export const Modal: React.FC<ModalProps> = ({
       />
 
       {/* Modal Container */}
-      <div className="min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
+      <div className="relative z-10 min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
         <div
           className={`w-full ${maxWidthClasses[maxWidth]} bg-slate-900 border border-slate-800 rounded-xl shadow-2xl text-left overflow-hidden transition-all transform animate-in fade-in zoom-in-95`}
           onClick={(e) => e.stopPropagation()}

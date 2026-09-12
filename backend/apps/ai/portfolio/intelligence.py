@@ -38,12 +38,40 @@ class PortfolioIntelligenceService:
             else 0.0
         )
 
+        markets = {holding.market for holding in portfolio.holdings}
+        currency = None
+        currency_context = None
+        market_currency_context = None
+
+        if markets == {"IN"}:
+            currency = "INR"
+            currency_context = "INR (₹)"
+        elif markets == {"US"}:
+            currency = "USD"
+            currency_context = "USD ($)"
+        elif markets == {"IN", "US"}:
+            currency = "MIXED"
+            currency_context = "MIXED (Indian holdings in INR ₹, US holdings in USD $)"
+
+        if portfolio.holdings:
+            market_currency_context = {
+                holding.ticker: {
+                    "market": holding.market,
+                    "currency": "INR" if holding.market == "IN" else "USD",
+                    "currency_symbol": "₹" if holding.market == "IN" else "$",
+                }
+                for holding in portfolio.holdings
+            }
+
         return PortfolioIntelligence(
             invested_value=invested_value,
             current_value=current_value,
             profit_loss=profit_loss,
             profit_loss_percentage=profit_loss_percentage,
             holdings_count=len(portfolio.holdings),
+            currency=currency,
+            currency_context=currency_context,
+            market_currency_context=market_currency_context,
         )
 
     def get_last_prices(self, portfolio: Portfolio) -> dict[str, float]:

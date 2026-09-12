@@ -45,19 +45,23 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMarket, setSelectedMarket] = useState<string>('ALL');
 
+  // Calculate total portfolio invested capital to show presentation-only holding weight
+  const totalPortfolioInvested = useMemo(() => {
+    return holdings.reduce((sum, h) => {
+      const inv = getHoldingInvestedValue(h);
+      return sum + (inv ?? 0);
+    }, 0);
+  }, [holdings]);
+
   // Filtered holdings list
   const filteredHoldings = useMemo(() => {
     return holdings.filter((item) => {
-      const ticker = (item.ticker || item.symbol || '').toUpperCase();
-      const name = (item.name || item.company_name || '').toUpperCase();
-      const sector = (item.sector || '').toUpperCase();
+      const ticker = (item.ticker || '').toUpperCase();
       const query = searchQuery.trim().toUpperCase();
 
-      const matchesSearch =
-        !query || ticker.includes(query) || name.includes(query) || sector.includes(query);
-
+      const matchesSearch = !query || ticker.includes(query);
       const matchesMarket =
-        selectedMarket === 'ALL' || (item.market || 'NSE').toUpperCase() === selectedMarket;
+        selectedMarket === 'ALL' || (item.market || 'IN').toUpperCase() === selectedMarket;
 
       return matchesSearch && matchesMarket;
     });
@@ -75,7 +79,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             </Badge>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Securities, purchase lots, and backend-evaluated market valuations
+            Persisted ledger securities and cost basis
           </p>
         </div>
 
@@ -85,7 +89,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search ticker, sector..."
+              placeholder="Search ticker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-950/60 text-slate-200 placeholder:text-slate-500 text-xs rounded-lg border border-slate-700/80 pl-8 pr-3 py-1.5 focus:outline-none focus:border-cyan-500 transition-colors"
@@ -99,10 +103,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             className="bg-slate-950/60 text-slate-200 text-xs rounded-lg border border-slate-700/80 px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 transition-colors"
           >
             <option value="ALL">All Markets</option>
-            <option value="NSE">NSE</option>
-            <option value="BSE">BSE</option>
-            <option value="NASDAQ">NASDAQ</option>
-            <option value="NYSE">NYSE</option>
+            <option value="IN">IN (India)</option>
+            <option value="US">US (United States)</option>
           </select>
 
           {/* Add Holding CTA */}
@@ -122,7 +124,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         <EmptyState
           icon={Layers}
           title="No holdings in this portfolio yet"
-          description="Add your first stock, ETF, or asset position to view backend valuations and allocation weights."
+          description="Add your first stock or ETF position to record holdings and run AI portfolio analysis."
           actionLabel="Add Holding"
           onAction={onAddHolding}
           className="border-0 bg-transparent my-6"
@@ -137,114 +139,61 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             <thead>
               <tr className="border-b border-slate-800/80 bg-slate-950/40 text-[11px] font-semibold uppercase tracking-wider text-slate-400 select-none">
                 <th className="py-3 px-4">Asset / Ticker</th>
-                <th className="py-3 px-4 text-right">Qty</th>
+                <th className="py-3 px-4 text-right">Quantity</th>
                 <th className="py-3 px-4 text-right">Avg Buy Price</th>
-                <th className="py-3 px-4 text-right">Current Price</th>
-                <th className="py-3 px-4 text-right">Invested</th>
-                <th className="py-3 px-4 text-right">Current Value</th>
-                <th className="py-3 px-4 text-right">P/L & Return</th>
-                <th className="py-3 px-4 text-right">Allocation</th>
+                <th className="py-3 px-4 text-right">Invested Capital</th>
+                <th className="py-3 px-4 text-right">Capital Weight</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
               {filteredHoldings.map((h) => {
-                const ticker = h.ticker || h.symbol || 'UNKNOWN';
-                const market = h.market || 'NSE';
-                const quantity = typeof h.quantity === 'string' ? parseFloat(h.quantity) : h.quantity ?? h.shares;
-                const buyPrice = typeof h.buy_price === 'string' ? parseFloat(h.buy_price) : h.buy_price ?? h.average_buy_price ?? h.avg_price;
-
-                // Read backend calculated fields strictly
-                const currentPrice = getHoldingCurrentPrice(h);
+                const ticker = h.ticker || 'UNKNOWN';
+                const market = h.market || 'IN';
+                const quantity = typeof h.quantity === 'string' ? parseFloat(h.quantity) : h.quantity;
+                const buyPrice = typeof h.average_price === 'string' ? parseFloat(h.average_price) : h.average_price;
                 const investedVal = getHoldingInvestedValue(h);
-                const currentVal = getHoldingCurrentValue(h);
-                const pnl = getHoldingPnL(h);
-                const pnlPct = getHoldingPnLPercent(h);
-                const allocPct = getHoldingAllocation(h);
+                const holdingWeight = (totalPortfolioInvested > 0 && investedVal !== null)
+                  ? (investedVal / totalPortfolioInvested) * 100
+                  : null;
 
-                const isGain = pnl !== null ? pnl >= 0 : null;
+                const holdingCurrency = market === 'US' ? 'USD' : 'INR';
 
                 return (
                   <tr
                     key={h.id}
                     className="hover:bg-slate-800/30 transition-colors group"
                   >
-                    {/* Ticker & Name */}
+                    {/* Ticker & Market */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-slate-100 text-sm">
-                              {ticker}
-                            </span>
-                            <Badge variant="neutral" size="sm">
-                              {market}
-                            </Badge>
-                          </div>
-                          {(h.name || h.company_name || h.sector) && (
-                            <p className="text-[11px] text-slate-400 truncate max-w-[180px] mt-0.5">
-                              {h.name || h.company_name || h.sector}
-                            </p>
-                          )}
-                        </div>
+                        <span className="font-mono font-bold text-slate-100 text-sm">
+                          {ticker}
+                        </span>
+                        <Badge variant="neutral" size="sm">
+                          {market}
+                        </Badge>
                       </div>
                     </td>
 
                     {/* Quantity */}
                     <td className="py-3.5 px-4 text-right font-mono text-slate-200">
-                      {formatNumber(quantity, 2)}
+                      {formatNumber(quantity, 4)}
                     </td>
 
                     {/* Avg Buy Price */}
                     <td className="py-3.5 px-4 text-right font-mono text-slate-300">
-                      {formatCurrency(buyPrice, currency)}
+                      {formatCurrency(buyPrice, holdingCurrency)}
                     </td>
 
-                    {/* Current Price (from backend) */}
-                    <td className="py-3.5 px-4 text-right font-mono text-slate-200">
-                      {currentPrice !== null ? formatCurrency(currentPrice, currency) : '—'}
+                    {/* Invested Value */}
+                    <td className="py-3.5 px-4 text-right font-mono text-slate-100 font-semibold">
+                      {investedVal !== null ? formatCurrency(investedVal, holdingCurrency) : '—'}
                     </td>
 
-                    {/* Invested Value (from backend) */}
-                    <td className="py-3.5 px-4 text-right font-mono text-slate-300">
-                      {investedVal !== null ? formatCurrency(investedVal, currency) : '—'}
-                    </td>
-
-                    {/* Current Value (from backend) */}
-                    <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-100">
-                      {currentVal !== null ? formatCurrency(currentVal, currency) : '—'}
-                    </td>
-
-                    {/* P/L & P/L % (from backend) */}
-                    <td className="py-3.5 px-4 text-right font-mono">
-                      {pnl !== null ? (
-                        <div
-                          className={`flex flex-col items-end ${
-                            isGain ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          <span className="font-semibold flex items-center gap-0.5">
-                            {isGain ? (
-                              <ArrowUpRight className="w-3 h-3 inline" />
-                            ) : (
-                              <ArrowDownRight className="w-3 h-3 inline" />
-                            )}
-                            {formatCurrency(pnl, currency)}
-                          </span>
-                          {pnlPct !== null && (
-                            <span className="text-[11px] opacity-90">
-                              {formatPercent(pnlPct, true)}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-500">—</span>
-                      )}
-                    </td>
-
-                    {/* Allocation % (from backend) */}
+                    {/* Capital Weight */}
                     <td className="py-3.5 px-4 text-right font-mono text-cyan-400 font-medium">
-                      {allocPct !== null ? formatPercent(allocPct, false) : '—'}
+                      {holdingWeight !== null ? formatPercent(holdingWeight, false) : '—'}
                     </td>
 
                     {/* Actions */}

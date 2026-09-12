@@ -42,6 +42,7 @@ export const PortfolioDetailPage: React.FC = () => {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [aiValuation, setAiValuation] = useState<any | null>(null);
 
   // Modals state
   const [isAddHoldingOpen, setIsAddHoldingOpen] = useState<boolean>(false);
@@ -71,7 +72,7 @@ export const PortfolioDetailPage: React.FC = () => {
       setHoldings(holdingsRes);
     } catch (err: any) {
       console.error('Failed to load portfolio detail:', err);
-      setError(err?.message || 'Failed to retrieve portfolio. Please verify backend state.');
+      setError(err?.response?.data?.error || err?.message || 'Failed to retrieve portfolio. Please verify backend state.');
     } finally {
       setIsLoading(false);
     }
@@ -103,39 +104,40 @@ export const PortfolioDetailPage: React.FC = () => {
       navigate('/app/portfolio');
     } catch (err: any) {
       console.error('Failed to delete portfolio:', err);
-      setPortfolioDeleteError(err?.message || 'Failed to delete portfolio. Permission denied or resource unavailable.');
+      setPortfolioDeleteError(err?.response?.data?.error || err?.message || 'Failed to delete portfolio. Permission denied or resource unavailable.');
     } finally {
       setIsActionLoading(false);
     }
   };
 
-  // Add Holding
+  // Add Holding - mutation clears previous AI live valuation
   const handleAddHolding = async (payload: CreateHoldingPayload) => {
     if (!portfolioId) return;
     setIsActionLoading(true);
     try {
       await portfolioApi.addHolding(portfolioId, payload);
-      // Reload portfolio and holdings to reflect updated backend valuations
+      setAiValuation(null); // Clear stale AI valuation after mutation
       await loadPortfolioData();
     } finally {
       setIsActionLoading(false);
     }
   };
 
-  // Edit Holding
+  // Edit Holding - mutation clears previous AI live valuation
   const handleEditHolding = async (payload: UpdateHoldingPayload) => {
     if (!portfolioId || !editingHolding) return;
     setIsActionLoading(true);
     try {
       await portfolioApi.updateHolding(portfolioId, editingHolding.id, payload);
       setEditingHolding(null);
+      setAiValuation(null); // Clear stale AI valuation after mutation
       await loadPortfolioData();
     } finally {
       setIsActionLoading(false);
     }
   };
 
-  // Delete Holding
+  // Delete Holding - mutation clears previous AI live valuation
   const handleDeleteHolding = async () => {
     if (!portfolioId || !deletingHolding) return;
     setIsActionLoading(true);
@@ -143,10 +145,11 @@ export const PortfolioDetailPage: React.FC = () => {
     try {
       await portfolioApi.deleteHolding(portfolioId, deletingHolding.id);
       setDeletingHolding(null);
+      setAiValuation(null); // Clear stale AI valuation after mutation
       await loadPortfolioData();
     } catch (err: any) {
       console.error('Failed to delete holding:', err);
-      setHoldingDeleteError(err?.message || 'Failed to delete holding position.');
+      setHoldingDeleteError(err?.response?.data?.error || err?.message || 'Failed to delete holding position.');
     } finally {
       setIsActionLoading(false);
     }
@@ -199,17 +202,13 @@ export const PortfolioDetailPage: React.FC = () => {
           <div className="flex items-center gap-3 flex-wrap">
             <span>{portfolio.name}</span>
             <Badge variant="neutral" size="sm">
-              {portfolio.currency || 'INR'}
+              INR
             </Badge>
           </div>
         }
         subtitle={
           <div className="flex items-center gap-3 flex-wrap">
-            {portfolio.description ? (
-              <span>{portfolio.description}</span>
-            ) : (
-              <span>Quantitative Asset Book & Valuation Register</span>
-            )}
+            <span>Quantitative Asset Ledger & Portfolio Intelligence</span>
             {portfolio.updated_at && (
               <span className="flex items-center gap-1 text-[11px] text-slate-500">
                 <Clock className="w-3 h-3" />
@@ -313,6 +312,7 @@ export const PortfolioDetailPage: React.FC = () => {
       <PortfolioSummaryCard
         portfolio={portfolio}
         holdingsCount={holdings.length}
+        aiValuation={aiValuation}
       />
 
       {/* Asset Allocation Breakdown (Pie chart / distribution) */}
@@ -324,7 +324,7 @@ export const PortfolioDetailPage: React.FC = () => {
       {/* Positions / Holdings Table */}
       <HoldingsTable
         holdings={holdings}
-        currency={portfolio.currency || 'INR'}
+        currency="INR"
         onAddHolding={() => setIsAddHoldingOpen(true)}
         onEditHolding={(holding) => setEditingHolding(holding)}
         onDeleteHolding={(holding) => setDeletingHolding(holding)}
@@ -335,7 +335,7 @@ export const PortfolioDetailPage: React.FC = () => {
       <HoldingModal
         isOpen={isAddHoldingOpen}
         onClose={() => setIsAddHoldingOpen(false)}
-        currency={portfolio.currency || 'INR'}
+        currency="INR"
         onSubmit={handleAddHolding}
         isLoading={isActionLoading}
       />
@@ -345,7 +345,7 @@ export const PortfolioDetailPage: React.FC = () => {
         isOpen={Boolean(editingHolding)}
         onClose={() => setEditingHolding(null)}
         holding={editingHolding}
-        currency={portfolio.currency || 'INR'}
+        currency="INR"
         onSubmit={handleEditHolding}
         isLoading={isActionLoading}
       />
@@ -359,7 +359,7 @@ export const PortfolioDetailPage: React.FC = () => {
         }}
         onConfirm={handleDeleteHolding}
         title="Delete Holding"
-        message={`Are you sure you want to remove ${deletingHolding?.ticker} (${deletingHolding?.quantity} shares) from this portfolio?`}
+        message={`Are you sure you want to remove ${deletingHolding?.ticker} from this portfolio?`}
         confirmLabel="Remove Position"
         isLoading={isActionLoading}
         error={holdingDeleteError}
@@ -395,6 +395,7 @@ export const PortfolioDetailPage: React.FC = () => {
         onClose={() => setIsAiAnalysisOpen(false)}
         portfolio={portfolio}
         holdings={holdings}
+        onAnalysisSuccess={(structured) => setAiValuation(structured)}
       />
     </div>
   );

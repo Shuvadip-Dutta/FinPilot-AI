@@ -51,10 +51,10 @@ export const PortfoliosListPage: React.FC = () => {
     setError(null);
     try {
       const data = await portfolioApi.getPortfolios();
-      setPortfolios(data);
+      setPortfolios(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error('Failed to load portfolios:', err);
-      setError(err?.message || 'Failed to fetch portfolios. Please check your backend connection.');
+      setError(err?.response?.data?.error || err?.message || 'Failed to fetch portfolios. Please check your backend connection.');
     } finally {
       setIsLoading(false);
     }
@@ -64,14 +64,11 @@ export const PortfoliosListPage: React.FC = () => {
     fetchPortfolios();
   }, [fetchPortfolios]);
 
-  // Filtered portfolios
+  // Filtered portfolios by name
   const filteredPortfolios = portfolios.filter((p) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.description && p.description.toLowerCase().includes(q))
-    );
+    return p.name.toLowerCase().includes(q);
   });
 
   const handleCreatePortfolio = async (payload: CreatePortfolioPayload) => {
@@ -205,13 +202,8 @@ export const PortfoliosListPage: React.FC = () => {
       {!isLoading && !error && filteredPortfolios.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredPortfolios.map((p) => {
-            const currency = p.currency || 'INR';
-            const currVal = getPortfolioCurrentValue(p);
             const investedVal = getPortfolioInvestedValue(p);
-            const pnl = getPortfolioPnL(p);
-            const pnlPct = getPortfolioPnLPercent(p);
-            const count = p.holdings_count ?? p.total_holdings ?? p.holdings?.length ?? 0;
-            const isGain = pnl !== null ? pnl >= 0 : null;
+            const count = p.holdings?.length ?? 0;
 
             return (
               <div
@@ -228,15 +220,13 @@ export const PortfoliosListPage: React.FC = () => {
                       >
                         {p.name}
                       </h3>
-                      {p.description && (
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                          {p.description}
-                        </p>
-                      )}
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        ID: {p.id.slice(0, 8)}...
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge variant="neutral" size="sm">
-                        {currency}
+                        INR
                       </Badge>
                       <button
                         type="button"
@@ -256,54 +246,19 @@ export const PortfoliosListPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-800/80">
                     <div>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
-                        Current Value
+                        Invested Capital
                       </span>
                       <span className="text-sm font-bold font-mono text-slate-100 mt-0.5 block">
-                        {currVal !== null ? formatCurrency(currVal, currency) : '—'}
+                        {investedVal !== null ? formatCurrency(investedVal, 'INR') : '—'}
                       </span>
                     </div>
 
                     <div>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
-                        Invested
+                        Holdings
                       </span>
                       <span className="text-sm font-mono text-slate-300 mt-0.5 block">
-                        {investedVal !== null ? formatCurrency(investedVal, currency) : '—'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
-                        Profit / Loss
-                      </span>
-                      <span
-                        className={`text-xs font-semibold font-mono flex items-center gap-0.5 mt-0.5 ${
-                          isGain === null
-                            ? 'text-slate-400'
-                            : isGain
-                            ? 'text-emerald-400'
-                            : 'text-rose-400'
-                        }`}
-                      >
-                        {isGain !== null && (isGain ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />)}
-                        {pnl !== null ? formatCurrency(pnl, currency) : '—'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
-                        Return (%)
-                      </span>
-                      <span
-                        className={`text-xs font-semibold font-mono mt-0.5 block ${
-                          isGain === null
-                            ? 'text-slate-400'
-                            : isGain
-                            ? 'text-emerald-400'
-                            : 'text-rose-400'
-                        }`}
-                      >
-                        {pnlPct !== null ? formatPercent(pnlPct, true) : '—'}
+                        {count} {count === 1 ? 'position' : 'positions'}
                       </span>
                     </div>
                   </div>
@@ -313,7 +268,7 @@ export const PortfoliosListPage: React.FC = () => {
                 <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <Layers className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{count} {count === 1 ? 'position' : 'positions'}</span>
+                    <span>{count} assets</span>
                   </div>
 
                   <div className="flex items-center gap-2">

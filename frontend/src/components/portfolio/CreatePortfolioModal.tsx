@@ -18,9 +18,6 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
   isLoading = false,
 }) => {
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [currency, setCurrency] = useState('INR');
-  const [cashBalance, setCashBalance] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,15 +31,8 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
     try {
       await onSubmit({
         name: name.trim(),
-        description: description.trim() || undefined,
-        currency,
-        cash_balance: cashBalance ? parseFloat(cashBalance) : undefined,
       });
-      // Reset form
       setName('');
-      setDescription('');
-      setCurrency('INR');
-      setCashBalance('');
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Failed to create portfolio. Please try again.');
@@ -54,7 +44,7 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Create New Portfolio"
-      subtitle="Establish a new quantitative asset book and tracking mandate"
+      subtitle="Establish a new asset ledger and tracking book"
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose} disabled={isLoading}>
@@ -63,7 +53,8 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
           <Button
             variant="primary"
             size="sm"
-            onClick={handleSubmit}
+            type="submit"
+            form="create-portfolio-form"
             isLoading={isLoading}
           >
             Create Portfolio
@@ -71,7 +62,7 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form id="create-portfolio-form" onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg">
             {error}
@@ -87,43 +78,15 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
           autoFocus
         />
 
-        <div>
-          <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-            Base Currency
-          </label>
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="w-full bg-slate-900/90 text-slate-100 text-sm rounded-lg border border-slate-700/80 px-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors"
+        <div className="pt-2 flex justify-end">
+          <Button
+            variant="primary"
+            size="sm"
+            type="submit"
+            isLoading={isLoading}
           >
-            <option value="INR">INR (₹) — Indian Rupee</option>
-            <option value="USD">USD ($) — US Dollar</option>
-            <option value="EUR">EUR (€) — Euro</option>
-            <option value="GBP">GBP (£) — British Pound</option>
-          </select>
-        </div>
-
-        <Input
-          label="Initial Cash Balance (Optional)"
-          type="number"
-          step="any"
-          placeholder="0.00"
-          value={cashBalance}
-          onChange={(e) => setCashBalance(e.target.value)}
-          helperText="Available unallocated liquidity held in the portfolio"
-        />
-
-        <div>
-          <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-            Investment Thesis / Description (Optional)
-          </label>
-          <textarea
-            rows={3}
-            placeholder="Document mandate, risk constraints, target benchmark..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full bg-slate-900/90 text-slate-100 placeholder:text-slate-500 text-sm rounded-lg border border-slate-700/80 px-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors"
-          />
+            Create Portfolio
+          </Button>
         </div>
       </form>
     </Modal>

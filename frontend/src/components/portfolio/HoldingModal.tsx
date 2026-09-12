@@ -24,38 +24,25 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
   const isEdit = Boolean(holding);
 
   const [ticker, setTicker] = useState('');
-  const [market, setMarket] = useState('NSE');
+  const [market, setMarket] = useState<'IN' | 'US'>('IN');
   const [quantity, setQuantity] = useState('');
-  const [buyPrice, setBuyPrice] = useState('');
-  const [buyDate, setBuyDate] = useState('');
-  const [sector, setSector] = useState('');
-  const [assetClass, setAssetClass] = useState('Equity');
-  const [notes, setNotes] = useState('');
+  const [averagePrice, setAveragePrice] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (holding) {
-      setTicker(holding.ticker || holding.symbol || '');
-      setMarket(holding.market || 'NSE');
-      const qty = holding.quantity ?? holding.shares ?? '';
+      setTicker(holding.ticker || '');
+      setMarket((holding.market as 'IN' | 'US') || 'IN');
+      const qty = holding.quantity ?? '';
       setQuantity(String(qty));
-      const price = holding.buy_price ?? holding.average_buy_price ?? holding.avg_price ?? '';
-      setBuyPrice(String(price));
-      setBuyDate(holding.buy_date || holding.purchase_date || '');
-      setSector(holding.sector || '');
-      setAssetClass(holding.asset_class || 'Equity');
-      setNotes(holding.notes || '');
+      const price = holding.average_price ?? '';
+      setAveragePrice(String(price));
       setError(null);
     } else {
-      // Defaults for new holding
       setTicker('');
-      setMarket(currency === 'USD' ? 'NASDAQ' : 'NSE');
+      setMarket('IN');
       setQuantity('');
-      setBuyPrice('');
-      setBuyDate(new Date().toISOString().split('T')[0]);
-      setSector('');
-      setAssetClass('Equity');
-      setNotes('');
+      setAveragePrice('');
       setError(null);
     }
   }, [holding, isOpen, currency]);
@@ -74,9 +61,9 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
       return;
     }
 
-    const parsedPrice = parseFloat(buyPrice);
+    const parsedPrice = parseFloat(averagePrice);
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      setError('Please enter a valid buy price greater than 0');
+      setError('Please enter a valid average buy price greater than 0');
       return;
     }
 
@@ -86,15 +73,16 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
         ticker: ticker.trim().toUpperCase(),
         market,
         quantity: parsedQty,
-        buy_price: parsedPrice,
-        buy_date: buyDate || undefined,
-        sector: sector.trim() || undefined,
-        asset_class: assetClass || undefined,
-        notes: notes.trim() || undefined,
+        average_price: parsedPrice,
       });
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Failed to save holding. Please check parameters.');
+      const respData = err?.response?.data;
+      if (respData?.non_field_errors) {
+        setError('This holding (ticker & market) already exists in this portfolio.');
+      } else {
+        setError(err?.message || 'Failed to save holding. Please check parameters.');
+      }
     }
   };
 
@@ -105,7 +93,7 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
       title={isEdit ? `Edit Holding: ${holding?.ticker}` : 'Add New Holding'}
       subtitle={
         isEdit
-          ? 'Update purchase lot details, position quantity, or cost basis'
+          ? 'Update position quantity or average buy price'
           : 'Record a security position lot into this portfolio'
       }
       footer={
@@ -116,7 +104,8 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
           <Button
             variant="primary"
             size="sm"
-            onClick={handleSubmit}
+            type="submit"
+            form="holding-modal-form"
             isLoading={isLoading}
           >
             {isEdit ? 'Update Position' : 'Add Position'}
@@ -124,7 +113,7 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form id="holding-modal-form" onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg">
             {error}
@@ -139,7 +128,7 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
               placeholder="e.g. RELIANCE, TCS, INFY, AAPL"
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              disabled={isEdit} // Ticker is typically fixed when editing a holding
+              disabled={isEdit}
               required
               autoFocus={!isEdit}
             />
@@ -150,80 +139,48 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
             </label>
             <select
               value={market}
-              onChange={(e) => setMarket(e.target.value)}
-              className="w-full bg-slate-900/90 text-slate-100 text-sm rounded-lg border border-slate-700/80 px-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors"
+              onChange={(e) => setMarket(e.target.value as 'IN' | 'US')}
+              disabled={isEdit}
+              className="w-full bg-slate-900/90 text-slate-100 text-sm rounded-lg border border-slate-700/80 px-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
             >
-              <option value="NSE">NSE</option>
-              <option value="BSE">BSE</option>
-              <option value="NASDAQ">NASDAQ</option>
-              <option value="NYSE">NYSE</option>
+              <option value="IN">IN (India)</option>
+              <option value="US">US (United States)</option>
             </select>
           </div>
         </div>
 
-        {/* Quantity & Buy Price */}
+        {/* Quantity & Average Buy Price */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Quantity (Shares / Units)"
             type="number"
             step="any"
-            placeholder="e.g. 50"
+            placeholder="e.g. 10"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             required
           />
           <Input
-            label={`Average Buy Price (${currency})`}
+            label={`Average Buy Price (${market === 'US' ? 'USD' : 'INR'})`}
             type="number"
             step="any"
-            placeholder="e.g. 2450.50"
-            value={buyPrice}
-            onChange={(e) => setBuyPrice(e.target.value)}
+            placeholder="e.g. 2850.00"
+            value={averagePrice}
+            onChange={(e) => setAveragePrice(e.target.value)}
             required
           />
         </div>
 
-        {/* Buy Date & Asset Class */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Acquisition Date"
-            type="date"
-            value={buyDate}
-            onChange={(e) => setBuyDate(e.target.value)}
-          />
-          <div>
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Asset Class
-            </label>
-            <select
-              value={assetClass}
-              onChange={(e) => setAssetClass(e.target.value)}
-              className="w-full bg-slate-900/90 text-slate-100 text-sm rounded-lg border border-slate-700/80 px-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors"
-            >
-              <option value="Equity">Equity (Stock)</option>
-              <option value="ETF">ETF (Exchange Traded Fund)</option>
-              <option value="Mutual Fund">Mutual Fund</option>
-              <option value="Fixed Income">Fixed Income / Bond</option>
-              <option value="Crypto">Cryptocurrency</option>
-              <option value="Commodity">Commodity / Gold</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Sector & Notes */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Sector (Optional)"
-            placeholder="e.g. Information Technology, Energy"
-            value={sector}
-            onChange={(e) => setSector(e.target.value)}
-          />
-          <Input
-            label="Investment Notes (Optional)"
-            placeholder="Target thesis, stop loss, rationale"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
+        {/* Inline submit button */}
+        <div className="pt-2 flex justify-end">
+          <Button
+            variant="primary"
+            size="sm"
+            type="submit"
+            isLoading={isLoading}
+          >
+            {isEdit ? 'Update Position' : 'Add Position'}
+          </Button>
         </div>
       </form>
     </Modal>

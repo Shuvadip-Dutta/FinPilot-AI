@@ -33,51 +33,33 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
   holdings,
   className = '',
 }) => {
-  const currency = portfolio?.currency || 'INR';
+  const currency = 'INR';
 
-  // Extract allocation data strictly from backend
+  // Compute allocation breakdown strictly from holding invested value: quantity * average_price
   const allocationItems: AllocationItem[] = React.useMemo(() => {
-    // 1. Direct allocation array on portfolio
-    if (Array.isArray(portfolio?.allocation) && portfolio.allocation.length > 0) {
-      return portfolio.allocation.map((item, idx) => ({
-        name: item.name || item.ticker || `Asset ${idx + 1}`,
-        ticker: item.ticker,
-        percentage: typeof item.percentage === 'string' ? parseFloat(item.percentage) : item.percentage ?? (typeof item.weight === 'string' ? parseFloat(item.weight) : item.weight),
-        value: typeof item.value === 'string' ? parseFloat(item.value) : item.value,
-        color: PALETTE[idx % PALETTE.length],
-      }));
-    }
+    let totalInvested = 0;
+    const items = holdings.map((h) => {
+      const qty = typeof h.quantity === 'string' ? parseFloat(h.quantity) : h.quantity;
+      const price = typeof h.average_price === 'string' ? parseFloat(h.average_price) : h.average_price;
+      const inv = (qty && price && !isNaN(qty) && !isNaN(price)) ? qty * price : 0;
+      totalInvested += inv;
+      return {
+        ticker: h.ticker,
+        market: h.market,
+        invested: inv,
+      };
+    });
 
-    // 2. Allocation dictionary/object on portfolio
-    if (portfolio?.allocation && typeof portfolio.allocation === 'object' && !Array.isArray(portfolio.allocation)) {
-      const entries = Object.entries(portfolio.allocation);
-      if (entries.length > 0) {
-        return entries.map(([key, val], idx) => ({
-          name: key,
-          ticker: key,
-          percentage: typeof val === 'number' ? val : parseFloat(String(val)),
-          color: PALETTE[idx % PALETTE.length],
-        }));
-      }
-    }
+    if (totalInvested <= 0) return [];
 
-    // 3. From holdings' backend-computed allocation_percentage or weight
-    const holdingsWithAlloc = holdings
-      .map((h, idx) => {
-        const alloc = getHoldingAllocation(h);
-        const currVal = getHoldingCurrentValue(h);
-        return {
-          name: h.ticker || h.symbol || `Asset ${idx + 1}`,
-          ticker: h.ticker,
-          percentage: alloc,
-          value: currVal,
-          color: PALETTE[idx % PALETTE.length],
-        };
-      })
-      .filter((item) => item.percentage !== null && item.percentage > 0);
-
-    return holdingsWithAlloc;
-  }, [portfolio, holdings]);
+    return items.map((item, idx) => ({
+      name: `${item.ticker} (${item.market})`,
+      ticker: item.ticker,
+      percentage: (item.invested / totalInvested) * 100,
+      value: item.invested,
+      color: PALETTE[idx % PALETTE.length],
+    }));
+  }, [holdings]);
 
   if (allocationItems.length === 0) {
     return (
