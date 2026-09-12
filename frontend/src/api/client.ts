@@ -233,7 +233,12 @@ export const apiClient = {
     return request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body !== undefined
+          ? body instanceof FormData
+            ? body
+            : JSON.stringify(body)
+          : undefined,
     });
   },
 
@@ -241,7 +246,12 @@ export const apiClient = {
     return request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body !== undefined
+          ? body instanceof FormData
+            ? body
+            : JSON.stringify(body)
+          : undefined,
     });
   },
 
@@ -249,7 +259,12 @@ export const apiClient = {
     return request<T>(endpoint, {
       ...options,
       method: 'PATCH',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body !== undefined
+          ? body instanceof FormData
+            ? body
+            : JSON.stringify(body)
+          : undefined,
     });
   },
 

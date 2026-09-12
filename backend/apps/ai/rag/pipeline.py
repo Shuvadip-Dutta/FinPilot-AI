@@ -54,3 +54,12 @@ class RAGPipeline:
             filters=filters,
             score_threshold=score_threshold,
         )
+
+    def delete_document(
+        self,
+        document_id: str,
+        user_id: str | None = None,
+    ) -> None:
+        if hasattr(self.vector_store, "delete_document"):
+            self.vector_store.delete_document(document_id, user_id)
+

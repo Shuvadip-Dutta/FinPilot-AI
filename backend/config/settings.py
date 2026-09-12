@@ -316,3 +316,6 @@ QDRANT_COLLECTION = os.getenv(
     "QDRANT_COLLECTION",
     "finpilot_documents",
 )
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))

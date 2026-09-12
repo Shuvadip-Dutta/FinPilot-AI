@@ -1,5 +1,10 @@
 from django.urls import path
 
+from apps.research.document_views import (
+    FinancialDocumentDetailView,
+    FinancialDocumentListCreateView,
+    FinancialDocumentSearchView,
+)
 from apps.research.views import (
     CompanyResearchView,
     FinancialResearchView,
@@ -12,6 +17,21 @@ from apps.research.views import (
 
 
 urlpatterns = [
+    path(
+        "documents/",
+        FinancialDocumentListCreateView.as_view(),
+        name="financial-documents-list-create",
+    ),
+    path(
+        "documents/search/",
+        FinancialDocumentSearchView.as_view(),
+        name="financial-documents-search",
+    ),
+    path(
+        "documents/<uuid:document_id>/",
+        FinancialDocumentDetailView.as_view(),
+        name="financial-documents-detail",
+    ),
     path(
         "company/",
         CompanyResearchView.as_view(),
@@ -47,4 +67,5 @@ urlpatterns = [
         ResearchSessionDetailView.as_view(),
         name="research-session-detail",
     ),
-]
+]
+

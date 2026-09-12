@@ -8,6 +8,7 @@ def _build_metadata_filters(
     market: str | None = None,
     document_type: str | None = None,
     fiscal_year: int | None = None,
+    user_id: str | int | None = None,
 ) -> dict[str, object]:
     filters: dict[str, object] = {}
 
@@ -33,6 +34,11 @@ def _build_metadata_filters(
             raise TypeError("fiscal_year must be an integer or null.")
         filters["fiscal_year"] = fiscal_year
 
+    if user_id is not None:
+        cleaned_user_id = str(user_id).strip()
+        if cleaned_user_id:
+            filters["user_id"] = cleaned_user_id
+
     return filters
 
 
@@ -56,6 +62,7 @@ def search_financial_documents(
     document_type: str | None = None,
     fiscal_year: int | None = None,
     top_k: int = 5,
+    user_id: str | int | None = None,
 ) -> dict[str, object]:
     """Search the vectorized financial document corpus using the existing RAG pipeline."""
 
@@ -74,6 +81,7 @@ def search_financial_documents(
         market=market,
         document_type=document_type,
         fiscal_year=fiscal_year,
+        user_id=user_id,
     )
 
     results = pipeline.retrieve(
@@ -85,3 +93,4 @@ def search_financial_documents(
     return {
         "documents": _serialize_results(results),
     }
+

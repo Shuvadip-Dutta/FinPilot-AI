@@ -149,3 +149,48 @@ class ResearchEvidence(models.Model):
 
     def __str__(self):
         return f"ResearchEvidence {self.agent_name} (Session {self.session_id})"
+
+
+class FinancialDocument(models.Model):
+    STATUS_PENDING = "PENDING"
+    STATUS_PROCESSING = "PROCESSING"
+    STATUS_COMPLETED = "COMPLETED"
+    STATUS_FAILED = "FAILED"
+
+    INGESTION_STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PROCESSING, "Processing"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="financial_documents",
+    )
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    file_size = models.PositiveBigIntegerField()
+    file_path = models.CharField(max_length=512)
+    ticker = models.CharField(max_length=20, blank=True, null=True)
+    market = models.CharField(max_length=10, blank=True, null=True)
+    ingestion_status = models.CharField(
+        max_length=20,
+        choices=INGESTION_STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    chunk_count = models.PositiveIntegerField(default=0)
+    ingestion_error = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.filename} ({self.ingestion_status})"

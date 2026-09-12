@@ -221,6 +221,7 @@ class LangGraphResearchWorkflow:
 
         initial_state = {
             "user_message": user_message,
+            "user_id": str(user.id) if user and getattr(user, "id", None) else None,
             "ticker": ticker,
             "market": market,
             "portfolio_input": portfolio_input,
@@ -229,6 +230,7 @@ class LangGraphResearchWorkflow:
             "results": {},
             "errors": [],
         }
+
         self.observer.graph_started(thread_id=thread_id, route=route)
         try:
             result = self._graph.invoke(
@@ -1065,6 +1067,7 @@ class LangGraphResearchWorkflow:
 
         return AgentState(
             user_message=root.get("user_message", ""),
+            user_id=root.get("user_id"),
             ticker=root.get("ticker"),
             market=root.get("market"),
             portfolio_input=root.get("portfolio_input"),
@@ -1073,3 +1076,4 @@ class LangGraphResearchWorkflow:
             results=results,
             errors=errors,
         )
+

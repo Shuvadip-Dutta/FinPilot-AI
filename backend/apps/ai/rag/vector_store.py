@@ -119,7 +119,27 @@ class InMemoryVectorStore:
             for _, chunk, score in candidates[:top_k]
         ]
 
+    def delete_document(
+        self,
+        document_id: str,
+        user_id: str | None = None,
+    ) -> int:
+        initial_len = len(self._entries)
+        self._entries = [
+            (chunk, emb)
+            for chunk, emb in self._entries
+            if not (
+                chunk.document_id == document_id
+                and (
+                    user_id is None
+                    or str(chunk.metadata.get("user_id")) == str(user_id)
+                )
+            )
+        ]
+        return initial_len - len(self._entries)
+
     def _validate_embedding(self, embedding: list[float]) -> None:
+
         if not embedding:
             raise ValueError("Embeddings must not be empty.")
 
@@ -301,4 +321,30 @@ class QdrantVectorStore:
 
         return models.Filter(
             must=conditions,
+        )
+
+    def delete_document(
+        self,
+        document_id: str,
+        user_id: str | None = None,
+    ) -> None:
+        conditions = [
+            models.FieldCondition(
+                key="metadata.document_id",
+                match=models.MatchValue(value=document_id),
+            )
+        ]
+        if user_id is not None:
+            conditions.append(
+                models.FieldCondition(
+                    key="metadata.user_id",
+                    match=models.MatchValue(value=str(user_id)),
+                )
+            )
+
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(must=conditions)
+            ),
         )

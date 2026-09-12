@@ -13,3 +13,4 @@ qdrant-client
 langgraph-checkpoint-postgres
 djangorestframework-simplejwt
 django-cors-headers
+pypdf

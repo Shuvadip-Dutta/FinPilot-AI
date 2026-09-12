@@ -10,11 +10,14 @@ class AgentState(BaseModel):
 
     user_message: str
 
+    user_id: str | int | None = None
+
     ticker: str | None = None
 
     market: str | None = None
 
     portfolio_input: PortfolioWorkflowInput | None = None
+
 
     route: Literal[
         "financial",

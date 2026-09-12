@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   BrainCircuit,
   History,
+  FileText,
   TrendingUp,
   PieChart,
   ShieldAlert,
@@ -29,6 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, exact: true },
   { name: 'Research', href: '/app/research', icon: BrainCircuit, badge: 'Agentic', exact: true },
   { name: 'Research History', href: '/app/research/history', icon: History, exact: true },
+  { name: 'Documents', href: '/app/documents', icon: FileText, badge: 'RAG', exact: true },
   { name: 'Markets', href: '/app/markets', icon: TrendingUp, exact: true },
   { name: 'Portfolio', href: '/app/portfolio', icon: PieChart },
   { name: 'Risk', href: '/app/risk', icon: ShieldAlert },
@@ -37,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'Profile', href: '/app/profile', icon: User, exact: true },
   { name: 'Settings', href: '/app/settings', icon: Settings, exact: true },
 ];
+
 
 export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,

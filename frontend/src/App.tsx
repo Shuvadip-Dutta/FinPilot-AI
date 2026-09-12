@@ -21,6 +21,7 @@ import { PortfolioAnalysisPage } from './pages/app/PortfolioAnalysisPage';
 import { PortfolioRiskPage } from './pages/app/PortfolioRiskPage';
 import { PortfolioOptimizationPage } from './pages/app/PortfolioOptimizationPage';
 import { BacktestPage } from './pages/app/BacktestPage';
+import { DocumentsPage } from './pages/app/DocumentsPage';
 import { PlaceholderPage } from './pages/app/PlaceholderPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="research" element={<ResearchPage />} />
             <Route path="research/history" element={<ResearchHistoryPage />} />
             <Route path="research/:sessionId" element={<ResearchSessionDetailPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
 
             {/* Markets & News Routes (Phase B) */}
             <Route path="markets" element={<MarketsPage />} />
