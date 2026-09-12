@@ -190,6 +190,7 @@ class PortfolioBacktestView(APIView):
             "total_transaction_costs": final_result.total_transaction_costs,
             "rebalance_events": [e.model_dump() for e in final_result.rebalance_events] if final_result.rebalance_events else [],
             "equity_curve": final_result.equity_curve,
+            "drawdown_curve": final_result.drawdown_curve,
             "return_series": final_result.return_series,
         }
 

@@ -85,20 +85,51 @@ class PortfolioBacktestRequestSerializer(serializers.Serializer):
     from_date = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
     to_date = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
     benchmark_ticker = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
+    benchmark = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
     initial_capital = serializers.FloatField(required=False, default=100000.0, min_value=0.01)
     rebalance_frequency = serializers.ChoiceField(
         choices=["monthly", "quarterly", "annually", "periodic"],
         required=False,
         default="periodic",
     )
-    in_sample_window_days = serializers.IntegerField(required=False, default=252, min_value=3)
-    out_of_sample_step_days = serializers.IntegerField(required=False, default=21, min_value=1)
-    transaction_cost_bps = serializers.FloatField(required=False, default=10.0, min_value=0.0)
+    in_sample_window_days = serializers.IntegerField(required=False, default=None, min_value=3)
+    in_sample_window = serializers.IntegerField(required=False, default=None, min_value=3)
+    out_of_sample_step_days = serializers.IntegerField(required=False, default=None, min_value=1)
+    out_of_sample_step = serializers.IntegerField(required=False, default=None, min_value=1)
+    transaction_cost_bps = serializers.FloatField(required=False, default=None, min_value=0.0)
+    transaction_cost = serializers.FloatField(required=False, default=None, min_value=0.0)
     risk_free_rate = serializers.FloatField(required=False, default=0.0)
     min_weight = serializers.FloatField(required=False, default=0.0, min_value=0.0, max_value=1.0)
     max_weight = serializers.FloatField(required=False, default=1.0, min_value=0.0, max_value=1.0)
 
     def validate(self, attrs: dict) -> dict:
+        # Canonical benchmark_ticker resolution
+        if not attrs.get("benchmark_ticker") and attrs.get("benchmark"):
+            attrs["benchmark_ticker"] = attrs.get("benchmark")
+
+        # In-sample window resolution
+        if attrs.get("in_sample_window_days") is None:
+            if attrs.get("in_sample_window") is not None:
+                attrs["in_sample_window_days"] = attrs["in_sample_window"]
+            else:
+                attrs["in_sample_window_days"] = 252
+
+        # Out-of-sample step resolution
+        if attrs.get("out_of_sample_step_days") is None:
+            if attrs.get("out_of_sample_step") is not None:
+                attrs["out_of_sample_step_days"] = attrs["out_of_sample_step"]
+            else:
+                attrs["out_of_sample_step_days"] = 21
+
+        # Transaction cost resolution (bps)
+        if attrs.get("transaction_cost_bps") is None:
+            if attrs.get("transaction_cost") is not None:
+                tc = attrs["transaction_cost"]
+                # If passed as decimal fraction (e.g. 0.001 for 10 bps), convert to bps
+                attrs["transaction_cost_bps"] = tc * 10000.0 if tc < 1.0 else tc
+            else:
+                attrs["transaction_cost_bps"] = 10.0
+
         min_w = attrs.get("min_weight", 0.0)
         max_w = attrs.get("max_weight", 1.0)
         if min_w > max_w:

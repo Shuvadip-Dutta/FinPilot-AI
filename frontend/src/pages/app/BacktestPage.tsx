@@ -129,6 +129,7 @@ export const BacktestPage: React.FC = () => {
     }
 
     setIsRunningBacktest(true);
+    setBacktestResponse(null);
     setError(null);
     setErrorStatus(undefined);
 
@@ -141,6 +142,7 @@ export const BacktestPage: React.FC = () => {
       const status = err?.status || err?.response?.status;
       setErrorStatus(status);
       const detail =
+        err?.response?.data?.error ||
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||

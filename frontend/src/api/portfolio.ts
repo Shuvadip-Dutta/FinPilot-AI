@@ -149,18 +149,29 @@ export const portfolioApi = {
     portfolioId: string | number,
     payload: BacktestPayload
   ): Promise<BacktestResponse> {
-    // Harmonize date field aliases for robust backend deserialization
     const formattedPayload: Record<string, any> = {
-      ...payload,
-      start_date: payload.start_date || payload.from_date,
-      end_date: payload.end_date || payload.to_date,
-      from_date: payload.from_date || payload.start_date,
-      to_date: payload.to_date || payload.end_date,
+      from_date: payload.from_date || payload.start_date || undefined,
+      to_date: payload.to_date || payload.end_date || undefined,
+      benchmark_ticker: payload.benchmark_ticker || payload.benchmark || undefined,
+      initial_capital: payload.initial_capital,
+      rebalance_frequency: payload.rebalance_frequency,
+      in_sample_window_days: payload.in_sample_window_days ?? payload.in_sample_window,
+      out_of_sample_step_days: payload.out_of_sample_step_days ?? payload.out_of_sample_step,
+      transaction_cost_bps:
+        payload.transaction_cost_bps !== undefined
+          ? payload.transaction_cost_bps
+          : payload.transaction_cost !== undefined
+          ? (payload.transaction_cost < 1.0 ? payload.transaction_cost * 10000.0 : payload.transaction_cost)
+          : undefined,
+      risk_free_rate: payload.risk_free_rate,
+      min_weight: payload.min_weight,
+      max_weight: payload.max_weight,
     };
 
     return await apiClient.post<BacktestResponse>(
       `portfolio/${portfolioId}/backtest/`,
-      formattedPayload
+      formattedPayload,
+      { timeoutMs: 60000 }
     );
   },
 

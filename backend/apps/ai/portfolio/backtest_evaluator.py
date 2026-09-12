@@ -17,13 +17,29 @@ class PortfolioBacktestEvaluator:
 
     Responsibilities:
     1. Strategy risk metrics via PortfolioRiskEngine
-    2. Static Buy-and-Hold baseline risk metrics
-    3. Benchmark risk metrics (when benchmark_prices provided)
+    2. Static Buy-and-Hold baseline risk metrics & equity curve
+    3. Benchmark risk metrics & normalized benchmark equity curve
     4. Relative performance metrics (excess CAGR, return diff, tracking error, IR)
+    5. Synchronized multi-series equity curve and drawdown curve
     """
 
     def __init__(self, risk_engine: PortfolioRiskEngine | None = None):
         self.risk_engine = risk_engine or PortfolioRiskEngine()
+
+    @staticmethod
+    def _calculate_drawdown_series(values: list[float]) -> list[float]:
+        """Calculate percentage drawdown from peak at each point in time. Returns non-positive decimals."""
+        peak = -float("inf")
+        drawdowns = []
+        for v in values:
+            if v is None or not math.isfinite(v):
+                drawdowns.append(0.0)
+                continue
+            if v > peak:
+                peak = v
+            dd = (v - peak) / peak if peak > 0 else 0.0
+            drawdowns.append(round(dd, 6))
+        return drawdowns
 
     def evaluate(
         self,
@@ -44,16 +60,21 @@ class PortfolioBacktestEvaluator:
             risk_free_rate=input_data.risk_free_rate,
         )
 
-        # 2. Static Buy-and-Hold Baseline Metrics
-        buy_and_hold_metrics = self._calculate_buy_and_hold_metrics(
+        # 2. Static Buy-and-Hold Baseline Metrics & Path
+        buy_and_hold_metrics, bnh_values = self._calculate_buy_and_hold_metrics(
             input_data=input_data,
             oos_dates=oos_dates,
         )
+
+        strat_dd = self._calculate_drawdown_series(strat_values)
+        bnh_dd = self._calculate_drawdown_series(bnh_values)
 
         # 3. Benchmark & Relative Metrics
         benchmark_metrics = None
         benchmark_ticker = input_data.benchmark_ticker
         relative_metrics = None
+        bmark_values_map: dict[str, float] = {}
+        bmark_dd = None
 
         if input_data.benchmark_prices:
             common_dates = [d for d in oos_dates if d in input_data.benchmark_prices]
@@ -89,12 +110,64 @@ class PortfolioBacktestEvaluator:
                     bmark_returns=bmark_common_returns,
                 )
 
+                # Construct normalized benchmark equity curve on oos_dates
+                b0 = float(bmark_prices_map[common_dates[0]])
+                if b0 > 0:
+                    for d in oos_dates:
+                        if d in bmark_prices_map:
+                            bmark_values_map[d] = round(input_data.initial_capital * (float(bmark_prices_map[d]) / b0), 4)
+
+                if bmark_values_map:
+                    b_list = []
+                    last_b = input_data.initial_capital
+                    for d in oos_dates:
+                        val = bmark_values_map.get(d)
+                        if val is not None:
+                            last_b = val
+                        b_list.append(last_b)
+                    bmark_dd = self._calculate_drawdown_series(b_list)
+
+        # 4. Construct synchronized multi-series equity curve and drawdown curve
+        enriched_equity_curve = []
+        drawdown_curve = []
+        for i, d in enumerate(oos_dates):
+            s_val = strat_values[i]
+            b_val = bnh_values[i]
+            bm_val = bmark_values_map.get(d)
+
+            s_d = strat_dd[i]
+            b_d = bnh_dd[i]
+            bm_d = bmark_dd[i] if bmark_dd is not None else None
+
+            enriched_equity_curve.append({
+                "date": d,
+                "portfolio_value": s_val,
+                "strategy_value": s_val,
+                "strategy": s_val,
+                "buy_and_hold_value": b_val,
+                "buy_and_hold": b_val,
+                "benchmark_value": bm_val,
+                "benchmark": bm_val,
+                "strategy_drawdown": s_d,
+                "benchmark_drawdown": bm_d,
+                "daily_return": backtest_result.equity_curve[i].get("daily_return", 0.0),
+            })
+
+            drawdown_curve.append({
+                "date": d,
+                "strategy_drawdown": s_d,
+                "buy_and_hold_drawdown": b_d,
+                "benchmark_drawdown": bm_d,
+            })
+
         updated_result = backtest_result.model_copy(deep=True)
         updated_result.strategy_metrics = strategy_metrics
         updated_result.buy_and_hold_metrics = buy_and_hold_metrics
         updated_result.benchmark_metrics = benchmark_metrics
         updated_result.benchmark_ticker = benchmark_ticker
         updated_result.relative_metrics = relative_metrics
+        updated_result.equity_curve = enriched_equity_curve
+        updated_result.drawdown_curve = drawdown_curve
 
         return updated_result
 
@@ -102,7 +175,7 @@ class PortfolioBacktestEvaluator:
         self,
         input_data: PortfolioBacktestInput,
         oos_dates: list[str],
-    ) -> PortfolioRiskMetrics:
+    ) -> tuple[PortfolioRiskMetrics, list[float]]:
         """Construct static buy-and-hold equity path and calculate risk metrics."""
         tickers = sorted(input_data.tickers)
         t0_date = oos_dates[0]
@@ -132,13 +205,15 @@ class PortfolioBacktestEvaluator:
         bnh_values = []
         for d in oos_dates:
             val = sum(shares[t] * float(input_data.historical_prices[t][d]) for t in tickers)
-            bnh_values.append(val)
+            bnh_values.append(round(val, 4))
 
-        return self.risk_engine.calculate(
+        metrics = self.risk_engine.calculate(
             historical_prices={"BUY_AND_HOLD": bnh_values},
             weights={"BUY_AND_HOLD": 1.0},
             risk_free_rate=input_data.risk_free_rate,
         )
+
+        return metrics, bnh_values
 
     @staticmethod
     def _calculate_relative_metrics(

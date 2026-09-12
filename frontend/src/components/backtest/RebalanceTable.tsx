@@ -65,9 +65,9 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
       });
     }
 
-    // If backend provided dictionaries: previous_allocation / target_allocation or prev_weights / new_weights
-    const prevAlloc = event.previous_allocation || event.prev_weights || {};
-    const targetAlloc = event.target_allocation || event.target_weights || event.new_weights || event.weights || {};
+    // If backend provided dictionaries: previous_allocation / target_allocation or prev_weights / new_weights / weights_before
+    const prevAlloc = event.weights_before || event.previous_allocation || event.prev_weights || {};
+    const targetAlloc = event.target_weights || event.target_allocation || event.new_weights || event.weights || {};
 
     const allTickers = Array.from(
       new Set([...Object.keys(prevAlloc), ...Object.keys(targetAlloc)])

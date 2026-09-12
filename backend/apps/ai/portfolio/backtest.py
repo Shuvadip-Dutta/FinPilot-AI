@@ -91,6 +91,7 @@ class PortfolioBacktestResult(BaseModel):
     final_portfolio_value: float | None = None
     total_transaction_costs: float | None = None
     equity_curve: list[dict[str, Any]] | None = None
+    drawdown_curve: list[dict[str, Any]] | None = None
     return_series: dict[str, float] | None = None
     rebalance_events: list[RebalanceEvent] | None = None
     strategy_metrics: PortfolioRiskMetrics | None = None

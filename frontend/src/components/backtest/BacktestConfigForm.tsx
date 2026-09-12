@@ -120,15 +120,19 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
     setValidationError(null);
 
     const payload: BacktestPayload = {
-      start_date: fromDate,
-      end_date: toDate,
       from_date: fromDate,
       to_date: toDate,
+      start_date: fromDate,
+      end_date: toDate,
+      benchmark_ticker: benchmark,
       benchmark,
       initial_capital: initialCapital,
       rebalance_frequency: rebalanceFrequency,
+      in_sample_window_days: inSampleWindow,
       in_sample_window: inSampleWindow,
+      out_of_sample_step_days: outOfSampleStep,
       out_of_sample_step: outOfSampleStep,
+      transaction_cost_bps: transactionCostBps,
       transaction_cost: transactionCostBps / 10000, // 10 bps -> 0.0010
       risk_free_rate: riskFreeRatePct / 100, // 6.5% -> 0.065
       min_weight: minWeightPct / 100,

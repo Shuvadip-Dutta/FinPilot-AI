@@ -586,11 +586,15 @@ export interface BacktestPayload {
   from_date?: string;
   to_date?: string;
   benchmark?: string;
+  benchmark_ticker?: string;
   initial_capital?: number;
   rebalance_frequency?: RebalanceFrequency | string;
   in_sample_window?: number; // trading days or periods
+  in_sample_window_days?: number;
   out_of_sample_step?: number; // trading days or periods
+  out_of_sample_step_days?: number;
   transaction_cost?: number; // decimal e.g. 0.001 for 10bps
+  transaction_cost_bps?: number;
   risk_free_rate?: number; // decimal e.g. 0.065
   min_weight?: number; // 0.0
   max_weight?: number; // 0.35
@@ -600,6 +604,7 @@ export interface BacktestMetricsGroup {
   cagr?: number | string | null;
   annualized_return?: number | string | null;
   total_return?: number | string | null;
+  total_period_return?: number | string | null;
   sharpe_ratio?: number | string | null;
   sortino_ratio?: number | string | null;
   calmar_ratio?: number | string | null;
@@ -649,11 +654,14 @@ export interface RebalanceEventDetail {
 export interface RebalanceEvent {
   date?: string;
   rebalance_date?: string;
+  portfolio_value_before?: number | string | null;
+  portfolio_value_after?: number | string | null;
   turnover?: number | string | null;
   transaction_cost?: number | string | null;
   cost?: number | string | null;
   previous_allocation?: Record<string, number | string>;
   prev_weights?: Record<string, number | string>;
+  weights_before?: Record<string, number | string>;
   target_allocation?: Record<string, number | string>;
   target_weights?: Record<string, number | string>;
   new_weights?: Record<string, number | string>;
@@ -663,6 +671,7 @@ export interface RebalanceEvent {
 
 export interface BacktestResponse {
   portfolio_id?: string | number;
+  benchmark_ticker?: string;
   initial_capital?: number | string;
   final_value?: number | string;
   final_portfolio_value?: number | string;
@@ -785,7 +794,7 @@ export function getBacktestTotalReturn(
   metrics: BacktestMetricsGroup | null | undefined
 ): number | null {
   if (!metrics) return null;
-  return parseNum(metrics.total_return);
+  return parseNum(metrics.total_period_return ?? metrics.total_return);
 }
 
 export function getBacktestVolatility(
@@ -806,9 +815,9 @@ export function getBacktestEquityCurve(
   if (!response || !Array.isArray(response.equity_curve)) return [];
   return response.equity_curve.map((pt) => ({
     date: pt.date,
-    strategy: parseNum(pt.strategy ?? pt.strategy_value),
-    buy_and_hold: parseNum(pt.buy_and_hold ?? pt.buy_and_hold_value),
-    benchmark: parseNum(pt.benchmark ?? pt.benchmark_value),
+    strategy: parseNum(pt.strategy_value ?? pt.strategy ?? (pt as any).portfolio_value),
+    buy_and_hold: parseNum(pt.buy_and_hold_value ?? pt.buy_and_hold),
+    benchmark: parseNum(pt.benchmark_value ?? pt.benchmark),
   }));
 }
 

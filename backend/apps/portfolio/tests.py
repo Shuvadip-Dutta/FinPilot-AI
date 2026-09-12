@@ -1948,6 +1948,250 @@ class PortfolioOptimizationViewTestCase(TestCase):
         self.assertIn("error", response.json())
 
 
+class PortfolioBacktestAPITestCase(TestCase):
+    """Test suite for POST /api/v1/portfolio/<portfolio_id>/backtest/ endpoint."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="backtest_user1",
+            email="backtest_user1@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="backtest_user2",
+            email="backtest_user2@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Backtest Test Portfolio",
+        )
+        self.holding_a = Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="ASSET_A",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("100.0"),
+        )
+        self.holding_b = Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="ASSET_B",
+            market="IN",
+            quantity=Decimal("30.0"),
+            average_price=Decimal("50.0"),
+        )
+        self.dates = [f"2025-01-{i:02d}" for i in range(1, 20)]
+        self.client = APIClient()
+
+    def _mock_get_historical_data(self, ticker, to_date, from_date=None, market="IN"):
+        norm_ticker = ticker.upper()
+        if norm_ticker == "ASSET_A":
+            candles = [
+                {"timestamp": d, "close": 100.0 + (5.0 if i % 2 == 0 else -3.0) + i * 1.5}
+                for i, d in enumerate(self.dates)
+            ]
+            return {"candles": candles}
+        elif norm_ticker == "ASSET_B":
+            candles = [
+                {"timestamp": d, "close": 50.0 + (2.0 if i % 2 == 0 else -1.0) + i * 0.8}
+                for i, d in enumerate(self.dates)
+            ]
+            return {"candles": candles}
+        elif norm_ticker in ["^NSEI", "NSE_INDEX|NIFTY 50", "NIFTY 50", "BENCHMARK"]:
+            candles = [
+                {"timestamp": d, "close": 1000.0 + i * 10.0 + (2.0 if i % 2 == 0 else -2.0)}
+                for i, d in enumerate(self.dates)
+            ]
+            return {"candles": candles}
+        return {"candles": []}
+
+    def test_unauthenticated_request_rejected(self):
+        """1. Unauthenticated request rejected with 401 Unauthorized."""
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_unowned_portfolio_rejected(self):
+        """2. Accessing another user's portfolio rejected with 404 Not Found."""
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_empty_portfolio_returns_400(self):
+        """3. Portfolio with no holdings returns 400 Bad Request."""
+        empty_portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Empty Backtest Portfolio",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": empty_portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+
+    def test_single_asset_portfolio_returns_400(self):
+        """4. Portfolio with only one asset returns 400 Bad Request."""
+        single_portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Single Asset Backtest Portfolio",
+        )
+        Holding.objects.create(
+            portfolio=single_portfolio,
+            ticker="ONLY_ONE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("100.0"),
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": single_portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+        self.assertIn("at least two", response.json()["error"].lower())
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_mixed_market_portfolio_returns_400(self, mock_fetch):
+        """5. Mixed-market portfolio returns 400 Bad Request."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="AAPL",
+            market="US",
+            quantity=Decimal("5.0"),
+            average_price=Decimal("150.0"),
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+        self.assertIn("mixed markets", response.json()["error"].lower())
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_canonical_request_fields_accepted(self, mock_fetch):
+        """6. Canonical request fields produce authoritative response with multi-series curves and unchanged holdings."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        self.client.force_authenticate(user=self.user)
+
+        payload = {
+            "from_date": "2025-01-01",
+            "to_date": "2025-01-19",
+            "benchmark_ticker": "^NSEI",
+            "initial_capital": 100000.0,
+            "rebalance_frequency": "periodic",
+            "in_sample_window_days": 5,
+            "out_of_sample_step_days": 2,
+            "transaction_cost_bps": 10.0,
+            "risk_free_rate": 0.05,
+            "min_weight": 0.0,
+            "max_weight": 1.0,
+        }
+
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Check response structure
+        self.assertEqual(data["portfolio_id"], str(self.portfolio.id))
+        self.assertEqual(data["benchmark_ticker"], "^NSEI")
+        self.assertEqual(data["initial_capital"], 100000.0)
+
+        # Strategy metrics check
+        self.assertIsNotNone(data["strategy_metrics"])
+        self.assertIn("total_period_return", data["strategy_metrics"])
+        self.assertIn("cagr", data["strategy_metrics"])
+        self.assertIn("sharpe_ratio", data["strategy_metrics"])
+        self.assertIn("max_drawdown", data["strategy_metrics"])
+
+        # Buy-and-hold metrics check
+        self.assertIsNotNone(data["buy_and_hold_metrics"])
+        self.assertIn("total_period_return", data["buy_and_hold_metrics"])
+
+        # Benchmark metrics check
+        self.assertIsNotNone(data["benchmark_metrics"])
+        self.assertIn("total_period_return", data["benchmark_metrics"])
+
+        # Relative metrics check
+        self.assertIsNotNone(data["relative_metrics"])
+        self.assertIn("excess_cagr", data["relative_metrics"])
+        self.assertIn("total_return_difference", data["relative_metrics"])
+        self.assertIn("tracking_error", data["relative_metrics"])
+        self.assertIn("information_ratio", data["relative_metrics"])
+
+        # Equity curve check
+        equity_curve = data["equity_curve"]
+        self.assertIsInstance(equity_curve, list)
+        self.assertGreater(len(equity_curve), 0)
+        first_eq = equity_curve[0]
+        self.assertIn("date", first_eq)
+        self.assertIn("strategy_value", first_eq)
+        self.assertIn("buy_and_hold_value", first_eq)
+        self.assertIn("benchmark_value", first_eq)
+
+        # Drawdown curve check
+        drawdown_curve = data["drawdown_curve"]
+        self.assertIsInstance(drawdown_curve, list)
+        self.assertGreater(len(drawdown_curve), 0)
+        first_dd = drawdown_curve[0]
+        self.assertIn("date", first_dd)
+        self.assertIn("strategy_drawdown", first_dd)
+        self.assertIn("benchmark_drawdown", first_dd)
+
+        # Non-mutation assertion: Portfolio holdings must remain intact
+        self.holding_a.refresh_from_db()
+        self.holding_b.refresh_from_db()
+        self.assertEqual(self.holding_a.quantity, Decimal("10.0"))
+        self.assertEqual(self.holding_a.average_price, Decimal("100.0"))
+        self.assertEqual(self.holding_b.quantity, Decimal("30.0"))
+        self.assertEqual(self.holding_b.average_price, Decimal("50.0"))
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_frontend_equivalent_aliases_forwarded_correctly(self, mock_fetch):
+        """7. Frontend alias fields (benchmark, in_sample_window, out_of_sample_step, transaction_cost) are resolved."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        self.client.force_authenticate(user=self.user)
+
+        payload = {
+            "benchmark": "^NSEI",
+            "initial_capital": 50000.0,
+            "in_sample_window": 5,
+            "out_of_sample_step": 2,
+            "transaction_cost": 0.0010,  # 10 bps as fraction
+        }
+
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        self.assertEqual(data["benchmark_ticker"], "^NSEI")
+        self.assertEqual(data["initial_capital"], 50000.0)
+        self.assertIsNotNone(data["equity_curve"])
+        self.assertIsNotNone(data["drawdown_curve"])
+        self.assertIsNotNone(data["strategy_metrics"])
+        self.assertIsNotNone(data["benchmark_metrics"])
+
+    def test_invalid_parameters_rejected(self):
+        """8. Invalid min_weight > max_weight rejected with 400 Bad Request."""
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-backtest", kwargs={"portfolio_id": self.portfolio.id})
+
+        response = self.client.post(url, {"min_weight": 0.8, "max_weight": 0.2}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+
 
 
 

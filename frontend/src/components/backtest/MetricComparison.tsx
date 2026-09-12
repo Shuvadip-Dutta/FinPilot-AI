@@ -62,12 +62,12 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
     {
       label: 'Total Return',
       description: 'Cumulative compounded growth over backtest span',
-      strat: fmtPct(strat?.total_return, true),
-      bnh: fmtPct(bnh?.total_return, true),
-      bm: fmtPct(bm?.total_return, true),
+      strat: fmtPct(strat?.total_period_return ?? strat?.total_return, true),
+      bnh: fmtPct(bnh?.total_period_return ?? bnh?.total_return, true),
+      bm: fmtPct(bm?.total_period_return ?? bm?.total_return, true),
       higherIsBetter: true,
-      rawStrat: Number(strat?.total_return),
-      rawBm: Number(bm?.total_return),
+      rawStrat: Number(strat?.total_period_return ?? strat?.total_return),
+      rawBm: Number(bm?.total_period_return ?? bm?.total_return),
     },
     {
       label: 'CAGR (Annualized)',
