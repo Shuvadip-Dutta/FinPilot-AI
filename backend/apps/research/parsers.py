@@ -1,10 +1,12 @@
 """Document parsers for extracting text and provenance from financial files."""
 
 import io
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 import pypdf
+from bs4 import BeautifulSoup, NavigableString
 
 
 @dataclass
@@ -21,6 +23,143 @@ class ParsedDocument:
     page_count: int
     pages: list[PageInfo] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def _format_html_table(table_tag) -> str:
+    """Convert an HTML <table> into structured, delimited rows preserving columns."""
+    rows: list[str] = []
+    for tr in table_tag.find_all("tr"):
+        cells = tr.find_all(["th", "td"])
+        if not cells:
+            continue
+        row_values: list[str] = []
+        for cell in cells:
+            # Flatten cell contents and normalize internal whitespace
+            cell_text = " ".join(cell.get_text(" ", strip=True).split())
+            row_values.append(cell_text)
+
+        # Only retain row if it contains at least one non-empty cell
+        if any(row_values):
+            rows.append(" | ".join(row_values))
+
+    if not rows:
+        return ""
+    return "\n".join(rows)
+
+
+def extract_text_from_html(source: str | Path | BinaryIO | bytes) -> ParsedDocument:
+    """Extract clean, structured text from an SEC HTML / XHTML document with table preservation."""
+    raw_html = ""
+    if isinstance(source, (str, Path)):
+        # Check if source is a file path on disk
+        source_str = str(source)
+        # Only treat as path if it looks like a path and doesn't look like raw HTML content
+        is_html_content = "<html" in source_str.lower() or "<body" in source_str.lower() or "<table" in source_str.lower() or "<p" in source_str.lower()
+        if not is_html_content and Path(source_str).is_file():
+            with open(source_str, "rb") as f:
+                raw_bytes = f.read()
+            try:
+                raw_html = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                raw_html = raw_bytes.decode("latin-1", errors="replace")
+        else:
+            raw_html = source_str
+    elif isinstance(source, bytes):
+        try:
+            raw_html = source.decode("utf-8")
+        except UnicodeDecodeError:
+            raw_html = source.decode("latin-1", errors="replace")
+    else:
+        read_data = source.read()
+        if isinstance(read_data, bytes):
+            try:
+                raw_html = read_data.decode("utf-8")
+            except UnicodeDecodeError:
+                raw_html = read_data.decode("latin-1", errors="replace")
+        else:
+            raw_html = str(read_data)
+
+    if not raw_html or not raw_html.strip():
+        raise ValueError("HTML file contains no readable text or is empty.")
+
+    soup = BeautifulSoup(raw_html, "html.parser")
+
+    # Remove dangerous and non-content tags
+    for tag_name in [
+        "script",
+        "style",
+        "head",
+        "noscript",
+        "meta",
+        "link",
+        "title",
+        "svg",
+        "iframe",
+        "object",
+        "embed",
+        "applet",
+    ]:
+        for element in soup.find_all(tag_name):
+            element.decompose()
+
+    # Convert tables into structured text before general extraction to avoid duplication
+    for table in soup.find_all("table"):
+        table_text = _format_html_table(table)
+        if table_text:
+            table.replace_with(NavigableString(f"\n\n{table_text}\n\n"))
+        else:
+            table.decompose()
+
+    # Extract text with newline separator for block structure
+    extracted_text = soup.get_text("\n")
+
+    # Clean up and normalize whitespace
+    lines = [line.strip() for line in extracted_text.splitlines()]
+    cleaned_lines: list[str] = []
+    empty_streak = 0
+    for line in lines:
+        if line:
+            # Normalize internal tabs / multiple spaces
+            norm_line = re.sub(r"[ \t]+", " ", line)
+            cleaned_lines.append(norm_line)
+            empty_streak = 0
+        else:
+            if empty_streak == 0:
+                cleaned_lines.append("")
+            empty_streak += 1
+
+    full_text = "\n".join(cleaned_lines).strip()
+
+    # Fallback if meaningful text is extremely small (< 100 characters) or empty due to unparseable tags
+    if len(full_text) < 100:
+        # Strip dangerous blocks from raw HTML before fallback text extraction
+        sanitized_raw = re.sub(
+            r"<(script|style|head|noscript|svg|iframe|object|embed|applet)[^>]*>.*?</\1>",
+            " ",
+            raw_html,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        stripped = re.sub(r"<[^>]+>", " ", sanitized_raw)
+        fallback_text = re.sub(r"\s+", " ", stripped).strip()
+        if not full_text and fallback_text:
+            full_text = fallback_text
+
+    if not full_text:
+        raise ValueError("HTML file contains no readable text or is empty.")
+
+    return ParsedDocument(
+        text=full_text,
+        page_count=1,
+        pages=[
+            PageInfo(
+                page_number=1,
+                text=full_text,
+                char_start=0,
+                char_end=len(full_text),
+            )
+        ],
+        metadata={"page_count": 1, "format": "html"},
+    )
 
 
 def extract_text_from_pdf(source: str | Path | BinaryIO | bytes) -> ParsedDocument:
@@ -72,19 +211,33 @@ def extract_text_from_pdf(source: str | Path | BinaryIO | bytes) -> ParsedDocume
 
 
 def extract_text_from_txt(source: str | Path | BinaryIO | bytes) -> ParsedDocument:
-    """Extract UTF-8 text from a plain text file."""
+    """Extract UTF-8 text from a plain text file or string."""
+    text = ""
     if isinstance(source, (str, Path)):
-        with open(source, "rb") as f:
-            raw_bytes = f.read()
+        source_str = str(source)
+        if isinstance(source, Path) or ("\n" not in source_str and Path(source_str).is_file()):
+            with open(source_str, "rb") as f:
+                raw_bytes = f.read()
+            try:
+                text = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"File is not valid UTF-8 text: {exc}") from exc
+        else:
+            text = source_str
     elif isinstance(source, bytes):
-        raw_bytes = source
+        try:
+            text = source.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"File is not valid UTF-8 text: {exc}") from exc
     else:
-        raw_bytes = source.read()
-
-    try:
-        text = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(f"File is not valid UTF-8 text: {exc}") from exc
+        read_data = source.read()
+        if isinstance(read_data, bytes):
+            try:
+                text = read_data.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"File is not valid UTF-8 text: {exc}") from exc
+        else:
+            text = str(read_data)
 
     clean_text = text.strip()
     if not clean_text:
@@ -116,7 +269,11 @@ def parse_financial_document(
 
     if norm_content_type == "application/pdf" or norm_filename.endswith(".pdf"):
         return extract_text_from_pdf(source)
-    elif norm_content_type in ("text/plain", "text/csv") or norm_filename.endswith((".txt", ".text")):
+    elif norm_content_type in ("text/html", "application/xhtml+xml") or norm_filename.endswith((".html", ".htm", ".xhtml")):
+        return extract_text_from_html(source)
+    elif norm_content_type in ("text/plain", "text/csv") or norm_filename.endswith((".txt", ".text", ".csv")):
         return extract_text_from_txt(source)
     else:
-        raise ValueError(f"Unsupported document format: {content_type or filename}. Only PDF and TXT files are supported.")
+        raise ValueError(f"Unsupported document format: {content_type or filename}. Only PDF, HTML, and TXT files are supported.")
+
+
