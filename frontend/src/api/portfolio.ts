@@ -127,16 +127,7 @@ export const portfolioApi = {
     portfolioId: string | number,
     params?: { period?: string; benchmark?: string; risk_free_rate?: number }
   ): Promise<PortfolioRiskResponse> {
-    try {
-      return await apiClient.get<PortfolioRiskResponse>(`portfolio/${portfolioId}/risk/`, { params });
-    } catch (err: any) {
-      // Fallback endpoint if Django registers it as metrics or analytics
-      try {
-        return await apiClient.get<PortfolioRiskResponse>(`portfolio/${portfolioId}/metrics/`, { params });
-      } catch {
-        throw err;
-      }
-    }
+    return apiClient.get<PortfolioRiskResponse>(`portfolio/${portfolioId}/risk/`, { params });
   },
 
   /**

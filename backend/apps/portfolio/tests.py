@@ -1572,5 +1572,151 @@ class PortfolioBacktestAPITestCase(TestCase):
         self.assertIn("mixed markets", response.json()["error"])
 
 
+class PortfolioRiskViewTestCase(TestCase):
+    """Test suite for GET /api/v1/portfolio/<portfolio_id>/risk/ endpoint."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="riskinvestor1",
+            email="riskinvestor1@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="riskinvestor2",
+            email="riskinvestor2@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Risk Test Portfolio",
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="ASSET_A",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("100.0"),
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="ASSET_B",
+            market="IN",
+            quantity=Decimal("30.0"),
+            average_price=Decimal("50.0"),
+        )
+        self.dates = [f"2025-01-{i:02d}" for i in range(1, 15)]
+        self.client = APIClient()
+
+    def _mock_get_historical_data(self, ticker, to_date, from_date=None, market="IN"):
+        norm_ticker = ticker.upper()
+        if norm_ticker == "ASSET_A":
+            # Include fluctuations so max_drawdown > 0 and calmar_ratio is calculated
+            candles = [{"timestamp": d, "close": 100.0 + (5.0 if i % 2 == 0 else -3.0) + i * 1.0} for i, d in enumerate(self.dates)]
+            return {"candles": candles}
+        elif norm_ticker == "ASSET_B":
+            candles = [{"timestamp": d, "close": 50.0 + (2.0 if i % 2 == 0 else -1.0) + i * 0.5} for i, d in enumerate(self.dates)]
+            return {"candles": candles}
+        return {"candles": []}
+
+    def test_unauthenticated_request_rejected(self):
+        """1. Unauthenticated request rejected with 401 Unauthorized."""
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_another_user_portfolio_rejected(self):
+        """2. Accessing another user's portfolio rejected with 404 Not Found."""
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_authenticated_owner_can_retrieve_all_12_risk_fields(self, mock_fetch):
+        """3. Authenticated owner can retrieve risk with all 12 authoritative fields."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        self.assertEqual(data["portfolio_id"], str(self.portfolio.id))
+        self.assertEqual(data["portfolio_name"], "Risk Test Portfolio")
+        self.assertIn("risk_metrics", data)
+
+        required_metrics = [
+            "total_period_return",
+            "annualized_return",
+            "cagr",
+            "volatility",
+            "downside_volatility",
+            "sharpe_ratio",
+            "sortino_ratio",
+            "calmar_ratio",
+            "max_drawdown",
+            "max_drawdown_duration_days",
+            "var_95_historical",
+            "cvar_95_historical",
+        ]
+
+        for metric in required_metrics:
+            self.assertIn(metric, data, f"Missing top-level metric: {metric}")
+            self.assertIn(metric, data["risk_metrics"], f"Missing risk_metrics field: {metric}")
+            self.assertIsNotNone(data[metric], f"Metric {metric} should not be None")
+
+    def test_empty_portfolio_returns_400(self):
+        """4. Portfolio with no holdings returns 400 Bad Request."""
+        empty_portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Empty Portfolio",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": empty_portfolio.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+        self.assertIn("no holdings", response.json()["error"].lower())
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_mixed_market_portfolio_returns_400(self, mock_fetch):
+        """5. Mixed-market portfolio returns 400 Bad Request."""
+        mock_fetch.side_effect = self._mock_get_historical_data
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="AAPL",
+            market="US",
+            quantity=Decimal("5.0"),
+            average_price=Decimal("150.0"),
+        )
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+        self.assertIn("mixed markets", response.json()["error"])
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_insufficient_historical_data_returns_400(self, mock_fetch):
+        """6. Insufficient historical price data returns 400 Bad Request."""
+        # Return only 1 candle (insufficient for covariance/variance estimation)
+        mock_fetch.return_value = {"candles": [{"timestamp": "2025-01-01", "close": 100.0}]}
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.json())
+
+
+
 
 

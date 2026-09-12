@@ -193,3 +193,96 @@ class PortfolioBacktestView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class PortfolioRiskView(APIView):
+    """Calculate and return deterministic quantitative risk metrics for an authenticated user's portfolio."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        portfolio = get_object_or_404(Portfolio, pk=portfolio_id, user=request.user)
+
+        if not portfolio.holdings.exists():
+            return Response(
+                {"error": "Portfolio has no holdings. Add holdings to calculate risk metrics."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.ai.portfolio.adapters import create_portfolio_market_data_adapter
+        from apps.ai.portfolio.intelligence import PortfolioIntelligenceService
+        from apps.ai.portfolio.risk import PortfolioRiskEngine, calculate_current_weights
+        from apps.portfolio.builder import PortfolioWorkflowInputBuilder
+
+        # Parse optional query parameters
+        risk_free_rate_param = request.query_params.get("risk_free_rate", 0.0)
+        try:
+            risk_free_rate = float(risk_free_rate_param)
+        except (ValueError, TypeError):
+            risk_free_rate = 0.0
+
+        to_date = request.query_params.get("to_date")
+        from_date = request.query_params.get("from_date")
+
+        builder = PortfolioWorkflowInputBuilder()
+        try:
+            canonical_portfolio = portfolio.to_pydantic()
+            historical_prices = builder.fetch_portfolio_historical_prices(
+                portfolio=canonical_portfolio,
+                to_date=to_date,
+                from_date=from_date,
+            )
+        except (ValueError, TypeError) as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calculate current weights using latest market prices
+        intel_service = PortfolioIntelligenceService(
+            market_data_tool=create_portfolio_market_data_adapter()
+        )
+        try:
+            last_prices = intel_service.get_last_prices(canonical_portfolio)
+        except Exception:
+            last_prices = {}
+
+        for holding in canonical_portfolio.holdings:
+            t = holding.ticker.strip().upper()
+            if t not in last_prices or last_prices[t] <= 0:
+                if t in historical_prices and historical_prices[t]:
+                    last_prices[t] = float(historical_prices[t][-1])
+                else:
+                    last_prices[t] = float(holding.average_price)
+
+        try:
+            weights = calculate_current_weights(canonical_portfolio, last_prices)
+        except (ValueError, TypeError) as exc:
+            return Response(
+                {"error": f"Failed to calculate holding weights: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calculate deterministic quantitative risk
+        risk_engine = PortfolioRiskEngine()
+        try:
+            metrics = risk_engine.calculate(
+                historical_prices=historical_prices,
+                weights=weights,
+                risk_free_rate=risk_free_rate,
+            )
+        except (ValueError, TypeError) as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        metrics_dict = metrics.model_dump()
+        response_data = {
+            "portfolio_id": str(portfolio.id),
+            "portfolio_name": portfolio.name,
+            "risk_metrics": metrics_dict,
+            **metrics_dict,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)

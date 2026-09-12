@@ -6,6 +6,7 @@ from apps.portfolio.views import (
     PortfolioBacktestView,
     PortfolioDetailView,
     PortfolioListCreateView,
+    PortfolioRiskView,
 )
 
 urlpatterns = [
@@ -18,6 +19,11 @@ urlpatterns = [
         "<uuid:pk>/",
         PortfolioDetailView.as_view(),
         name="portfolio-detail",
+    ),
+    path(
+        "<uuid:portfolio_id>/risk/",
+        PortfolioRiskView.as_view(),
+        name="portfolio-risk",
     ),
     path(
         "<uuid:portfolio_id>/backtest/",

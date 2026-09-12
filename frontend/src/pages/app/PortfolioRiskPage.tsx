@@ -138,16 +138,34 @@ export const PortfolioRiskPage: React.FC = () => {
       if (portfolioRes.status === 'fulfilled') {
         setCurrentPortfolio(portfolioRes.value);
       }
+      let currentHoldings: Holding[] = [];
       if (holdingsRes.status === 'fulfilled') {
-        setHoldings(holdingsRes.value);
+        currentHoldings = holdingsRes.value;
+        setHoldings(currentHoldings);
       }
 
       if (riskRes.status === 'fulfilled') {
         setRiskData(riskRes.value);
+        setError(null);
       } else {
-        console.warn('Backend risk endpoint failed or returned empty:', riskRes.reason);
-        // We do not invent mock numbers; let the UI display missing state gracefully
         setRiskData(null);
+        const errPayload = (riskRes.reason as any)?.response?.data;
+        const errMsg =
+          errPayload?.error ||
+          errPayload?.detail ||
+          (riskRes.reason as any)?.message;
+
+        if (currentHoldings.length === 0 || (errMsg && String(errMsg).toLowerCase().includes('no holdings'))) {
+          setError('This portfolio currently has no holdings. Add assets to your ledger to calculate quantitative risk metrics.');
+        } else if (errMsg && String(errMsg).toLowerCase().includes('mixed market')) {
+          setError('Mixed-market portfolios (containing both Indian and US assets) cannot be processed by the single-market quantitative risk engine.');
+        } else if (errMsg && String(errMsg).toLowerCase().includes('insufficient historical data')) {
+          setError('Insufficient historical market data available for the portfolio holdings to compute robust risk metrics.');
+        } else if (errMsg) {
+          setError(String(errMsg));
+        } else {
+          setError('Unable to retrieve quantitative risk metrics from the backend.');
+        }
       }
     } catch (err: any) {
       console.error('Failed to load portfolio quantitative data:', err);
@@ -171,7 +189,11 @@ export const PortfolioRiskPage: React.FC = () => {
     if (found) {
       setCurrentPortfolio(found);
     }
-    setOptimizationData(null); // Reset optimization results for different portfolio
+    // Reset state immediately to prevent showing stale data from previous portfolio
+    setRiskData(null);
+    setHoldings([]);
+    setError(null);
+    setOptimizationData(null);
   };
 
   // Run mathematical optimization

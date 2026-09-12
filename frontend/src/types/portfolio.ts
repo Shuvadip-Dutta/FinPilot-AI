@@ -82,6 +82,12 @@ export interface PortfolioAiAnalysisResponse {
   route: string;
   structured_data?: {
     portfolio?: PortfolioStructuredValuation;
+    portfolio_risk?: {
+      current_risk?: PortfolioRiskMetrics | Record<string, any>;
+      optimized_risk?: PortfolioRiskMetrics | Record<string, any> | null;
+      [key: string]: any;
+    };
+    [key: string]: any;
   };
 }
 
@@ -93,16 +99,23 @@ export interface PortfolioAiAnalysisResponse {
  */
 
 export interface PortfolioRiskMetrics {
+  // Authoritative 12 exact backend fields
   total_period_return?: number | string | null;
   annualized_return?: number | string | null;
+  cagr?: number | string | null;
   volatility?: number | string | null;
-  annualized_volatility?: number | string | null;
   downside_volatility?: number | string | null;
-  downside_deviation?: number | string | null;
   sharpe_ratio?: number | string | null;
   sortino_ratio?: number | string | null;
   calmar_ratio?: number | string | null;
   max_drawdown?: number | string | null;
+  max_drawdown_duration_days?: number | string | null;
+  var_95_historical?: number | string | null;
+  cvar_95_historical?: number | string | null;
+
+  // Compatibility aliases
+  annualized_volatility?: number | string | null;
+  downside_deviation?: number | string | null;
   maximum_drawdown?: number | string | null;
   drawdown_duration?: number | string | null;
   drawdown_duration_days?: number | string | null;
@@ -110,7 +123,6 @@ export interface PortfolioRiskMetrics {
   var_95_percent?: number | string | null;
   cvar_95?: number | string | null;
   cvar_95_percent?: number | string | null;
-  cagr?: number | string | null;
   beta?: number | string | null;
   alpha?: number | string | null;
   r_squared?: number | string | null;
@@ -148,6 +160,8 @@ export interface PortfolioRiskResponse {
   portfolio_id?: string | number;
   portfolio_name?: string;
   as_of_date?: string;
+  market?: string;
+  data_points?: number;
   period?: string;
   benchmark?: string;
   risk_metrics?: PortfolioRiskMetrics;
@@ -156,19 +170,24 @@ export interface PortfolioRiskResponse {
   historical_series?: DrawdownSeriesPoint[];
   risk_contributions?: AssetRiskContribution[];
 
-  // Flat top-level fallback fields if returned directly by Django
+  // Authoritative 12 exact backend fields (flat top-level)
   total_period_return?: number | string | null;
   annualized_return?: number | string | null;
+  cagr?: number | string | null;
   volatility?: number | string | null;
   downside_volatility?: number | string | null;
   sharpe_ratio?: number | string | null;
   sortino_ratio?: number | string | null;
   calmar_ratio?: number | string | null;
   max_drawdown?: number | string | null;
+  max_drawdown_duration_days?: number | string | null;
+  var_95_historical?: number | string | null;
+  cvar_95_historical?: number | string | null;
+
+  // Compatibility aliases
   drawdown_duration?: number | string | null;
   var_95?: number | string | null;
   cvar_95?: number | string | null;
-  cagr?: number | string | null;
   beta?: number | string | null;
 }
 
@@ -436,7 +455,7 @@ export function getRiskDrawdownDuration(
 ): number | null {
   if (!response) return null;
   const metrics = 'risk_metrics' in response ? response.risk_metrics ?? response.metrics ?? response : response;
-  return parseNum(metrics?.drawdown_duration ?? (metrics as any)?.drawdown_duration_days);
+  return parseNum(metrics?.max_drawdown_duration_days ?? metrics?.drawdown_duration ?? (metrics as any)?.drawdown_duration_days);
 }
 
 export function getRiskVaR95(
@@ -444,7 +463,7 @@ export function getRiskVaR95(
 ): number | null {
   if (!response) return null;
   const metrics = 'risk_metrics' in response ? response.risk_metrics ?? response.metrics ?? response : response;
-  return parseNum(metrics?.var_95 ?? (metrics as any)?.var_95_percent);
+  return parseNum(metrics?.var_95_historical ?? metrics?.var_95 ?? (metrics as any)?.var_95_percent);
 }
 
 export function getRiskCVaR95(
@@ -452,7 +471,7 @@ export function getRiskCVaR95(
 ): number | null {
   if (!response) return null;
   const metrics = 'risk_metrics' in response ? response.risk_metrics ?? response.metrics ?? response : response;
-  return parseNum(metrics?.cvar_95 ?? (metrics as any)?.cvar_95_percent);
+  return parseNum(metrics?.cvar_95_historical ?? metrics?.cvar_95 ?? (metrics as any)?.cvar_95_percent);
 }
 
 export function getRiskCAGR(
