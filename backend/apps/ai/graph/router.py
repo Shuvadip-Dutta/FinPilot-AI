@@ -4,7 +4,7 @@ This module intentionally contains no model or service dependencies.  A future
 router can replace the keyword rules while preserving the ``route`` interface.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 
 WorkflowRoute = Literal[
@@ -63,13 +63,28 @@ class WorkflowRouter:
         "risk assessment",
     )
 
+    BACKTEST_KEYWORDS = (
+        "backtest",
+        "backtesting",
+        "walk forward",
+        "walk-forward",
+        "historical simulation",
+        "historically simulate",
+    )
+
     PORTFOLIO_KEYWORDS = (
         "portfolio",
         "holdings",
         "allocation",
         "portfolio analysis",
         "portfolio optimization",
-    )
+    ) + BACKTEST_KEYWORDS
+
+    @classmethod
+    def is_backtest_intent(cls, message: str) -> bool:
+        """Return True if message expresses backtest/historical simulation intent."""
+        normalized = message.casefold()
+        return cls._contains_keyword(normalized, cls.BACKTEST_KEYWORDS)
 
     def route(self, message: str) -> WorkflowRoute:
         """Return the workflow route for ``message`` without calling an LLM."""
@@ -113,6 +128,13 @@ class WorkflowRouter:
     def classify(self, message: str) -> WorkflowRoute:
         """Alias for callers that prefer classification-oriented naming."""
         return self.route(message)
+
+    def classify_intent(self, message: str) -> dict[str, Any]:
+        """Classify route and intent metadata."""
+        return {
+            "route": self.route(message),
+            "is_backtest": self.is_backtest_intent(message),
+        }
 
     @staticmethod
     def _contains_keyword(message: str, keywords: tuple[str, ...]) -> bool:
