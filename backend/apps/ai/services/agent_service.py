@@ -1,3 +1,4 @@
+from datetime import date, datetime
 import uuid
 from django.shortcuts import get_object_or_404
 
@@ -61,24 +62,73 @@ class AgentService:
         portfolio_input: PortfolioWorkflowInput | None = None,
         portfolio_id: str | uuid.UUID | None = None,
         thread_id: str = "default",
+        reference_date: date | datetime | None = None,
     ) -> AgentResult:
         if self.workflow is None:
             self.workflow = self._create_default_workflow()
 
-        if portfolio_id is not None and portfolio_input is None:
+        if portfolio_id is not None:
             if user is None or getattr(user, "is_anonymous", False):
                 raise ValueError("Authentication is required to access portfolio.")
 
-            from apps.portfolio.builder import PortfolioWorkflowInputBuilder
             from apps.portfolio.models import Portfolio
 
-            portfolio_orm = get_object_or_404(Portfolio, pk=portfolio_id, user=user)
-            include_opt = "optimiz" in message.casefold()
-            builder = PortfolioWorkflowInputBuilder()
-            portfolio_input = builder.build_workflow_input(
-                portfolio=portfolio_orm,
-                include_optimization=include_opt,
+            try:
+                portfolio_pk = uuid.UUID(str(portfolio_id))
+            except (ValueError, AttributeError, TypeError) as exc:
+                raise ValueError(f"Invalid portfolio id '{portfolio_id}': expected a valid UUID.") from exc
+
+            portfolio_orm = get_object_or_404(Portfolio, pk=portfolio_pk, user=user)
+
+            if portfolio_input is None:
+                from apps.portfolio.builder import PortfolioWorkflowInputBuilder
+
+                include_opt = "optimiz" in message.casefold()
+                builder = PortfolioWorkflowInputBuilder()
+                portfolio_input = builder.build_workflow_input(
+                    portfolio=portfolio_orm,
+                    include_optimization=include_opt,
+                )
+            portfolio_input.django_portfolio_id = str(portfolio_orm.pk)
+
+        from apps.ai.graph.router import WorkflowRouter
+
+        if WorkflowRouter.is_backtest_intent(message):
+            from apps.ai.portfolio.backtest_extractor import BacktestParameterExtractor
+
+            extracted_config = BacktestParameterExtractor.extract(
+                message, reference_date=reference_date
             )
+
+            # Security guard: conversational backtest requires a trusted portfolio context
+            if portfolio_input is None and portfolio_id is None:
+                raise ValueError("A portfolio is required for backtesting.")
+
+            # If an authenticated user is present and portfolio_input has a django_portfolio_id, verify ownership
+            if (
+                user is not None
+                and not getattr(user, "is_anonymous", False)
+                and portfolio_input is not None
+                and portfolio_input.django_portfolio_id is not None
+                and portfolio_id is None
+            ):
+                raw_id = str(portfolio_input.django_portfolio_id)
+                if not raw_id.startswith(("synth-", "mock-", "test-")):
+                    try:
+                        portfolio_uuid = uuid.UUID(raw_id)
+                    except (ValueError, AttributeError, TypeError) as exc:
+                        raise ValueError(
+                            f"Invalid portfolio id '{raw_id}': expected a valid UUID."
+                        ) from exc
+
+                    from apps.portfolio.models import Portfolio
+
+                    get_object_or_404(Portfolio, pk=portfolio_uuid, user=user)
+
+            if portfolio_input is not None:
+                portfolio_input.include_backtest = True
+                for field_name, val in extracted_config.to_workflow_kwargs().items():
+                    setattr(portfolio_input, field_name, val)
 
         workflow_kwargs = {
             "user_message": message,
@@ -153,6 +203,7 @@ class AgentService:
         portfolio_input: PortfolioWorkflowInput | None = None,
         portfolio_id: str | uuid.UUID | None = None,
         thread_id: str = "default",
+        reference_date: date | datetime | None = None,
     ) -> AgentResult:
         return self.run_workflow(
             message=message,
@@ -162,4 +213,5 @@ class AgentService:
             portfolio_input=portfolio_input,
             portfolio_id=portfolio_id,
             thread_id=thread_id,
+            reference_date=reference_date,
         )

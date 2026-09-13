@@ -377,3 +377,15 @@ class PortfolioAPIChatEndpointTestCase(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_api_chat_backtest_without_portfolio_id_returns_400(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/ai/chat/",
+            {
+                "message": "Backtest my portfolio against NIFTY 50",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("portfolio is required", response.data.get("error", "").lower())

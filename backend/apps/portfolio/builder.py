@@ -156,10 +156,12 @@ class PortfolioWorkflowInputBuilder:
             )
             historical_prices = opt_input.historical_prices
 
+        django_portfolio_id = str(portfolio.pk) if isinstance(portfolio, PortfolioModel) else None
         return PortfolioWorkflowInput(
             portfolio=canonical_portfolio,
             optimization_input=opt_input,
             historical_prices=historical_prices,
+            django_portfolio_id=django_portfolio_id,
         )
 
     @staticmethod

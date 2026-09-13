@@ -1,15 +1,23 @@
-"""Unit and integration tests for Module 14 Phase 1: Conversational Backtest Intent & Extraction."""
-
 from datetime import date
-from django.test import SimpleTestCase
+from decimal import Decimal
+from unittest.mock import MagicMock
+from django.contrib.auth import get_user_model
+from django.http import Http404
+from django.test import SimpleTestCase, TestCase
 
 from apps.ai.graph.router import WorkflowRouter
+from apps.ai.graph.state import AgentState
 from apps.ai.portfolio.backtest_extractor import (
     BacktestExtractionError,
     BacktestParameterExtractor,
     ExtractedBacktestConfig,
     extract_backtest_config,
 )
+from apps.ai.services.agent_service import AgentService
+from apps.ai.services.schemas import AgentResult
+from apps.portfolio.models import Holding, Portfolio
+
+User = get_user_model()
 
 
 class ConversationalBacktestRoutingTestCase(SimpleTestCase):
@@ -306,3 +314,379 @@ class BacktestParameterExtractionTestCase(SimpleTestCase):
             "backtest_risk_free_rate": 0.065,
         }
         self.assertEqual(kwargs, expected)
+
+
+class ConversationalBacktestAgentServiceTestCase(TestCase):
+    """Test suite for Module 14 Phase 2: AgentService & Portfolio Workflow Input Alignment."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="test_backtest_user",
+            email="backtest@example.com",
+            password="password123",
+        )
+        self.other_user = User.objects.create_user(
+            username="other_backtest_user",
+            email="other@example.com",
+            password="password123",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="My Growth Portfolio",
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("2500.00"),
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="TCS",
+            market="IN",
+            quantity=Decimal("5.0"),
+            average_price=Decimal("3500.00"),
+        )
+
+        self.other_portfolio = Portfolio.objects.create(
+            user=self.other_user,
+            name="Other Portfolio",
+        )
+        Holding.objects.create(
+            portfolio=self.other_portfolio,
+            ticker="INFY",
+            market="IN",
+            quantity=Decimal("20.0"),
+            average_price=Decimal("1500.00"),
+        )
+
+        self.fixed_ref_date = date(2026, 9, 13)
+        self.mock_workflow = MagicMock()
+        self.mock_workflow.run.return_value = AgentState(
+            user_message="mock message",
+            route="portfolio",
+            results={
+                "synthesis": AgentResult(response="Synthesized backtest output", tools_used=[])
+            },
+        )
+        self.service = AgentService(workflow=self.mock_workflow)
+
+    def test_1_backtest_request_detected_and_extractor_invoked(self):
+        """Case 1: Backtest request detected and extractor invoked."""
+        self.service.run(
+            message="Backtest my portfolio against NIFTY 50",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+            reference_date=self.fixed_ref_date,
+        )
+        self.mock_workflow.run.assert_called_once()
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertTrue(p_input.include_backtest)
+        self.assertEqual(p_input.backtest_benchmark_ticker, "NIFTY 50")
+
+    def test_2_normal_portfolio_request_does_not_enable_backtesting(self):
+        """Case 2: Normal portfolio request does not enable backtesting."""
+        self.service.run(
+            message="Analyze my portfolio allocation",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        self.mock_workflow.run.assert_called_once()
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertFalse(p_input.include_backtest)
+
+    def test_3_trusted_portfolio_id_attached_to_workflow_input(self):
+        """Case 3: Trusted portfolio id is attached to PortfolioWorkflowInput."""
+        self.service.run(
+            message="Backtest my portfolio against NIFTY 50",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.django_portfolio_id, str(self.portfolio.id))
+
+    def test_4_portfolio_belonging_to_another_user_is_rejected(self):
+        """Case 4: A portfolio belonging to another user is rejected with 404."""
+        with self.assertRaises(Http404):
+            self.service.run(
+                message="Backtest my portfolio against NIFTY 50",
+                user=self.user,
+                portfolio_id=self.other_portfolio.id,
+            )
+        self.mock_workflow.run.assert_not_called()
+
+    def test_5_natural_language_prompt_cannot_override_trusted_portfolio_id(self):
+        """Case 5: Natural-language prompt cannot override the trusted portfolio id."""
+        message = f"Backtest portfolio {self.other_portfolio.id} against NIFTY 50"
+        self.service.run(
+            message=message,
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.django_portfolio_id, str(self.portfolio.id))
+        self.assertNotEqual(p_input.django_portfolio_id, str(self.other_portfolio.id))
+
+    def test_6_backtest_benchmark_and_relative_dates(self):
+        """Case 6: 'Backtest my portfolio against NIFTY 50 for the last 2 years' results."""
+        self.service.run(
+            message="Backtest my portfolio against NIFTY 50 for the last 2 years",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+            reference_date=self.fixed_ref_date,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertTrue(p_input.include_backtest)
+        self.assertEqual(p_input.backtest_benchmark_ticker, "NIFTY 50")
+        self.assertEqual(p_input.backtest_from_date, "2024-09-13")
+        self.assertEqual(p_input.backtest_to_date, "2026-09-13")
+
+    def test_7_explicit_initial_capital_propagated(self):
+        """Case 7: Explicit initial capital is propagated."""
+        self.service.run(
+            message="Backtest my portfolio with 50k",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.backtest_initial_capital, 50000.0)
+
+    def test_8_explicit_rebalance_frequency_propagated(self):
+        """Case 8: Explicit rebalance frequency is propagated."""
+        self.service.run(
+            message="Backtest my portfolio quarterly",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.backtest_rebalance_frequency, "quarterly")
+
+    def test_9_explicit_numerics_and_weights_propagated(self):
+        """Case 9: Explicit transaction cost, risk-free rate, and weights propagated."""
+        self.service.run(
+            message="Backtest with 15 bps, risk free rate 6%, min weight 5%, max weight 40%",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.backtest_transaction_cost_bps, 15.0)
+        self.assertAlmostEqual(p_input.backtest_risk_free_rate, 0.06)
+        self.assertAlmostEqual(p_input.backtest_min_weight, 0.05)
+        self.assertAlmostEqual(p_input.backtest_max_weight, 0.40)
+
+    def test_10_omitted_optional_parameters_remain_default(self):
+        """Case 10: Omitted optional parameters remain unset so canonical downstream defaults apply."""
+        self.service.run(
+            message="Backtest my portfolio against NIFTY 50",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.backtest_benchmark_ticker, "NIFTY 50")
+        self.assertIsNone(p_input.backtest_from_date)
+        self.assertIsNone(p_input.backtest_to_date)
+        self.assertEqual(p_input.backtest_initial_capital, 100_000.0)
+        self.assertEqual(p_input.backtest_rebalance_frequency, "monthly")
+        self.assertEqual(p_input.backtest_in_sample_window_days, 252)
+        self.assertEqual(p_input.backtest_out_of_sample_step_days, 21)
+        self.assertEqual(p_input.backtest_transaction_cost_bps, 10.0)
+        self.assertEqual(p_input.backtest_risk_free_rate, 0.0)
+        self.assertEqual(p_input.backtest_min_weight, 0.0)
+        self.assertEqual(p_input.backtest_max_weight, 1.0)
+
+    def test_11_invalid_extracted_capital_prevents_workflow_execution(self):
+        """Case 11: Invalid extracted capital prevents workflow execution."""
+        with self.assertRaises(BacktestExtractionError):
+            self.service.run(
+                message="Backtest my portfolio start with -50000",
+                user=self.user,
+                portfolio_id=self.portfolio.id,
+            )
+        self.mock_workflow.run.assert_not_called()
+
+    def test_12_invalid_date_range_prevents_workflow_execution(self):
+        """Case 12: Invalid date range and calendar dates prevent workflow execution."""
+        with self.assertRaises(BacktestExtractionError):
+            self.service.run(
+                message="Backtest my portfolio from 2025-12-31 to 2024-01-01",
+                user=self.user,
+                portfolio_id=self.portfolio.id,
+            )
+        self.mock_workflow.run.assert_not_called()
+
+        with self.assertRaises(BacktestExtractionError):
+            self.service.run(
+                message="Backtest my portfolio from 2024-99-99 to 2025-01-01",
+                user=self.user,
+                portfolio_id=self.portfolio.id,
+            )
+        self.mock_workflow.run.assert_not_called()
+
+    def test_13_invalid_weight_bounds_prevents_workflow_execution(self):
+        """Case 13: Invalid weight bounds prevent workflow execution."""
+        with self.assertRaises(BacktestExtractionError):
+            self.service.run(
+                message="Backtest my portfolio with min weight 50% and max weight 20%",
+                user=self.user,
+                portfolio_id=self.portfolio.id,
+            )
+        self.mock_workflow.run.assert_not_called()
+
+    def test_14_existing_portfolio_request_behavior_unchanged(self):
+        """Case 14: Existing portfolio request behavior unchanged."""
+        self.service.run(
+            message="Analyze my portfolio",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertFalse(p_input.include_backtest)
+        self.assertIsNone(p_input.optimization_input)
+
+    def test_15_existing_financial_market_news_routing_unchanged(self):
+        """Case 15: Existing financial/market/news routing unchanged."""
+        self.service.run(
+            message="Show Reliance's quarterly revenue",
+            ticker="RELIANCE",
+            market="IN",
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        self.assertNotIn("portfolio_input", kwargs)
+
+    def test_16_existing_portfolio_optimization_does_not_enable_backtest(self):
+        """Case 16: Existing portfolio optimization/risk requests do not accidentally enable backtest."""
+        self.service.run(
+            message="Optimize my portfolio",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertIsNotNone(p_input.optimization_input)
+        self.assertFalse(p_input.include_backtest)
+
+    def test_17_final_portfolio_workflow_input_contains_all_aligned_fields(self):
+        """Case 17: Final PortfolioWorkflowInput contains correct django_portfolio_id, include_backtest, and parameters."""
+        self.service.run(
+            message="Backtest my portfolio against NIFTY 50 for the last 2 years with 50k quarterly",
+            user=self.user,
+            portfolio_id=self.portfolio.id,
+            reference_date=self.fixed_ref_date,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        p_input = kwargs["portfolio_input"]
+        self.assertEqual(p_input.django_portfolio_id, str(self.portfolio.id))
+        self.assertTrue(p_input.include_backtest)
+        self.assertEqual(p_input.backtest_benchmark_ticker, "NIFTY 50")
+        self.assertEqual(p_input.backtest_from_date, "2024-09-13")
+        self.assertEqual(p_input.backtest_to_date, "2026-09-13")
+        self.assertEqual(p_input.backtest_initial_capital, 50000.0)
+        self.assertEqual(p_input.backtest_rebalance_frequency, "quarterly")
+
+    def test_unauthenticated_user_access_portfolio_raises_error(self):
+        """Authentication is required to access portfolio."""
+        with self.assertRaises(ValueError) as ctx:
+            self.service.run(
+                message="Backtest my portfolio",
+                user=None,
+                portfolio_id=self.portfolio.id,
+            )
+        self.assertIn("Authentication is required", str(ctx.exception))
+
+    def test_backtest_without_portfolio_context_raises_error(self):
+        """Conversational backtest without portfolio_id or portfolio_input raises ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            self.service.run(
+                message="Backtest my portfolio against NIFTY 50",
+                user=self.user,
+            )
+        self.assertIn("portfolio is required for backtesting", str(ctx.exception).lower())
+
+    def test_backtest_with_foreign_portfolio_input_rejected(self):
+        """A portfolio_input pointing to another user's database portfolio is rejected."""
+        from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
+        from apps.ai.portfolio.schemas import Portfolio as PortfolioSchema, Holding as HoldingSchema
+
+        p_schema = PortfolioSchema(
+            id=str(self.other_portfolio.id),
+            name=self.other_portfolio.name,
+            holdings=[
+                HoldingSchema(ticker="INFY", market="IN", quantity=20.0, average_price=1500.0)
+            ],
+        )
+        p_input = PortfolioWorkflowInput(
+            portfolio=p_schema,
+            django_portfolio_id=str(self.other_portfolio.id),
+        )
+
+        with self.assertRaises(Http404):
+            self.service.run(
+                message="Backtest my portfolio against NIFTY 50",
+                user=self.user,
+                portfolio_input=p_input,
+            )
+
+    def test_backtest_with_internal_synthetic_portfolio_input_preserved(self):
+        """Internal/test synthetic portfolio_inputs not matching DB records are preserved."""
+        from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
+        from apps.ai.portfolio.schemas import Portfolio as PortfolioSchema, Holding as HoldingSchema
+
+        p_schema = PortfolioSchema(
+            id="synth-001",
+            name="Synthetic Portfolio",
+            holdings=[
+                HoldingSchema(ticker="RELIANCE", market="IN", quantity=10.0, average_price=2500.0)
+            ],
+        )
+        p_input = PortfolioWorkflowInput(
+            portfolio=p_schema,
+            django_portfolio_id="synth-001",
+        )
+
+        self.service.run(
+            message="Backtest my portfolio against NIFTY 50",
+            user=self.user,
+            portfolio_input=p_input,
+        )
+        _, kwargs = self.mock_workflow.run.call_args
+        inp = kwargs["portfolio_input"]
+        self.assertTrue(inp.include_backtest)
+        self.assertEqual(inp.django_portfolio_id, "synth-001")
+
+    def test_backtest_with_malformed_portfolio_id_in_portfolio_input_rejected(self):
+        """A malformed django_portfolio_id supplied to an authenticated caller raises ValueError."""
+        from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
+        from apps.ai.portfolio.schemas import Portfolio as PortfolioSchema, Holding as HoldingSchema
+
+        p_schema = PortfolioSchema(
+            id="non-uuid-portfolio",
+            name="Malformed Portfolio",
+            holdings=[
+                HoldingSchema(ticker="RELIANCE", market="IN", quantity=10.0, average_price=2500.0)
+            ],
+        )
+        p_input = PortfolioWorkflowInput(
+            portfolio=p_schema,
+            django_portfolio_id="malformed-non-uuid-id",
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            self.service.run(
+                message="Backtest my portfolio against NIFTY 50",
+                user=self.user,
+                portfolio_input=p_input,
+            )
+        self.assertIn("Invalid portfolio id", str(ctx.exception))
+        self.mock_workflow.run.assert_not_called()

@@ -108,3 +108,36 @@ class AgentServiceFacadeTestCase(TestCase):
         self.assertEqual(result.response, "Test response")
         self.assertEqual(result.tools_used, ["get_news"])
         self.assertEqual(result.data["route"], "news")
+
+    def test_run_workflow_with_backtest_intent_populates_portfolio_input(self):
+        from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
+        from apps.ai.portfolio.schemas import Portfolio as PortfolioSchema, Holding as HoldingSchema
+
+        p_schema = PortfolioSchema(
+            id="p-1",
+            name="Test Portfolio",
+            holdings=[
+                HoldingSchema(ticker="RELIANCE", market="IN", quantity=10.0, average_price=2500.0)
+            ],
+        )
+        p_input = PortfolioWorkflowInput(portfolio=p_schema, django_portfolio_id="p-1")
+
+        mock_workflow = MagicMock()
+        mock_workflow.run.return_value = AgentState(
+            user_message="Backtest my portfolio against NIFTY 50",
+            route="portfolio",
+            results={
+                "synthesis": AgentResult(response="Backtest result", tools_used=[])
+            },
+        )
+        service = AgentService(workflow=mock_workflow)
+        res = service.run(
+            "Backtest my portfolio against NIFTY 50 with 50k",
+            portfolio_input=p_input,
+        )
+        self.assertEqual(res.response, "Backtest result")
+        _, kwargs = mock_workflow.run.call_args
+        inp = kwargs["portfolio_input"]
+        self.assertTrue(inp.include_backtest)
+        self.assertEqual(inp.backtest_benchmark_ticker, "NIFTY 50")
+        self.assertEqual(inp.backtest_initial_capital, 50000.0)
