@@ -143,3 +143,108 @@ def portfolio_to_schema(portfolio: Portfolio) -> PortfolioSchema:
     return PortfolioSchema(
         holdings=[holding_to_schema(h) for h in portfolio.holdings.all()]
     )
+
+
+class AlertType(models.TextChoices):
+    CONCENTRATION_BREACH = "concentration_breach", "Concentration Breach"
+    DRAWDOWN_BREACH = "drawdown_breach", "Drawdown Breach"
+    LOSS_THRESHOLD = "loss_threshold", "Loss Threshold"
+
+
+class AlertSeverity(models.TextChoices):
+    INFO = "info", "Info"
+    WARNING = "warning", "Warning"
+    CRITICAL = "critical", "Critical"
+
+
+class AlertStatus(models.TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    ACKNOWLEDGED = "ACKNOWLEDGED", "Acknowledged"
+    RESOLVED = "RESOLVED", "Resolved"
+
+
+class Alert(models.Model):
+    """A deterministic portfolio-monitoring event or threshold breach."""
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    portfolio = models.ForeignKey(
+        Portfolio,
+        on_delete=models.CASCADE,
+        related_name="alerts",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="portfolio_alerts",
+    )
+    alert_type = models.CharField(
+        max_length=50,
+        choices=AlertType.choices,
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=AlertSeverity.choices,
+        default=AlertSeverity.WARNING,
+    )
+    title = models.CharField(
+        max_length=200,
+    )
+    message = models.TextField(
+        blank=True,
+        default="",
+    )
+    metric_value = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+    )
+    threshold_value = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=AlertStatus.choices,
+        default=AlertStatus.ACTIVE,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    acknowledged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["portfolio", "alert_type", "created_at"],
+                name="idx_alert_port_type_created",
+            ),
+            models.Index(
+                fields=["portfolio", "status"],
+                name="idx_alert_port_status",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.severity.upper()}] {self.alert_type} on {self.portfolio.name} ({self.status})"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.portfolio_id and self.user_id:
+            if self.portfolio.user_id != self.user_id:
+                raise ValidationError(
+                    {"user": "Alert user must match the portfolio owner."}
+                )
+
+    def save(self, *args, **kwargs) -> None:
+        if self.portfolio_id and not self.user_id:
+            self.user = self.portfolio.user
+        self.clean()
+        super().save(*args, **kwargs)

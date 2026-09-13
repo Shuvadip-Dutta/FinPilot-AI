@@ -1,7 +1,7 @@
 from decimal import Decimal
 from rest_framework import serializers
 
-from apps.portfolio.models import Holding, Portfolio
+from apps.portfolio.models import Alert, Holding, Portfolio
 
 
 class HoldingSerializer(serializers.ModelSerializer):
@@ -155,5 +155,39 @@ class PortfolioOptimizationRequestSerializer(serializers.Serializer):
         if min_w > max_w:
             raise serializers.ValidationError({"min_weight": "min_weight cannot exceed max_weight."})
         return attrs
+
+
+class AlertSerializer(serializers.ModelSerializer):
+    """Read-oriented serializer for portfolio monitoring alerts."""
+
+    class Meta:
+        model = Alert
+        fields = [
+            "id",
+            "portfolio",
+            "user",
+            "alert_type",
+            "severity",
+            "title",
+            "message",
+            "metric_value",
+            "threshold_value",
+            "status",
+            "created_at",
+            "acknowledged_at",
+        ]
+        read_only_fields = [
+            "id",
+            "portfolio",
+            "user",
+            "alert_type",
+            "severity",
+            "title",
+            "message",
+            "metric_value",
+            "threshold_value",
+            "created_at",
+            "acknowledged_at",
+        ]
 
 

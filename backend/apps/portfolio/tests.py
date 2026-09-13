@@ -16,11 +16,16 @@ from apps.ai.portfolio.schemas import (
 )
 from apps.portfolio.builder import PortfolioWorkflowInputBuilder
 from apps.portfolio.models import (
+    Alert,
+    AlertSeverity,
+    AlertStatus,
+    AlertType,
     Holding,
     Portfolio,
     holding_to_schema,
     portfolio_to_schema,
 )
+from apps.portfolio.serializers import AlertSerializer
 
 User = get_user_model()
 
@@ -2189,6 +2194,278 @@ class PortfolioBacktestAPITestCase(TestCase):
 
         response = self.client.post(url, {"min_weight": 0.8, "max_weight": 0.2}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class AlertModelTestCase(TestCase):
+    """Test suite for Alert model, ownership invariants, choices, indexes, and serializer."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="alert_user",
+            email="alert_user@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="other_alert_user",
+            email="other_alert_user@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Main Portfolio",
+        )
+        self.other_portfolio = Portfolio.objects.create(
+            user=self.other_user,
+            name="Other User Portfolio",
+        )
+
+    def test_alert_creation_for_owned_portfolio(self):
+        """1. Alert can be created for an owned portfolio."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            severity=AlertSeverity.WARNING,
+            title="High Concentration Warning",
+            message="Holding RELIANCE exceeds 35% weight.",
+            metric_value=Decimal("38.5000"),
+            threshold_value=Decimal("35.0000"),
+        )
+        self.assertIsNotNone(alert.pk)
+        self.assertEqual(alert.portfolio, self.portfolio)
+        self.assertEqual(alert.user, self.user)
+
+    def test_alert_uuid_primary_key_generated(self):
+        """2. UUID primary key is generated correctly."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="Max Drawdown Breach",
+            metric_value=Decimal("18.2500"),
+            threshold_value=Decimal("15.0000"),
+        )
+        self.assertIsInstance(alert.id, uuid.UUID)
+
+    def test_default_status_is_active(self):
+        """3. Default status is ACTIVE."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.LOSS_THRESHOLD,
+            title="Severe Loss Alert",
+            metric_value=Decimal("-12.5000"),
+            threshold_value=Decimal("-10.0000"),
+        )
+        self.assertEqual(alert.status, AlertStatus.ACTIVE)
+        self.assertEqual(alert.severity, AlertSeverity.WARNING)
+
+    def test_created_at_is_populated(self):
+        """4. created_at is automatically populated on save."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="Drawdown Alert",
+            metric_value=Decimal("16.0000"),
+            threshold_value=Decimal("15.0000"),
+        )
+        self.assertIsNotNone(alert.created_at)
+
+    def test_acknowledged_at_defaults_to_none(self):
+        """5. acknowledged_at defaults to None for active alerts."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Concentration Alert",
+            metric_value=Decimal("40.0000"),
+            threshold_value=Decimal("30.0000"),
+        )
+        self.assertIsNone(alert.acknowledged_at)
+
+    def test_valid_alert_types_accepted(self):
+        """6. All valid alert types are accepted."""
+        for alert_type in [
+            AlertType.CONCENTRATION_BREACH,
+            AlertType.DRAWDOWN_BREACH,
+            AlertType.LOSS_THRESHOLD,
+        ]:
+            alert = Alert.objects.create(
+                portfolio=self.portfolio,
+                alert_type=alert_type,
+                title=f"Alert for {alert_type}",
+                metric_value=Decimal("10.0000"),
+                threshold_value=Decimal("5.0000"),
+            )
+            self.assertEqual(alert.alert_type, alert_type)
+
+    def test_valid_severities_accepted(self):
+        """7. All valid severities (info, warning, critical) are accepted."""
+        for sev in [AlertSeverity.INFO, AlertSeverity.WARNING, AlertSeverity.CRITICAL]:
+            alert = Alert.objects.create(
+                portfolio=self.portfolio,
+                alert_type=AlertType.CONCENTRATION_BREACH,
+                severity=sev,
+                title=f"Severity {sev}",
+                metric_value=Decimal("10.0000"),
+                threshold_value=Decimal("5.0000"),
+            )
+            self.assertEqual(alert.severity, sev)
+
+    def test_valid_statuses_accepted(self):
+        """8. All valid statuses (ACTIVE, ACKNOWLEDGED, RESOLVED) are accepted."""
+        for st in [AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED, AlertStatus.RESOLVED]:
+            alert = Alert.objects.create(
+                portfolio=self.portfolio,
+                alert_type=AlertType.CONCENTRATION_BREACH,
+                status=st,
+                title=f"Status {st}",
+                metric_value=Decimal("10.0000"),
+                threshold_value=Decimal("5.0000"),
+            )
+            self.assertEqual(alert.status, st)
+
+    def test_alert_linked_to_portfolio_user_automatically(self):
+        """9. Alert automatically inherits portfolio.user when user is omitted."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Auto-user test",
+            metric_value=Decimal("30.0000"),
+            threshold_value=Decimal("25.0000"),
+        )
+        self.assertEqual(alert.user, self.portfolio.user)
+
+    def test_application_level_validation_rejects_mismatched_user(self):
+        """10. Validation rejects mismatched user and portfolio owner."""
+        alert = Alert(
+            portfolio=self.portfolio,  # owned by self.user
+            user=self.other_user,       # mismatched user!
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Mismatched User Alert",
+            metric_value=Decimal("30.0000"),
+            threshold_value=Decimal("25.0000"),
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            alert.full_clean()
+        self.assertIn("user", ctx.exception.message_dict)
+
+        with self.assertRaises(ValidationError):
+            alert.save()
+
+    def test_portfolio_deletion_cascades_to_alerts(self):
+        """11. Portfolio deletion removes associated alerts according to CASCADE."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="To be deleted",
+            metric_value=Decimal("20.0000"),
+            threshold_value=Decimal("15.0000"),
+        )
+        alert_id = alert.id
+        self.portfolio.delete()
+        self.assertFalse(Alert.objects.filter(id=alert_id).exists())
+
+    def test_user_deletion_cascades_to_alerts(self):
+        """12. User deletion cascades to alerts without leaving orphaned records."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.LOSS_THRESHOLD,
+            title="User to be deleted",
+            metric_value=Decimal("-15.0000"),
+            threshold_value=Decimal("-10.0000"),
+        )
+        alert_id = alert.id
+        self.user.delete()
+        self.assertFalse(Alert.objects.filter(id=alert_id).exists())
+
+    def test_alert_query_filtering_by_portfolio_alert_type_and_created_at(self):
+        """13. Alert queryset can efficiently filter by portfolio + alert_type + created_at."""
+        alert1 = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Alert 1",
+            metric_value=Decimal("32.0000"),
+            threshold_value=Decimal("30.0000"),
+        )
+        alert2 = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="Alert 2",
+            metric_value=Decimal("16.0000"),
+            threshold_value=Decimal("15.0000"),
+        )
+
+        qs = Alert.objects.filter(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            created_at__lte=alert1.created_at,
+        )
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().id, alert1.id)
+
+        status_qs = Alert.objects.filter(
+            portfolio=self.portfolio,
+            status=AlertStatus.ACTIVE,
+        )
+        self.assertEqual(status_qs.count(), 2)
+
+    def test_serializer_returns_alert_information_correctly(self):
+        """14. Serializer correctly formats alert fields for presentation."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            severity=AlertSeverity.CRITICAL,
+            title="Critical Concentration",
+            message="TCS exceeds 45% of portfolio.",
+            metric_value=Decimal("46.2500"),
+            threshold_value=Decimal("35.0000"),
+            status=AlertStatus.ACTIVE,
+        )
+        serializer = AlertSerializer(alert)
+        data = serializer.data
+
+        self.assertEqual(data["id"], str(alert.id))
+        self.assertEqual(data["portfolio"], self.portfolio.id)
+        self.assertEqual(data["user"], self.user.id)
+        self.assertEqual(data["alert_type"], "concentration_breach")
+        self.assertEqual(data["severity"], "critical")
+        self.assertEqual(data["title"], "Critical Concentration")
+        self.assertEqual(data["message"], "TCS exceeds 45% of portfolio.")
+        self.assertEqual(Decimal(str(data["metric_value"])), Decimal("46.2500"))
+        self.assertEqual(Decimal(str(data["threshold_value"])), Decimal("35.0000"))
+        self.assertEqual(data["status"], "ACTIVE")
+        self.assertIsNone(data["acknowledged_at"])
+        self.assertIsNotNone(data["created_at"])
+
+    def test_serializer_does_not_permit_writing_arbitrary_user_ownership(self):
+        """15. User cannot write arbitrary user ownership through serializer."""
+        self.assertIn("user", AlertSerializer.Meta.read_only_fields)
+        self.assertIn("portfolio", AlertSerializer.Meta.read_only_fields)
+
+    def test_serializer_portfolio_ownership_cannot_be_reassigned(self):
+        """16. Portfolio ownership cannot be reassigned through serializer."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Initial Alert",
+            metric_value=Decimal("30.0000"),
+            threshold_value=Decimal("25.0000"),
+        )
+        serializer = AlertSerializer(
+            instance=alert,
+            data={"portfolio": str(self.other_portfolio.id), "title": "Updated Title"},
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid())
+        updated_alert = serializer.save()
+        self.assertEqual(updated_alert.portfolio, self.portfolio)
+
+    def test_server_controlled_fields_are_read_only(self):
+        """17. Server-controlled fields are marked read-only in serializer."""
+        for field in ["id", "portfolio", "user", "created_at", "acknowledged_at"]:
+            self.assertIn(
+                field,
+                AlertSerializer.Meta.read_only_fields,
+                f"Field '{field}' must be marked read_only.",
+            )
 
 
 
