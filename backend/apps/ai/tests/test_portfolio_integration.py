@@ -1,8 +1,9 @@
 """Integration tests for portfolio integration into AgentService and LangGraph workflow."""
 
-import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -12,6 +13,7 @@ from rest_framework.test import APITestCase
 from apps.ai.graph.langgraph_workflow import LangGraphResearchWorkflow
 from apps.ai.graph.portfolio_contracts import PortfolioWorkflowInput
 from apps.ai.graph.state import AgentState
+from apps.research.models import ResearchEvidence, ResearchSession
 from apps.ai.portfolio.optimization import (
     OptimizationInput,
     OptimizationResult,
@@ -361,10 +363,72 @@ class PortfolioAPIChatEndpointTestCase(APITestCase):
             quantity=Decimal("5.0"),
             average_price=Decimal("3000.00"),
         )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("2500.00"),
+        )
         self.other_portfolio = Portfolio.objects.create(
             user=self.other_user,
             name="Unowned Portfolio",
         )
+
+    @classmethod
+    def _make_deterministic_market_fixtures(cls):
+        today = datetime.now(timezone.utc).date()
+        dates = [
+            (today - timedelta(days=i)).isoformat()
+            for i in range(800)
+            if (today - timedelta(days=i)).weekday() < 5
+        ][:520]
+        dates.sort()
+
+        def mock_hist(ticker, to_date, from_date=None, market="IN"):
+            norm = ticker.upper()
+            mult = 1.0 if "RELIANCE" in norm else (1.5 if "TCS" in norm else 10.0)
+            base = 2000.0 if "RELIANCE" in norm else (3000.0 if "TCS" in norm else 18000.0)
+            return {
+                "ticker": ticker,
+                "market": market,
+                "candles": [
+                    {
+                        "timestamp": d,
+                        "open": base + i * mult,
+                        "high": base + i * mult + 10.0,
+                        "low": base + i * mult - 10.0,
+                        "close": base + i * mult,
+                        "volume": 1000,
+                    }
+                    for i, d in enumerate(dates)
+                ],
+            }
+
+        def mock_mkt(ticker, market="IN"):
+            norm = ticker.upper()
+            price = 2500.0 if "RELIANCE" in norm else 3500.0
+            return {
+                "ticker": ticker,
+                "market": market,
+                "quotes": [
+                    {
+                        "exchange": "NSE",
+                        "price": price,
+                        "percent_change": 1.0,
+                        "year_high": 4000.0,
+                        "year_low": 2000.0,
+                    }
+                ],
+            }
+
+        def mock_llm_generate(messages, **kwargs):
+            return (
+                "Portfolio backtest against NIFTY 50 completed successfully. "
+                "The strategy achieved a positive CAGR and sound risk-adjusted return."
+            )
+
+        return mock_hist, mock_mkt, mock_llm_generate
 
     def test_api_chat_with_unowned_portfolio_id_returns_404(self):
         self.client.force_authenticate(user=self.user)
@@ -389,3 +453,262 @@ class PortfolioAPIChatEndpointTestCase(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("portfolio is required", response.data.get("error", "").lower())
+
+    def test_api_chat_conversational_backtest_e2e_success(self):
+        """Phase 3 Full User-Facing Public API E2E Test verifying requirements A through L."""
+        mock_hist, mock_mkt, mock_llm = self._make_deterministic_market_fixtures()
+        thread_id = "conversational-backtest-e2e"
+
+        # A. Authenticated user
+        self.client.force_authenticate(user=self.user)
+
+        with patch("apps.ai.services.research_tools.get_historical_data", side_effect=mock_hist), \
+             patch("apps.ai.services.research_tools.get_market_data", side_effect=mock_mkt), \
+             patch("apps.ai.services.llm_service.LLMService.generate", side_effect=mock_llm):
+            response = self.client.post(
+                "/api/v1/ai/chat/",
+                {
+                    "message": "Backtest my portfolio against NIFTY 50 for the last 2 years",
+                    "portfolio_id": str(self.portfolio.id),
+                    "thread_id": thread_id,
+                },
+                format="json",
+            )
+
+        # A. Authentication succeeds
+        # B. Portfolio ownership succeeds
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # C. Backtest intent is detected & routed to portfolio
+        self.assertEqual(response.data["route"], "portfolio")
+        self.assertEqual(response.data["thread_id"], thread_id)
+
+        # D, E, F, G, H: Structured data received with deterministic backtest result
+        self.assertIsNotNone(response.data["structured_data"])
+        self.assertIn("portfolio_backtest", response.data["structured_data"])
+
+        bt_data = response.data["structured_data"]["portfolio_backtest"]
+        self.assertTrue(bt_data["success"])
+        self.assertEqual(bt_data["benchmark_ticker"], "NIFTY 50")
+        self.assertEqual(bt_data["tickers"], ["RELIANCE", "TCS"])
+
+        # F. Deterministic backtest result produced
+        self.assertIsNotNone(bt_data.get("strategy_metrics"))
+        self.assertIn("cagr", bt_data["strategy_metrics"])
+        self.assertIn("sharpe_ratio", bt_data["strategy_metrics"])
+        self.assertIn("max_drawdown", bt_data["strategy_metrics"])
+
+        # Benchmark metrics present
+        self.assertIsNotNone(bt_data.get("benchmark_metrics"))
+        self.assertIn("cagr", bt_data["benchmark_metrics"])
+
+        # Relative metrics present
+        self.assertIsNotNone(bt_data.get("relative_metrics"))
+
+        # Equity curve sample present
+        self.assertIn("equity_curve_sample", bt_data)
+        self.assertGreater(len(bt_data["equity_curve_sample"]), 0)
+
+        # H, L. Final response contains synthesis explaining backtest
+        self.assertIn("backtest against NIFTY 50", response.data["response"])
+
+        # I. Session is persisted
+        session = ResearchSession.objects.filter(thread_id=thread_id, user=self.user).first()
+        self.assertIsNotNone(session)
+        self.assertEqual(session.route, "portfolio")
+        self.assertEqual(session.status, "COMPLETED")
+        self.assertEqual(session.final_synthesis, response.data["response"])
+
+        # J. ResearchEvidence contains agent_name="portfolio_backtest"
+        evidence = session.evidence_items.filter(agent_name="portfolio_backtest").first()
+        self.assertIsNotNone(evidence)
+
+        # K. structured_data contains deterministic backtest evidence
+        self.assertEqual(evidence.structured_data["benchmark_ticker"], "NIFTY 50")
+        self.assertAlmostEqual(
+            evidence.structured_data["strategy_metrics"]["cagr"],
+            bt_data["strategy_metrics"]["cagr"],
+        )
+
+    def test_api_chat_conversational_backtest_deterministic_result_preservation(self):
+        """Verify the result produced by the real backtest pipeline preserves all authoritative fields."""
+        mock_hist, mock_mkt, mock_llm = self._make_deterministic_market_fixtures()
+        thread_id = f"test-preservation-{uuid.uuid4()}"
+
+        self.client.force_authenticate(user=self.user)
+
+        with patch("apps.ai.services.research_tools.get_historical_data", side_effect=mock_hist), \
+             patch("apps.ai.services.research_tools.get_market_data", side_effect=mock_mkt), \
+             patch("apps.ai.services.llm_service.LLMService.generate", side_effect=mock_llm):
+            response = self.client.post(
+                "/api/v1/ai/chat/",
+                {
+                    "message": "Backtest my portfolio against NIFTY 50 for the last 2 years",
+                    "portfolio_id": str(self.portfolio.id),
+                    "thread_id": thread_id,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        bt = response.data["structured_data"]["portfolio_backtest"]
+
+        # Strategy metrics fields match Module 10
+        strat = bt["strategy_metrics"]
+        for field in ("cagr", "volatility", "sharpe_ratio", "sortino_ratio", "max_drawdown", "calmar_ratio"):
+            self.assertIn(field, strat)
+
+        # Buy-and-hold metrics
+        self.assertIsNotNone(bt.get("buy_and_hold_metrics"))
+        self.assertIn("cagr", bt["buy_and_hold_metrics"])
+
+        # Benchmark metrics
+        bmark = bt["benchmark_metrics"]
+        self.assertIsNotNone(bmark)
+        self.assertIn("cagr", bmark)
+        self.assertIn("sharpe_ratio", bmark)
+        self.assertIn("max_drawdown", bmark)
+
+        # Relative metrics
+        rel = bt["relative_metrics"]
+        self.assertIsNotNone(rel)
+        for field in ("excess_cagr", "total_return_difference", "tracking_error", "information_ratio"):
+            self.assertIn(field, rel)
+
+        # Rebalance info
+        self.assertIn("rebalance_count", bt)
+        self.assertGreaterEqual(bt["rebalance_count"], 1)
+        self.assertIn("rebalance_events_summary", bt)
+
+    def test_api_chat_conversational_backtest_session_persistence_contract(self):
+        """Verify stored session evidence matches structured backtest evidence and reloads cleanly."""
+        mock_hist, mock_mkt, mock_llm = self._make_deterministic_market_fixtures()
+        thread_id = f"test-persistence-{uuid.uuid4()}"
+
+        self.client.force_authenticate(user=self.user)
+
+        with patch("apps.ai.services.research_tools.get_historical_data", side_effect=mock_hist), \
+             patch("apps.ai.services.research_tools.get_market_data", side_effect=mock_mkt), \
+             patch("apps.ai.services.llm_service.LLMService.generate", side_effect=mock_llm):
+            response = self.client.post(
+                "/api/v1/ai/chat/",
+                {
+                    "message": "Backtest my portfolio against NIFTY 50 for the last 2 years",
+                    "portfolio_id": str(self.portfolio.id),
+                    "thread_id": thread_id,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Reload from database directly
+        session = ResearchSession.objects.get(thread_id=thread_id, user=self.user)
+        self.assertEqual(session.final_synthesis, response.data["response"])
+
+        ev = session.evidence_items.get(agent_name="portfolio_backtest")
+        self.assertIsInstance(ev.structured_data, dict)
+        self.assertTrue(ev.structured_data["success"])
+        self.assertEqual(ev.structured_data["benchmark_ticker"], "NIFTY 50")
+        self.assertIn("strategy_metrics", ev.structured_data)
+        self.assertIn("cagr", ev.structured_data["strategy_metrics"])
+
+    def test_api_chat_backtest_with_foreign_portfolio_returns_404(self):
+        """Foreign portfolio requested for backtesting returns HTTP 404 and creates no session."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/ai/chat/",
+            {
+                "message": "Backtest my portfolio against NIFTY 50",
+                "portfolio_id": str(self.other_portfolio.id),
+                "thread_id": "foreign-portfolio-backtest-attempt",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(
+            ResearchSession.objects.filter(thread_id="foreign-portfolio-backtest-attempt").exists()
+        )
+
+    def test_api_chat_backtest_invalid_configuration_returns_400(self):
+        """Invalid configurations (negative capital, invalid dates, inverted weights) return HTTP 400."""
+        self.client.force_authenticate(user=self.user)
+
+        invalid_queries = [
+            "Backtest my portfolio with initial capital -50000",
+            "Backtest my portfolio from 2025-01-01 to 2024-01-01",
+            "Backtest my portfolio from 2024-99-99 to 2025-01-01",
+            "Backtest my portfolio with min weight 0.8 and max weight 0.2",
+        ]
+
+        for query in invalid_queries:
+            thread_id = f"invalid-cfg-{uuid.uuid4()}"
+            response = self.client.post(
+                "/api/v1/ai/chat/",
+                {
+                    "message": query,
+                    "portfolio_id": str(self.portfolio.id),
+                    "thread_id": thread_id,
+                },
+                format="json",
+            )
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_400_BAD_REQUEST,
+                f"Expected 400 for query '{query}', got {response.status_code}",
+            )
+            self.assertFalse(
+                ResearchSession.objects.filter(thread_id=thread_id).exists()
+            )
+
+    def test_api_chat_non_backtest_portfolio_requests_do_not_enable_backtest(self):
+        """Non-backtest portfolio requests do not set include_backtest and omit portfolio_backtest evidence."""
+        mock_hist, mock_mkt, mock_llm = self._make_deterministic_market_fixtures()
+        thread_id = f"normal-portfolio-{uuid.uuid4()}"
+
+        self.client.force_authenticate(user=self.user)
+
+        with patch("apps.ai.services.research_tools.get_historical_data", side_effect=mock_hist), \
+             patch("apps.ai.services.research_tools.get_market_data", side_effect=mock_mkt), \
+             patch("apps.ai.services.llm_service.LLMService.generate", side_effect=mock_llm):
+            response = self.client.post(
+                "/api/v1/ai/chat/",
+                {
+                    "message": "Analyze my portfolio",
+                    "portfolio_id": str(self.portfolio.id),
+                    "thread_id": thread_id,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        structured = response.data.get("structured_data") or {}
+        self.assertNotIn("portfolio_backtest", structured)
+
+        session = ResearchSession.objects.get(thread_id=thread_id)
+        self.assertFalse(session.evidence_items.filter(agent_name="portfolio_backtest").exists())
+
+    def test_api_chat_optimize_and_backtest_interaction(self):
+        """Optimize and backtest naturally executes both optimization and backtest in workflow."""
+        mock_hist, mock_mkt, mock_llm = self._make_deterministic_market_fixtures()
+        thread_id = f"opt-backtest-{uuid.uuid4()}"
+
+        self.client.force_authenticate(user=self.user)
+
+        with patch("apps.ai.services.research_tools.get_historical_data", side_effect=mock_hist), \
+             patch("apps.ai.services.research_tools.get_market_data", side_effect=mock_mkt), \
+             patch("apps.ai.services.llm_service.LLMService.generate", side_effect=mock_llm):
+            response = self.client.post(
+                "/api/v1/ai/chat/",
+                {
+                    "message": "Optimize and backtest my portfolio against NIFTY 50",
+                    "portfolio_id": str(self.portfolio.id),
+                    "thread_id": thread_id,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        structured = response.data.get("structured_data") or {}
+        self.assertIn("portfolio_backtest", structured)
+        self.assertTrue(structured["portfolio_backtest"]["success"])

@@ -16,6 +16,7 @@ from apps.ai.portfolio.backtest_extractor import (
 from apps.ai.services.agent_service import AgentService
 from apps.ai.services.schemas import AgentResult
 from apps.portfolio.models import Holding, Portfolio
+from apps.research.models import ResearchEvidence, ResearchSession
 
 User = get_user_model()
 
@@ -690,3 +691,82 @@ class ConversationalBacktestAgentServiceTestCase(TestCase):
             )
         self.assertIn("Invalid portfolio id", str(ctx.exception))
         self.mock_workflow.run.assert_not_called()
+
+    def test_backtest_session_evidence_contract(self):
+        """Verify portfolio_backtest appears consistently across AgentState, ResearchEvidence, and synthesis."""
+        from apps.research.services.session_service import ResearchSessionService
+        from apps.ai.agents.synthesis import FinalSynthesisAgent
+
+        # 1. State with portfolio_backtest deterministic payload
+        bt_payload = {
+            "success": True,
+            "benchmark_ticker": "NIFTY 50",
+            "tickers": ["RELIANCE", "TCS"],
+            "strategy_metrics": {
+                "cagr": 0.152,
+                "volatility": 0.12,
+                "sharpe_ratio": 1.25,
+                "max_drawdown": 0.08,
+            },
+            "buy_and_hold_metrics": {"cagr": 0.11},
+            "benchmark_metrics": {"cagr": 0.12},
+            "rebalance_count": 4,
+            "equity_curve_sample": [{"date": "2024-01-01", "portfolio_value": 100000.0}],
+        }
+        thread_id = f"contract-thread-{self.portfolio.id}"
+        state = AgentState(
+            user_message="Backtest my portfolio against NIFTY 50",
+            route="portfolio",
+            results={
+                "portfolio_backtest": bt_payload,
+            },
+        )
+
+        # 2. Synthesis context includes PORTFOLIO BACKTEST EVIDENCE
+        synth_context = FinalSynthesisAgent._build_context(state)
+        self.assertIn("PORTFOLIO BACKTEST EVIDENCE", synth_context)
+        self.assertEqual(synth_context["PORTFOLIO BACKTEST EVIDENCE"], bt_payload)
+
+        # 3. Structured evidence collection preserves portfolio_backtest verbatim
+        structured_evidence = FinalSynthesisAgent._collect_structured_evidence(state)
+        self.assertIn("portfolio_backtest", structured_evidence)
+        self.assertEqual(structured_evidence["portfolio_backtest"]["benchmark_ticker"], "NIFTY 50")
+
+        # 4. ResearchSessionService persistence preserves portfolio_backtest evidence
+        session = ResearchSessionService.create_session(
+            user_message=state.user_message,
+            user=self.user,
+            route="portfolio",
+            thread_id=thread_id,
+        )
+        ResearchSessionService.save_workflow_result(
+            session_id=session.id,
+            agent_state=state,
+        )
+
+        evidence = ResearchEvidence.objects.filter(session=session, agent_name="portfolio_backtest").first()
+        self.assertIsNotNone(evidence)
+        self.assertIsInstance(evidence.structured_data, dict)
+        self.assertEqual(evidence.structured_data["benchmark_ticker"], "NIFTY 50")
+        self.assertEqual(evidence.structured_data["strategy_metrics"]["cagr"], 0.152)
+
+    def test_other_routes_regression_financial_market_news_general(self):
+        """Verify financial, market, news, general requests remain unchanged."""
+        cases = [
+            ("Show Reliance quarterly revenue", "RELIANCE", "IN"),
+            ("What is the current stock price of Apple?", "AAPL", "US"),
+            ("Latest news about semiconductor tariffs", None, None),
+            ("Explain price to earnings ratio", None, None),
+        ]
+        router = WorkflowRouter()
+        for message, ticker, market in cases:
+            # Router does not classify these as backtest
+            self.assertFalse(router.is_backtest_intent(message))
+            self.service.run(
+                message=message,
+                user=self.user,
+                ticker=ticker,
+                market=market,
+            )
+            _, kwargs = self.mock_workflow.run.call_args
+            self.assertIsNone(kwargs.get("portfolio_input"))
