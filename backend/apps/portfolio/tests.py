@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -15,6 +16,10 @@ from apps.ai.portfolio.schemas import (
     Portfolio as PortfolioSchema,
 )
 from apps.portfolio.builder import PortfolioWorkflowInputBuilder
+from django.urls import reverse
+from unittest.mock import MagicMock, patch
+
+from apps.portfolio.alert_service import AlertService
 from apps.portfolio.models import (
     Alert,
     AlertSeverity,
@@ -2750,8 +2755,523 @@ class PortfolioMonitorServiceTestCase(TestCase):
         self.assertEqual(Alert.objects.count(), initial_count)
 
 
+class PortfolioAlertsAPITestCase(TestCase):
+    """Phase 3 test suite for Portfolio Alerts REST API and On-Demand Evaluation."""
 
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="alert_owner",
+            email="owner@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="alert_intruder",
+            email="intruder@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Main Monitored Portfolio",
+        )
+        self.portfolio_2 = Portfolio.objects.create(
+            user=self.user,
+            name="Second Monitored Portfolio",
+        )
+        self.other_portfolio = Portfolio.objects.create(
+            user=self.other_user,
+            name="Foreign Monitored Portfolio",
+        )
 
+    def _mock_market_data_breach(self, ticker, market="IN"):
+        prices = {
+            "RELIANCE": {"last_price": 700.0},
+            "TCS": {"last_price": 1000.0},
+            "INFY": {"last_price": 1000.0},
+        }
+        return prices.get(ticker.upper(), {"last_price": 1000.0})
 
+    def _mock_historical_data_breach(self, ticker, to_date=None, from_date=None, market="IN"):
+        histories = {
+            "RELIANCE": {"candles": [{"close": 1000.0}, {"close": 1000.0}, {"close": 700.0}, {"close": 700.0}]},
+            "TCS": {"candles": [{"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}]},
+            "INFY": {"candles": [{"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}]},
+        }
+        return histories.get(ticker.upper(), {"candles": [{"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}]})
 
+    def test_authenticated_owner_can_list_alerts(self):
+        """1. Authenticated owner can list alerts."""
+        a1 = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Breach 1",
+            metric_value=Decimal("40.0"),
+            threshold_value=Decimal("35.0"),
+        )
+        a2 = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="Breach 2",
+            metric_value=Decimal("20.0"),
+            threshold_value=Decimal("15.0"),
+        )
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-alert-list", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.get(url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 2)
+        self.assertEqual(res.data[0]["id"], str(a2.id))
+        self.assertEqual(res.data[1]["id"], str(a1.id))
+
+    def test_unauthenticated_alert_listing_is_rejected(self):
+        """2. Unauthenticated alert listing is rejected with 401 Unauthorized."""
+        url = reverse("portfolio-alert-list", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_foreign_user_cannot_list_another_portfolio_alerts(self):
+        """3. Foreign user cannot list another portfolio's alerts (returns 404 Not Found)."""
+        Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Secret Breach",
+            metric_value=Decimal("40.0"),
+            threshold_value=Decimal("35.0"),
+        )
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("portfolio-alert-list", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_owner_can_trigger_on_demand_monitoring(self, mock_market, mock_hist):
+        """4. Owner can trigger on-demand monitoring."""
+        mock_market.side_effect = self._mock_market_data_breach
+        mock_hist.side_effect = self._mock_historical_data_breach
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.post(url, {}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_monitoring_creates_alert_records_for_detected_breaches(self, mock_market, mock_hist):
+        """5. Monitoring creates Alert records for detected breaches."""
+        mock_market.side_effect = self._mock_market_data_breach
+        mock_hist.side_effect = self._mock_historical_data_breach
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        self.assertEqual(Alert.objects.filter(portfolio=self.portfolio).count(), 0)
+
+        res = self.client.post(url, {}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        alerts = Alert.objects.filter(portfolio=self.portfolio)
+        self.assertGreater(alerts.count(), 0)
+        for alert in alerts:
+            self.assertEqual(alert.user, self.user)
+            self.assertEqual(alert.status, AlertStatus.ACTIVE)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_monitoring_returns_detected_events_and_created_alerts(self, mock_market, mock_hist):
+        """6. Monitoring returns detected events and created alerts in structured payload."""
+        mock_market.side_effect = self._mock_market_data_breach
+        mock_hist.side_effect = self._mock_historical_data_breach
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.post(url, {}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["portfolio_id"], str(self.portfolio.id))
+        self.assertIn("evaluated_at", res.data)
+        self.assertIn("events", res.data)
+        self.assertIn("alerts_created", res.data)
+        self.assertIn("alerts_suppressed", res.data)
+        self.assertGreater(len(res.data["alerts_created"]), 0)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_repeated_monitoring_within_24_hours_does_not_duplicate_same_alert_type(self, mock_market, mock_hist):
+        """7. Repeated monitoring within 24 hours does not duplicate the same alert type."""
+        mock_market.side_effect = self._mock_market_data_breach
+        mock_hist.side_effect = self._mock_historical_data_breach
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+
+        res1 = self.client.post(url, {}, format="json")
+        initial_count = Alert.objects.filter(portfolio=self.portfolio).count()
+        self.assertGreater(initial_count, 0)
+        self.assertEqual(len(res1.data["alerts_created"]), initial_count)
+
+        res2 = self.client.post(url, {}, format="json")
+        self.assertEqual(len(res2.data["alerts_created"]), 0)
+        self.assertEqual(len(res2.data["alerts_suppressed"]), initial_count)
+        self.assertEqual(Alert.objects.filter(portfolio=self.portfolio).count(), initial_count)
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_concentration_events_preserve_ticker_context_under_cooldown(self, mock_market, mock_hist):
+        """8. Concentration events preserve ticker context where applicable."""
+        mock_market.return_value = {"last_price": 1000.0}
+        mock_hist.return_value = {"candles": [{"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}, {"close": 1000.0}]}
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("40.0"),
+            average_price=Decimal("1000.0"),
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="INFY",
+            market="IN",
+            quantity=Decimal("60.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        res1 = self.client.post(url, {}, format="json")
+
+        conc_created_1 = [a for a in res1.data["alerts_created"] if a["alert_type"] == AlertType.CONCENTRATION_BREACH]
+        self.assertEqual(len(conc_created_1), 2)
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="TCS",
+            market="IN",
+            quantity=Decimal("100.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        res2 = self.client.post(url, {}, format="json")
+        created_tickers = [a["title"] for a in res2.data["alerts_created"] if a["alert_type"] == AlertType.CONCENTRATION_BREACH]
+        self.assertEqual(len(created_tickers), 1)
+        self.assertIn("TCS", created_tickers[0])
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_different_portfolios_users_remain_isolated_under_cooldown(self, mock_market, mock_hist):
+        """9. Different portfolios/users remain isolated under cooldown."""
+        mock_market.side_effect = self._mock_market_data_breach
+        mock_hist.side_effect = self._mock_historical_data_breach
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio_2,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url1 = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        url2 = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio_2.id})
+
+        res1 = self.client.post(url1, {}, format="json")
+        self.assertGreater(len(res1.data["alerts_created"]), 0)
+
+        res2 = self.client.post(url2, {}, format="json")
+        self.assertGreater(len(res2.data["alerts_created"]), 0)
+
+    def test_owner_can_acknowledge_active_alert(self):
+        """10. Owner can acknowledge an ACTIVE alert."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Breach",
+            metric_value=Decimal("40.0"),
+            threshold_value=Decimal("35.0"),
+            status=AlertStatus.ACTIVE,
+        )
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-alert-acknowledge", kwargs={"portfolio_id": self.portfolio.id, "alert_id": alert.id})
+        res = self.client.post(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_acknowledgement_sets_status_acknowledged(self):
+        """11. Acknowledgement sets status=ACKNOWLEDGED."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="Breach",
+            metric_value=Decimal("20.0"),
+            threshold_value=Decimal("15.0"),
+            status=AlertStatus.ACTIVE,
+        )
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-alert-acknowledge", kwargs={"portfolio_id": self.portfolio.id, "alert_id": alert.id})
+        res = self.client.post(url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "ACKNOWLEDGED")
+        alert.refresh_from_db()
+        self.assertEqual(alert.status, AlertStatus.ACKNOWLEDGED)
+
+    def test_acknowledgement_sets_acknowledged_at(self):
+        """12. Acknowledgement sets acknowledged_at timestamp."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.LOSS_THRESHOLD,
+            title="Loss Breach",
+            metric_value=Decimal("-15.0"),
+            threshold_value=Decimal("-10.0"),
+            status=AlertStatus.ACTIVE,
+        )
+        self.assertIsNone(alert.acknowledged_at)
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-alert-acknowledge", kwargs={"portfolio_id": self.portfolio.id, "alert_id": alert.id})
+        res = self.client.post(url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(res.data["acknowledged_at"])
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.acknowledged_at)
+
+    def test_repeated_acknowledgement_is_deterministic_and_idempotent(self):
+        """13. Repeated acknowledgement is deterministic/idempotent."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Breach",
+            metric_value=Decimal("40.0"),
+            threshold_value=Decimal("35.0"),
+            status=AlertStatus.ACTIVE,
+        )
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-alert-acknowledge", kwargs={"portfolio_id": self.portfolio.id, "alert_id": alert.id})
+
+        res1 = self.client.post(url)
+        alert.refresh_from_db()
+        ack_time1 = alert.acknowledged_at
+
+        res2 = self.client.post(url)
+        alert.refresh_from_db()
+
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(alert.acknowledged_at, ack_time1)
+
+    def test_foreign_user_cannot_acknowledge_another_user_alert(self):
+        """14. Foreign user cannot acknowledge another user's alert (returns 404)."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            title="Breach",
+            metric_value=Decimal("20.0"),
+            threshold_value=Decimal("15.0"),
+            status=AlertStatus.ACTIVE,
+        )
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("portfolio-alert-acknowledge", kwargs={"portfolio_id": self.portfolio.id, "alert_id": alert.id})
+        res = self.client.post(url)
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        alert.refresh_from_db()
+        self.assertEqual(alert.status, AlertStatus.ACTIVE)
+
+    def test_alert_belonging_to_different_portfolio_cannot_be_acknowledged_through_another_portfolio_url(self):
+        """15. Alert belonging to a different portfolio cannot be acknowledged through another portfolio URL."""
+        alert_in_other = Alert.objects.create(
+            portfolio=self.other_portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Other Breach",
+            metric_value=Decimal("40.0"),
+            threshold_value=Decimal("35.0"),
+            status=AlertStatus.ACTIVE,
+        )
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-alert-acknowledge", kwargs={"portfolio_id": self.portfolio.id, "alert_id": alert_in_other.id})
+        res = self.client.post(url)
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        alert_in_other.refresh_from_db()
+        self.assertEqual(alert_in_other.status, AlertStatus.ACTIVE)
+
+    def test_monitor_endpoint_cannot_create_alerts_for_foreign_portfolio(self):
+        """16. Monitor endpoint cannot create alerts for a foreign portfolio."""
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.post(url, {}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(Alert.objects.filter(portfolio=self.portfolio).count(), 0)
+
+    def test_alert_serializer_output_remains_read_only_and_server_controlled(self):
+        """17. Alert serializer output remains read-only/server-controlled."""
+        alert = Alert.objects.create(
+            portfolio=self.portfolio,
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            title="Server Title",
+            metric_value=Decimal("40.0"),
+            threshold_value=Decimal("35.0"),
+        )
+        serializer = AlertSerializer(
+            instance=alert,
+            data={
+                "status": AlertStatus.RESOLVED,
+                "user": self.other_user.id,
+                "metric_value": Decimal("99.9999"),
+            },
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid())
+        saved_alert = serializer.save()
+
+        self.assertEqual(saved_alert.status, AlertStatus.ACTIVE)
+        self.assertEqual(saved_alert.user, self.user)
+        self.assertEqual(saved_alert.metric_value, Decimal("40.0000"))
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_monitor_endpoint_does_not_accept_caller_controlled_user_ownership(self, mock_market, mock_hist):
+        """18. Monitor endpoint does not accept caller-controlled user ownership."""
+        mock_market.side_effect = self._mock_market_data_breach
+        mock_hist.side_effect = self._mock_historical_data_breach
+
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="RELIANCE",
+            market="IN",
+            quantity=Decimal("10.0"),
+            average_price=Decimal("1000.0"),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-monitor", kwargs={"portfolio_id": self.portfolio.id})
+        res = self.client.post(
+            url,
+            {"user": self.other_user.id, "user_id": self.other_user.id, "portfolio": str(self.other_portfolio.id)},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        for alert in Alert.objects.filter(portfolio=self.portfolio):
+            self.assertEqual(alert.user, self.user)
+
+    def test_transaction_behavior_is_safe_when_multiple_alerts_are_created(self):
+        """19. Transaction behavior is safe when multiple alerts are created (atomic rollback on error)."""
+        service = AlertService()
+        result = MonitoringResult(
+            portfolio_id=str(self.portfolio.id),
+            evaluated_at=timezone.now(),
+            events=[
+                MonitoringEvent(
+                    alert_type=AlertType.CONCENTRATION_BREACH,
+                    severity=AlertSeverity.WARNING,
+                    title="Breach 1",
+                    message="msg 1",
+                    metric_value=Decimal("40.0"),
+                    threshold_value=Decimal("35.0"),
+                ),
+                MonitoringEvent(
+                    alert_type=AlertType.DRAWDOWN_BREACH,
+                    severity=AlertSeverity.WARNING,
+                    title="Breach 2",
+                    message="msg 2",
+                    metric_value=Decimal("20.0"),
+                    threshold_value=Decimal("15.0"),
+                ),
+            ],
+        )
+
+        initial_count = Alert.objects.filter(portfolio=self.portfolio).count()
+        original_create = Alert.objects.create
+        call_count = [0]
+
+        def fail_on_second(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise IntegrityError("Simulated DB failure")
+            return original_create(*args, **kwargs)
+
+        with patch.object(Alert.objects, "create", side_effect=fail_on_second):
+            with self.assertRaises(IntegrityError):
+                service.process_monitoring_result(self.portfolio, result)
+
+        self.assertEqual(Alert.objects.filter(portfolio=self.portfolio).count(), initial_count)
+
+    def test_critical_section_serializes_with_select_for_update_and_prevents_duplicate_creation(self):
+        """20. Critical section serializes portfolio evaluation with select_for_update and prevents duplicate creation."""
+        service = AlertService()
+        result = MonitoringResult(
+            portfolio_id=str(self.portfolio.id),
+            evaluated_at=timezone.now(),
+            events=[
+                MonitoringEvent(
+                    alert_type=AlertType.DRAWDOWN_BREACH,
+                    severity=AlertSeverity.CRITICAL,
+                    title="Critical Drawdown",
+                    message="Portfolio drawdown exceeds threshold.",
+                    metric_value=Decimal("22.5"),
+                    threshold_value=Decimal("15.0"),
+                ),
+            ],
+        )
+
+        with patch.object(Portfolio.objects, "select_for_update", wraps=Portfolio.objects.select_for_update) as mock_sfu:
+            res1 = service.process_monitoring_result(self.portfolio, result)
+            self.assertTrue(mock_sfu.called)
+
+        self.assertEqual(len(res1["alerts_created"]), 1)
+        self.assertEqual(Alert.objects.filter(portfolio=self.portfolio, alert_type=AlertType.DRAWDOWN_BREACH).count(), 1)
+
+        # Immediate second evaluation on the same portfolio:
+        # Serialized critical section executes cooldown inside atomic block and suppresses duplicate
+        with patch.object(Portfolio.objects, "select_for_update", wraps=Portfolio.objects.select_for_update) as mock_sfu2:
+            res2 = service.process_monitoring_result(self.portfolio, result)
+            self.assertTrue(mock_sfu2.called)
+
+        self.assertEqual(len(res2["alerts_created"]), 0)
+        self.assertEqual(len(res2["alerts_suppressed"]), 1)
+        self.assertEqual(Alert.objects.filter(portfolio=self.portfolio, alert_type=AlertType.DRAWDOWN_BREACH).count(), 1)
 

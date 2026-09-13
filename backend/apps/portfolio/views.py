@@ -7,10 +7,14 @@ from rest_framework.views import APIView
 from apps.ai.portfolio.backtest import PortfolioBacktestEngine
 from apps.ai.portfolio.backtest_evaluator import PortfolioBacktestEvaluator
 from apps.portfolio.backtest_builder import PortfolioBacktestInputBuilder
-from apps.portfolio.models import Holding, Portfolio
+from apps.portfolio.alert_service import AlertService
+from apps.portfolio.models import Alert, Holding, Portfolio
+from apps.portfolio.monitor import PortfolioMonitorService
 from apps.portfolio.serializers import (
+    AlertSerializer,
     HoldingSerializer,
     PortfolioBacktestRequestSerializer,
+    PortfolioMonitorRequestSerializer,
     PortfolioOptimizationRequestSerializer,
     PortfolioSerializer,
 )
@@ -446,3 +450,66 @@ class PortfolioOptimizationView(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
+
+class PortfolioAlertListView(APIView):
+    """List all alerts belonging to an authenticated user's portfolio."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        portfolio = get_object_or_404(Portfolio, pk=portfolio_id, user=request.user)
+        alerts = portfolio.alerts.all()
+        serializer = AlertSerializer(alerts, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PortfolioMonitorView(APIView):
+    """Execute on-demand deterministic portfolio monitoring and persist unsuppressed alerts."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, portfolio_id):
+        portfolio = get_object_or_404(Portfolio, pk=portfolio_id, user=request.user)
+
+        serializer = PortfolioMonitorRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+
+        monitor_service = PortfolioMonitorService()
+        try:
+            result = monitor_service.evaluate(
+                portfolio=portfolio,
+                user=request.user,
+                from_date=validated_data.get("from_date"),
+                to_date=validated_data.get("to_date"),
+            )
+        except (ValueError, TypeError) as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        alert_service = AlertService()
+        response_data = alert_service.process_monitoring_result(
+            portfolio=portfolio,
+            result=result,
+        )
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class PortfolioAlertAcknowledgeView(APIView):
+    """Acknowledge an alert belonging to an authenticated user's portfolio."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, portfolio_id, alert_id):
+        portfolio = get_object_or_404(Portfolio, pk=portfolio_id, user=request.user)
+        alert = get_object_or_404(Alert, pk=alert_id, portfolio=portfolio, user=request.user)
+
+        alert_service = AlertService()
+        acknowledged_alert = alert_service.acknowledge_alert(alert)
+
+        return Response(
+            AlertSerializer(acknowledged_alert).data,
+            status=status.HTTP_200_OK,
+        )

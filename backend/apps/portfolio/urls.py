@@ -3,9 +3,12 @@ from django.urls import path
 from apps.portfolio.views import (
     HoldingDetailView,
     HoldingListCreateView,
+    PortfolioAlertAcknowledgeView,
+    PortfolioAlertListView,
     PortfolioBacktestView,
     PortfolioDetailView,
     PortfolioListCreateView,
+    PortfolioMonitorView,
     PortfolioOptimizationView,
     PortfolioRiskView,
 )
@@ -35,6 +38,21 @@ urlpatterns = [
         "<uuid:portfolio_id>/backtest/",
         PortfolioBacktestView.as_view(),
         name="portfolio-backtest",
+    ),
+    path(
+        "<uuid:portfolio_id>/alerts/",
+        PortfolioAlertListView.as_view(),
+        name="portfolio-alert-list",
+    ),
+    path(
+        "<uuid:portfolio_id>/monitor/",
+        PortfolioMonitorView.as_view(),
+        name="portfolio-monitor",
+    ),
+    path(
+        "<uuid:portfolio_id>/alerts/<uuid:alert_id>/acknowledge/",
+        PortfolioAlertAcknowledgeView.as_view(),
+        name="portfolio-alert-acknowledge",
     ),
     path(
         "<uuid:portfolio_pk>/holdings/",

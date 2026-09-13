@@ -186,8 +186,24 @@ class AlertSerializer(serializers.ModelSerializer):
             "message",
             "metric_value",
             "threshold_value",
+            "status",
             "created_at",
             "acknowledged_at",
         ]
 
 
+class PortfolioMonitorRequestSerializer(serializers.Serializer):
+    """Optional request parameters for on-demand portfolio monitoring evaluation."""
+
+    from_date = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        default=None,
+    )
+    to_date = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        default=None,
+    )
