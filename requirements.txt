@@ -1,6 +1,6 @@
-django 
-djangorestframework 
-psycopg[binary] 
+django
+djangorestframework
+psycopg[binary]
 python-dotenv
 requests
 groq
@@ -14,4 +14,6 @@ langgraph-checkpoint-postgres
 djangorestframework-simplejwt
 django-cors-headers
 pypdf
-beautifulsoup4
+beautifulsoup4
+celery
+redis

@@ -22,6 +22,16 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
 
+  redis:
+    image: redis:7-alpine
+    container_name: finpilot_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
 volumes:
   postgres_data:
   qdrant_storage:
+  redis_data:

@@ -3275,3 +3275,366 @@ class PortfolioAlertsAPITestCase(TestCase):
         self.assertEqual(len(res2["alerts_suppressed"]), 1)
         self.assertEqual(Alert.objects.filter(portfolio=self.portfolio, alert_type=AlertType.DRAWDOWN_BREACH).count(), 1)
 
+
+class PortfolioCeleryTasksTestCase(TestCase):
+    """Focused test suite for Module 15 Phase 4: Celery + Redis background worker & scheduler."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="celery_user_1",
+            email="celery1@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="celery_user_2",
+            email="celery2@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Celery Growth Portfolio",
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            ticker="AAPL",
+            market="US",
+            quantity=Decimal("100"),
+            average_price=Decimal("150.00"),
+        )
+
+    def test_01_celery_app_imports_successfully(self):
+        """1. Celery app imports successfully and is configured with correct app name."""
+        from config import celery_app as imported_app
+
+        self.assertIsNotNone(imported_app)
+        self.assertEqual(imported_app.main, "finpilot")
+
+    def test_02_celery_configuration_reads_broker_url_from_config(self):
+        """2. Celery configuration reads broker URL from environment/settings."""
+        from django.conf import settings
+        from config import celery_app as imported_app
+
+        self.assertIn("redis", imported_app.conf.broker_url.lower())
+        self.assertEqual(imported_app.conf.broker_url, settings.CELERY_BROKER_URL)
+
+    def test_03_monitor_portfolio_accepts_only_portfolio_id(self):
+        """3. monitor_portfolio accepts only portfolio_id; does not accept caller-provided authority."""
+        import inspect
+        from apps.portfolio.tasks import monitor_portfolio
+
+        # Inspect the underlying task function signature
+        sig = inspect.signature(monitor_portfolio.run)
+        params = list(sig.parameters.keys())
+        self.assertEqual(params, ["portfolio_id"])
+        self.assertNotIn("user_id", params)
+        self.assertNotIn("user", params)
+
+        # Calling with extra user_id argument must raise TypeError
+        with self.assertRaises(TypeError):
+            monitor_portfolio(str(self.portfolio.id), user_id=self.user.id)
+
+    def test_04_monitor_portfolio_resolves_correct_portfolio_owner(self):
+        """4. monitor_portfolio resolves the correct portfolio owner from the database."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        with patch.object(PortfolioMonitorService, "evaluate") as mock_eval, \
+             patch.object(AlertService, "process_monitoring_result") as mock_alert_proc:
+
+            mock_eval.return_value = MonitoringResult(
+                portfolio_id=str(self.portfolio.id),
+                evaluated_at=timezone.now(),
+                events=[],
+            )
+            mock_alert_proc.return_value = {
+                "portfolio_id": str(self.portfolio.id),
+                "evaluated_at": timezone.now().isoformat(),
+                "events": [],
+                "detected_events": [],
+                "alerts_created": [],
+                "alerts_suppressed": [],
+            }
+
+            monitor_portfolio(str(self.portfolio.id))
+
+            self.assertEqual(mock_eval.call_count, 1)
+            call_kwargs = mock_eval.call_args.kwargs
+            # Verify the resolved user passed to evaluate is authoritative DB owner
+            self.assertEqual(call_kwargs["user"], self.user)
+            self.assertEqual(call_kwargs["portfolio"].user, self.user)
+
+    def test_05_monitor_portfolio_invokes_portfolio_monitor_service(self):
+        """5. monitor_portfolio invokes PortfolioMonitorService with the trusted portfolio."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        with patch.object(PortfolioMonitorService, "evaluate") as mock_eval, \
+             patch.object(AlertService, "process_monitoring_result") as mock_alert_proc:
+
+            mock_eval.return_value = MonitoringResult(
+                portfolio_id=str(self.portfolio.id),
+                evaluated_at=timezone.now(),
+                events=[],
+            )
+            mock_alert_proc.return_value = {
+                "portfolio_id": str(self.portfolio.id),
+                "evaluated_at": timezone.now().isoformat(),
+                "events": [],
+                "detected_events": [],
+                "alerts_created": [],
+                "alerts_suppressed": [],
+            }
+
+            res = monitor_portfolio(str(self.portfolio.id))
+
+            self.assertTrue(mock_eval.called)
+            self.assertEqual(res["status"], "success")
+
+    def test_06_monitor_portfolio_invokes_alert_service(self):
+        """6. monitor_portfolio invokes AlertService.process_monitoring_result()."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        mock_event = MonitoringEvent(
+            alert_type=AlertType.CONCENTRATION_BREACH,
+            severity=AlertSeverity.WARNING,
+            title="High Concentration",
+            message="AAPL weight > 35%",
+            metric_value=Decimal("45.0"),
+            threshold_value=Decimal("35.0"),
+        )
+        fake_result = MonitoringResult(
+            portfolio_id=str(self.portfolio.id),
+            evaluated_at=timezone.now(),
+            events=[mock_event],
+        )
+
+        with patch.object(PortfolioMonitorService, "evaluate", return_value=fake_result), \
+             patch.object(AlertService, "process_monitoring_result") as mock_alert_proc:
+
+            mock_alert_proc.return_value = {
+                "portfolio_id": str(self.portfolio.id),
+                "evaluated_at": fake_result.evaluated_at.isoformat(),
+                "events": [mock_event],
+                "detected_events": [mock_event],
+                "alerts_created": [{"id": 1, "title": "High Concentration"}],
+                "alerts_suppressed": [],
+            }
+
+            res = monitor_portfolio(str(self.portfolio.id))
+
+            self.assertEqual(mock_alert_proc.call_count, 1)
+            call_kwargs = mock_alert_proc.call_args.kwargs
+            self.assertEqual(call_kwargs["portfolio"].id, self.portfolio.id)
+            self.assertEqual(call_kwargs["result"], fake_result)
+            self.assertEqual(res["alerts_created"], 1)
+
+    def test_07_returned_task_result_is_json_serializable(self):
+        """7. returned task result is JSON serializable and contains expected fields."""
+        import json
+        from apps.portfolio.tasks import monitor_portfolio
+
+        with patch.object(PortfolioMonitorService, "evaluate") as mock_eval, \
+             patch.object(AlertService, "process_monitoring_result") as mock_alert_proc:
+
+            mock_eval.return_value = MonitoringResult(
+                portfolio_id=str(self.portfolio.id),
+                evaluated_at=timezone.now(),
+                events=[],
+            )
+            mock_alert_proc.return_value = {
+                "portfolio_id": str(self.portfolio.id),
+                "evaluated_at": timezone.now().isoformat(),
+                "events": [],
+                "detected_events": [],
+                "alerts_created": [],
+                "alerts_suppressed": [],
+            }
+
+            result = monitor_portfolio(str(self.portfolio.id))
+
+            # Must serialize with standard json.dumps without error
+            serialized = json.dumps(result)
+            self.assertIsInstance(serialized, str)
+            deserialized = json.loads(serialized)
+            self.assertEqual(deserialized["portfolio_id"], str(self.portfolio.id))
+            self.assertIn("events_detected", deserialized)
+            self.assertIn("alerts_created", deserialized)
+            self.assertIn("alerts_suppressed", deserialized)
+
+    def test_08_nonexistent_portfolio_is_handled_explicitly(self):
+        """8. nonexistent portfolio is handled explicitly without crashing worker process."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        missing_id = str(uuid.uuid4())
+        result = monitor_portfolio(missing_id)
+
+        self.assertEqual(result["status"], "not_found")
+        self.assertEqual(result["portfolio_id"], missing_id)
+        self.assertEqual(result["events_detected"], 0)
+        self.assertEqual(result["alerts_created"], 0)
+
+    def test_09_cross_tenant_user_spoofing_is_impossible(self):
+        """9. cross-tenant/user spoofing is impossible because user_id is not accepted."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        # Malicious payload trying to pass another user's ID
+        with self.assertRaises(TypeError):
+            monitor_portfolio(str(self.portfolio.id), user_id=str(self.other_user.id))
+
+        # Even if executed, the task only derives the user from the Portfolio record
+        with patch.object(PortfolioMonitorService, "evaluate") as mock_eval, \
+             patch.object(AlertService, "process_monitoring_result") as mock_alert_proc:
+
+            mock_eval.return_value = MonitoringResult(
+                portfolio_id=str(self.portfolio.id),
+                evaluated_at=timezone.now(),
+                events=[],
+            )
+            mock_alert_proc.return_value = {
+                "portfolio_id": str(self.portfolio.id),
+                "evaluated_at": timezone.now().isoformat(),
+                "events": [],
+                "detected_events": [],
+                "alerts_created": [],
+                "alerts_suppressed": [],
+            }
+
+            monitor_portfolio(str(self.portfolio.id))
+            # Verify evaluate was called with portfolio.user (self.user), not other_user
+            self.assertEqual(mock_eval.call_args.kwargs["user"], self.user)
+            self.assertNotEqual(mock_eval.call_args.kwargs["user"], self.other_user)
+
+    def test_10_repeated_task_execution_safe_against_duplicate_alerts(self):
+        """10. repeated task execution remains safe because Phase 3 cooldown prevents duplicates."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        # Concrete integration test: run task twice with real AlertService cooldown
+        mock_event = MonitoringEvent(
+            alert_type=AlertType.DRAWDOWN_BREACH,
+            severity=AlertSeverity.CRITICAL,
+            title="Drawdown Breach Alert",
+            message="Portfolio drawdown reached 25%",
+            metric_value=Decimal("25.0"),
+            threshold_value=Decimal("15.0"),
+        )
+        fake_result = MonitoringResult(
+            portfolio_id=str(self.portfolio.id),
+            evaluated_at=timezone.now(),
+            events=[mock_event],
+        )
+
+        with patch.object(PortfolioMonitorService, "evaluate", return_value=fake_result):
+            # First background run: alert is created
+            res1 = monitor_portfolio(str(self.portfolio.id))
+            self.assertEqual(res1["alerts_created"], 1)
+            self.assertEqual(res1["alerts_suppressed"], 0)
+            self.assertEqual(Alert.objects.filter(portfolio=self.portfolio).count(), 1)
+
+            # Second background run: alert is suppressed by cooldown
+            res2 = monitor_portfolio(str(self.portfolio.id))
+            self.assertEqual(res2["alerts_created"], 0)
+            self.assertEqual(res2["alerts_suppressed"], 1)
+            # Total alerts in database remains exactly 1
+            self.assertEqual(Alert.objects.filter(portfolio=self.portfolio).count(), 1)
+
+    def test_11_monitor_all_portfolios_discovers_portfolio_ids_correctly(self):
+        """11. monitor_all_portfolios discovers portfolio IDs correctly without N+1 relations."""
+        from apps.portfolio.tasks import monitor_all_portfolios
+
+        p2 = Portfolio.objects.create(user=self.other_user, name="Portfolio 2")
+        p3 = Portfolio.objects.create(user=self.user, name="Portfolio 3")
+
+        with patch("apps.portfolio.tasks.monitor_portfolio.delay") as mock_delay:
+            res = monitor_all_portfolios()
+
+            self.assertEqual(res["status"], "success")
+            self.assertEqual(res["dispatched_count"], 3)
+            expected_ids = {str(self.portfolio.id), str(p2.id), str(p3.id)}
+            self.assertEqual(set(res["portfolio_ids"]), expected_ids)
+
+    def test_12_monitor_all_portfolios_fans_out_tasks(self):
+        """12. monitor_all_portfolios fans out monitoring tasks passing only portfolio IDs."""
+        from apps.portfolio.tasks import monitor_all_portfolios
+
+        p2 = Portfolio.objects.create(user=self.other_user, name="Portfolio 2")
+
+        with patch("apps.portfolio.tasks.monitor_portfolio.delay") as mock_delay:
+            monitor_all_portfolios()
+
+            self.assertEqual(mock_delay.call_count, 2)
+            dispatched_args = [call.args[0] for call in mock_delay.call_args_list]
+            self.assertIn(str(self.portfolio.id), dispatched_args)
+            self.assertIn(str(p2.id), dispatched_args)
+
+    def test_13_scheduler_configuration_contains_hourly_schedule(self):
+        """13. scheduler configuration contains the intended hourly schedule."""
+        from django.conf import settings
+        from config import celery_app as imported_app
+
+        beat_schedule = imported_app.conf.beat_schedule
+        self.assertIn("monitor-portfolios-hourly", beat_schedule)
+        schedule_entry = beat_schedule["monitor-portfolios-hourly"]
+        self.assertEqual(schedule_entry["task"], "apps.portfolio.tasks.monitor_all_portfolios")
+        self.assertEqual(schedule_entry["schedule"], 3600)
+
+    def test_14_no_monitoring_logic_duplicated_in_tasks(self):
+        """14. no monitoring logic is duplicated inside tasks (delegates strictly to services)."""
+        import inspect
+        from apps.portfolio import tasks
+
+        task_source = inspect.getsource(tasks)
+        # Ensure tasks do not duplicate quantitative risk calculations
+        self.assertNotIn("calculate_current_weights", task_source)
+        self.assertNotIn("calculate_drawdown", task_source)
+        self.assertNotIn("unrealized_pnl", task_source)
+        self.assertIn("PortfolioMonitorService", task_source)
+        self.assertIn("AlertService", task_source)
+
+    def test_15_task_does_not_create_alerts_directly(self):
+        """15. task does not create alerts directly except through AlertService."""
+        from apps.portfolio.tasks import monitor_portfolio
+
+        mock_event = MonitoringEvent(
+            alert_type=AlertType.LOSS_THRESHOLD,
+            severity=AlertSeverity.CRITICAL,
+            title="Loss Alert",
+            message="Loss breach",
+            metric_value=Decimal("-15.0"),
+            threshold_value=Decimal("-10.0"),
+        )
+        fake_result = MonitoringResult(
+            portfolio_id=str(self.portfolio.id),
+            evaluated_at=timezone.now(),
+            events=[mock_event],
+        )
+
+        with patch.object(PortfolioMonitorService, "evaluate", return_value=fake_result), \
+             patch.object(AlertService, "process_monitoring_result") as mock_proc:
+
+            # Mock AlertService to return empty without persisting to DB
+            mock_proc.return_value = {
+                "portfolio_id": str(self.portfolio.id),
+                "evaluated_at": timezone.now().isoformat(),
+                "events": [mock_event],
+                "detected_events": [mock_event],
+                "alerts_created": [],
+                "alerts_suppressed": [],
+            }
+
+            monitor_portfolio(str(self.portfolio.id))
+
+            # Database has 0 alerts, confirming monitor_portfolio does not bypass AlertService
+            self.assertEqual(Alert.objects.count(), 0)
+
+    def test_16_transient_failure_retries_with_celery_policy(self):
+        """16. Transient failures (market data / operational) trigger Celery retry."""
+        from apps.portfolio.tasks import monitor_portfolio
+        from apps.ai.portfolio.intelligence import PortfolioMarketDataError
+
+        with patch.object(PortfolioMonitorService, "evaluate", side_effect=PortfolioMarketDataError("Connection timeout")), \
+             patch.object(monitor_portfolio, "retry", side_effect=Exception("Retry Triggered")) as mock_retry:
+
+            with self.assertRaises(Exception) as ctx:
+                monitor_portfolio(str(self.portfolio.id))
+            self.assertIn("Retry Triggered", str(ctx.exception))
+            self.assertTrue(mock_retry.called)
+
