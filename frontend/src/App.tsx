@@ -21,6 +21,7 @@ import { PortfolioAnalysisPage } from './pages/app/PortfolioAnalysisPage';
 import { PortfolioRiskPage } from './pages/app/PortfolioRiskPage';
 import { PortfolioOptimizationPage } from './pages/app/PortfolioOptimizationPage';
 import { BacktestPage } from './pages/app/BacktestPage';
+import { PortfolioAlertsPage } from './pages/app/PortfolioAlertsPage';
 import { DocumentsPage } from './pages/app/DocumentsPage';
 import { PlaceholderPage } from './pages/app/PlaceholderPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -79,12 +80,17 @@ export default function App() {
             <Route path="portfolio/:portfolioId/risk" element={<PortfolioRiskPage />} />
             <Route path="portfolio/:portfolioId/optimization" element={<PortfolioOptimizationPage />} />
             <Route path="portfolio/:portfolioId/backtest" element={<BacktestPage />} />
+            <Route path="portfolio/:portfolioId/alerts" element={<PortfolioAlertsPage />} />
 
             {/* Quantitative Risk & Optimization Routes (Phase D) */}
             <Route path="risk" element={<PortfolioRiskPage />} />
             <Route path="risk/:portfolioId" element={<PortfolioRiskPage />} />
             <Route path="optimization" element={<PortfolioOptimizationPage />} />
             <Route path="optimization/:portfolioId" element={<PortfolioOptimizationPage />} />
+
+            {/* Portfolio Alert Center (Module 15) */}
+            <Route path="alerts" element={<PortfolioAlertsPage />} />
+            <Route path="alerts/:portfolioId" element={<PortfolioAlertsPage />} />
 
             {/* Backtest Workspace (Phase E) */}
             <Route path="backtest" element={<BacktestPage />} />

@@ -14,6 +14,9 @@ import {
   BacktestPayload,
   BacktestResponse,
   PortfolioAiAnalysisResponse,
+  Alert,
+  MonitoringResponse,
+  RunMonitoringPayload,
 } from '../types/portfolio';
 
 export const portfolioApi = {
@@ -190,6 +193,52 @@ export const portfolioApi = {
         portfolio_id: String(portfolioId),
       },
       { timeoutMs: 60000 }
+    );
+  },
+
+  /**
+   * GET /api/v1/portfolio/<id>/alerts/
+   * Retrieves active, acknowledged, and historic monitoring alerts for a specific portfolio
+   */
+  async getAlerts(portfolioId: string | number): Promise<Alert[]> {
+    const response = await apiClient.get<Alert[] | { results: Alert[] }>(
+      `portfolio/${portfolioId}/alerts/`
+    );
+    if (Array.isArray(response)) {
+      return response;
+    }
+    if (response && Array.isArray((response as any).results)) {
+      return (response as any).results;
+    }
+    return [];
+  },
+
+  /**
+   * POST /api/v1/portfolio/<id>/monitor/
+   * Evaluates deterministic portfolio monitoring conditions on demand and creates unsuppressed alerts
+   */
+  async runMonitoring(
+    portfolioId: string | number,
+    payload?: RunMonitoringPayload
+  ): Promise<MonitoringResponse> {
+    return apiClient.post<MonitoringResponse>(
+      `portfolio/${portfolioId}/monitor/`,
+      payload || {},
+      { timeoutMs: 30000 }
+    );
+  },
+
+  /**
+   * POST /api/v1/portfolio/<id>/alerts/<alert_id>/acknowledge/
+   * Idempotently acknowledges an active or existing alert
+   */
+  async acknowledgeAlert(
+    portfolioId: string | number,
+    alertId: string | number
+  ): Promise<Alert> {
+    return apiClient.post<Alert>(
+      `portfolio/${portfolioId}/alerts/${alertId}/acknowledge/`,
+      {}
     );
   },
 };

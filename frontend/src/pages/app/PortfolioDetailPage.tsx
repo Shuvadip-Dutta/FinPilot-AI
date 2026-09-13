@@ -12,6 +12,7 @@ import { HoldingModal } from '../../components/portfolio/HoldingModal';
 import { EditPortfolioModal } from '../../components/portfolio/EditPortfolioModal';
 import { DeleteConfirmModal } from '../../components/portfolio/DeleteConfirmModal';
 import { PortfolioAiAnalysisModal } from '../../components/portfolio/PortfolioAiAnalysisModal';
+import { AlertCenter } from '../../components/portfolio/AlertCenter';
 import { portfolioApi } from '../../api/portfolio';
 import {
   Portfolio,
@@ -31,6 +32,7 @@ import {
   ShieldAlert,
   Sliders,
   GitFork,
+  Bell,
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -43,6 +45,7 @@ export const PortfolioDetailPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [aiValuation, setAiValuation] = useState<any | null>(null);
+  const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
 
   // Modals state
   const [isAddHoldingOpen, setIsAddHoldingOpen] = useState<boolean>(false);
@@ -263,6 +266,29 @@ export const PortfolioDetailPage: React.FC = () => {
               Backtest
             </Button>
 
+            {/* Quantitative Risk Alerts Entry (Module 15) */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const el = document.getElementById('portfolio-alert-center');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  navigate(`/app/portfolio/${portfolioId}/alerts`);
+                }
+              }}
+              className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+              leftIcon={<Bell className="w-3.5 h-3.5 text-amber-400" />}
+            >
+              Alerts
+              {activeAlertsCount > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">
+                  {activeAlertsCount}
+                </span>
+              )}
+            </Button>
+
             {/* Refresh */}
             <Button
               variant="outline"
@@ -329,6 +355,12 @@ export const PortfolioDetailPage: React.FC = () => {
         onEditHolding={(holding) => setEditingHolding(holding)}
         onDeleteHolding={(holding) => setDeletingHolding(holding)}
         isLoading={isLoading}
+      />
+
+      {/* Quantitative Alert Center (Module 15) */}
+      <AlertCenter
+        portfolioId={portfolioId!}
+        onAlertCountChange={setActiveAlertsCount}
       />
 
       {/* Add Holding Modal */}
