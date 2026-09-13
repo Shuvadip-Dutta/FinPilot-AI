@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from rest_framework import status
@@ -24,6 +24,12 @@ from apps.portfolio.models import (
     Portfolio,
     holding_to_schema,
     portfolio_to_schema,
+)
+from apps.portfolio.monitor import (
+    MonitoringConfig,
+    MonitoringEvent,
+    MonitoringResult,
+    PortfolioMonitorService,
 )
 from apps.portfolio.serializers import AlertSerializer
 
@@ -2466,6 +2472,282 @@ class AlertModelTestCase(TestCase):
                 AlertSerializer.Meta.read_only_fields,
                 f"Field '{field}' must be marked read_only.",
             )
+
+
+class PortfolioMonitorServiceTestCase(TestCase):
+    """Phase 2 test suite for deterministic PortfolioMonitorService."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username="monitor_owner",
+            email="owner@example.com",
+            password="securepassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="monitor_intruder",
+            email="intruder@example.com",
+            password="securepassword456",
+        )
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            name="Monitoring Test Portfolio",
+        )
+        self.service = PortfolioMonitorService()
+
+    def test_concentration_breach_detected_above_35_percent(self):
+        """1. Concentration breach is detected above 35%."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("40.0"), average_price=Decimal("1000.0"))
+        Holding.objects.create(portfolio=self.portfolio, ticker="TCS", market="IN", quantity=Decimal("30.0"), average_price=Decimal("1000.0"))
+        Holding.objects.create(portfolio=self.portfolio, ticker="INFY", market="IN", quantity=Decimal("30.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 1000.0, "TCS": 1000.0, "INFY": 1000.0}
+        historical_prices = {
+            "RELIANCE": [1000.0, 1000.0, 1000.0, 1000.0],
+            "TCS": [1000.0, 1000.0, 1000.0, 1000.0],
+            "INFY": [1000.0, 1000.0, 1000.0, 1000.0],
+        }
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        conc_events = [e for e in result.events if e.alert_type == AlertType.CONCENTRATION_BREACH]
+        self.assertEqual(len(conc_events), 1)
+        self.assertEqual(conc_events[0].metadata["ticker"], "RELIANCE")
+        self.assertEqual(conc_events[0].metric_value, Decimal("40.0000"))
+        self.assertEqual(conc_events[0].threshold_value, Decimal("35.0"))
+
+    def test_concentration_exactly_at_35_percent_does_not_breach(self):
+        """2. Concentration exactly at 35% does NOT breach (strictly > 35%)."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("35.0"), average_price=Decimal("1000.0"))
+        Holding.objects.create(portfolio=self.portfolio, ticker="TCS", market="IN", quantity=Decimal("35.0"), average_price=Decimal("1000.0"))
+        Holding.objects.create(portfolio=self.portfolio, ticker="INFY", market="IN", quantity=Decimal("30.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 1000.0, "TCS": 1000.0, "INFY": 1000.0}
+        historical_prices = {
+            "RELIANCE": [1000.0, 1000.0, 1000.0, 1000.0],
+            "TCS": [1000.0, 1000.0, 1000.0, 1000.0],
+            "INFY": [1000.0, 1000.0, 1000.0, 1000.0],
+        }
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        conc_events = [e for e in result.events if e.alert_type == AlertType.CONCENTRATION_BREACH]
+        self.assertEqual(len(conc_events), 0)
+
+    def test_multiple_concentration_breaches_returned(self):
+        """3. Multiple concentration breaches are returned."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("50.0"), average_price=Decimal("1000.0"))
+        Holding.objects.create(portfolio=self.portfolio, ticker="TCS", market="IN", quantity=Decimal("50.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 1000.0, "TCS": 1000.0}
+        historical_prices = {
+            "RELIANCE": [1000.0, 1000.0, 1000.0, 1000.0],
+            "TCS": [1000.0, 1000.0, 1000.0, 1000.0],
+        }
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        conc_events = [e for e in result.events if e.alert_type == AlertType.CONCENTRATION_BREACH]
+        self.assertEqual(len(conc_events), 2)
+        tickers = {e.metadata["ticker"] for e in conc_events}
+        self.assertEqual(tickers, {"RELIANCE", "TCS"})
+
+    def test_no_concentration_breach_returns_no_concentration_event(self):
+        """4. No concentration breach returns no concentration event."""
+        for ticker in ["A", "B", "C", "D"]:
+            Holding.objects.create(portfolio=self.portfolio, ticker=ticker, market="IN", quantity=Decimal("25.0"), average_price=Decimal("100.0"))
+
+        last_prices = {t: 100.0 for t in ["A", "B", "C", "D"]}
+        historical_prices = {t: [100.0, 100.0, 100.0, 100.0] for t in ["A", "B", "C", "D"]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        conc_events = [e for e in result.events if e.alert_type == AlertType.CONCENTRATION_BREACH]
+        self.assertEqual(len(conc_events), 0)
+
+    def test_drawdown_breach_above_15_percent_detected(self):
+        """5. Drawdown breach above 15% is detected."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("100.0"))
+
+        last_prices = {"RELIANCE": 82.0}
+        historical_prices = {"RELIANCE": [100.0, 100.0, 80.0, 82.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        dd_events = [e for e in result.events if e.alert_type == AlertType.DRAWDOWN_BREACH]
+        self.assertEqual(len(dd_events), 1)
+        self.assertEqual(dd_events[0].metric_value, Decimal("20.0000"))
+        self.assertEqual(dd_events[0].threshold_value, Decimal("15.0"))
+        self.assertIn("15.00%", dd_events[0].message)
+
+    def test_drawdown_exactly_at_15_percent_does_not_breach(self):
+        """6. Drawdown exactly at 15% does NOT breach (strictly > 15%)."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("100.0"))
+
+        last_prices = {"RELIANCE": 86.0}
+        historical_prices = {"RELIANCE": [100.0, 100.0, 85.0, 86.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        dd_events = [e for e in result.events if e.alert_type == AlertType.DRAWDOWN_BREACH]
+        self.assertEqual(len(dd_events), 0)
+
+    def test_severe_loss_below_minus_10_percent_detected(self):
+        """7. Severe loss below -10% is detected."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 850.0}
+        historical_prices = {"RELIANCE": [850.0, 850.0, 850.0, 850.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        loss_events = [e for e in result.events if e.alert_type == AlertType.LOSS_THRESHOLD]
+        self.assertEqual(len(loss_events), 1)
+        self.assertEqual(loss_events[0].metric_value, Decimal("-15.0000"))
+        self.assertEqual(loss_events[0].threshold_value, Decimal("-10.0"))
+
+    def test_loss_exactly_minus_10_percent_does_not_breach(self):
+        """8. Loss exactly -10% does NOT breach (strictly < -10%)."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 900.0}
+        historical_prices = {"RELIANCE": [900.0, 900.0, 900.0, 900.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        loss_events = [e for e in result.events if e.alert_type == AlertType.LOSS_THRESHOLD]
+        self.assertEqual(len(loss_events), 0)
+
+    def test_no_loss_breach_when_above_threshold(self):
+        """9. No loss breach when above threshold (e.g. +5% profit)."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 1050.0}
+        historical_prices = {"RELIANCE": [1000.0, 1020.0, 1040.0, 1050.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        loss_events = [e for e in result.events if e.alert_type == AlertType.LOSS_THRESHOLD]
+        self.assertEqual(len(loss_events), 0)
+
+    def test_multiple_condition_types_returned_together(self):
+        """10. Multiple condition types can be returned together (concentration + drawdown + loss)."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 750.0}
+        historical_prices = {"RELIANCE": [1000.0, 1000.0, 750.0, 750.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        types = {e.alert_type for e in result.events}
+        self.assertIn(AlertType.CONCENTRATION_BREACH, types)
+        self.assertIn(AlertType.DRAWDOWN_BREACH, types)
+        self.assertIn(AlertType.LOSS_THRESHOLD, types)
+        self.assertEqual(len(result.events), 3)
+
+    def test_empty_or_no_holdings_behaves_safely(self):
+        """11. Empty/no holdings behaves safely, returning 0 events."""
+        result = self.service.evaluate(portfolio=self.portfolio)
+        self.assertEqual(result.portfolio_id, str(self.portfolio.id))
+        self.assertEqual(len(result.events), 0)
+
+    def test_historical_data_absence_behaves_according_to_existing_risk_service(self):
+        """12. Historical-data absence behaves according to existing risk-service behavior."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+        last_prices = {"RELIANCE": 1000.0}
+
+        mock_builder = PortfolioWorkflowInputBuilder(
+            historical_data_fetcher=lambda **kwargs: {"ticker": "RELIANCE", "candles": []}
+        )
+        service = PortfolioMonitorService(workflow_input_builder=mock_builder)
+
+        with self.assertRaises(ValueError) as ctx:
+            service.evaluate(
+                portfolio=self.portfolio,
+                last_prices=last_prices,
+                historical_prices=None,
+            )
+        self.assertIn("contains no candles", str(ctx.exception))
+
+    def test_returned_metric_and_threshold_values_are_correct_decimals(self):
+        """13. Returned metric/threshold values are correct Decimal values."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+
+        last_prices = {"RELIANCE": 800.0}
+        historical_prices = {"RELIANCE": [1000.0, 1000.0, 800.0, 800.0]}
+
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+
+        for event in result.events:
+            self.assertIsInstance(event.metric_value, Decimal)
+            self.assertIsInstance(event.threshold_value, Decimal)
+
+    def test_ownership_cross_tenant_access_is_rejected(self):
+        """14. Ownership/cross-tenant access is rejected with PermissionDenied."""
+        with self.assertRaises(PermissionDenied):
+            self.service.evaluate(
+                portfolio=self.portfolio,
+                user=self.other_user,
+            )
+
+    def test_monitor_does_not_create_alert_database_rows(self):
+        """15. Monitor does not create Alert database rows."""
+        Holding.objects.create(portfolio=self.portfolio, ticker="RELIANCE", market="IN", quantity=Decimal("10.0"), average_price=Decimal("1000.0"))
+        last_prices = {"RELIANCE": 700.0}
+        historical_prices = {"RELIANCE": [1000.0, 1000.0, 700.0, 700.0]}
+
+        initial_count = Alert.objects.count()
+        result = self.service.evaluate(
+            portfolio=self.portfolio,
+            last_prices=last_prices,
+            historical_prices=historical_prices,
+        )
+        self.assertGreater(len(result.events), 0)
+        self.assertEqual(Alert.objects.count(), initial_count)
 
 
 
