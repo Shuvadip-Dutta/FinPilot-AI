@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.test import TestCase
+from django.test.utils import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -217,3 +218,41 @@ class APISecurityTestCase(TestCase):
         res_refresh = self.client.post("/api/v1/auth/token/refresh/", {})
         self.assertEqual(res_refresh.status_code, status.HTTP_400_BAD_REQUEST)
 
+
+class HealthEndpointThrottleTestCase(TestCase):
+    """Regression test proving the health endpoint is NOT subject to global DRF throttles.
+
+    The Docker HEALTHCHECK fires repeatedly (every 10–30 s).  If it consumed the
+    global AnonRateThrottle bucket it would eventually return HTTP 429 and cause
+    Docker to mark the container unhealthy.  This test ensures the endpoint is
+    permanently exempt from all throttle classes.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    @override_settings(
+        REST_FRAMEWORK={
+            **settings.REST_FRAMEWORK,
+            "DEFAULT_THROTTLE_RATES": {
+                **settings.REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {}),
+                "anon": "1/day",  # extremely restrictive — would normally block the 2nd request
+            },
+        }
+    )
+    def test_repeated_anonymous_health_requests_are_not_throttled(self):
+        """Even under a 1/day anon rate, repeated health requests must all return 200.
+
+        This proves the health endpoint does NOT consume the global AnonRateThrottle
+        bucket regardless of how often it is called.
+        """
+        from django.core.cache import cache
+        cache.clear()  # ensure throttle cache is clean
+
+        for attempt in range(1, 6):
+            response = self.client.get("/api/v1/health/")
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_200_OK,
+                f"Request #{attempt} to /health/ returned {response.status_code} — should be 200",
+            )

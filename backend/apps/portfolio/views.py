@@ -233,11 +233,27 @@ class PortfolioRiskView(APIView):
         builder = PortfolioWorkflowInputBuilder()
         try:
             canonical_portfolio = portfolio.to_pydantic()
-            historical_prices = builder.fetch_portfolio_historical_prices(
-                portfolio=canonical_portfolio,
-                to_date=to_date,
-                from_date=from_date,
-            )
+            sorted_dates = []
+            try:
+                historical_candles = builder.fetch_portfolio_historical_candles(
+                    portfolio=canonical_portfolio,
+                    to_date=to_date,
+                    from_date=from_date,
+                )
+                sorted_tickers = sorted(list(historical_candles.keys()))
+                date_sets = [set(historical_candles[t].keys()) for t in sorted_tickers]
+                sorted_dates = sorted(list(set.intersection(*date_sets))) if date_sets else []
+                historical_prices = {
+                    t: [historical_candles[t][d] for d in sorted_dates]
+                    for t in sorted_tickers
+                }
+            except (ValueError, TypeError, OSError, IOError):
+                historical_prices = builder.fetch_portfolio_historical_prices(
+                    portfolio=canonical_portfolio,
+                    to_date=to_date,
+                    from_date=from_date,
+                )
+                sorted_dates = []
         except (ValueError, TypeError) as exc:
             return Response(
                 {"error": str(exc)},
@@ -276,6 +292,7 @@ class PortfolioRiskView(APIView):
                 historical_prices=historical_prices,
                 weights=weights,
                 risk_free_rate=risk_free_rate,
+                dates=sorted_dates if sorted_dates else None,
             )
         except (ValueError, TypeError) as exc:
             return Response(
@@ -284,10 +301,13 @@ class PortfolioRiskView(APIView):
             )
 
         metrics_dict = metrics.model_dump()
+        drawdown_series = metrics.drawdown_series or []
         response_data = {
             "portfolio_id": str(portfolio.id),
             "portfolio_name": portfolio.name,
             "risk_metrics": metrics_dict,
+            "drawdown_series": drawdown_series,
+            "historical_series": drawdown_series,
             **metrics_dict,
         }
 

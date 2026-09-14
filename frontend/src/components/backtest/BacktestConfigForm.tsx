@@ -42,15 +42,29 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
   const [benchmark, setBenchmark] = useState<string>('^NSEI');
   const [initialCapital, setInitialCapital] = useState<number>(100000);
   const [rebalanceFrequency, setRebalanceFrequency] = useState<RebalanceFrequency>('quarterly');
+  const minAllowedCap = portfolioHoldingsCount > 0 ? Math.ceil(100 / portfolioHoldingsCount) : 50;
+
   const [inSampleWindow, setInSampleWindow] = useState<number>(252); // ~1 trading year
   const [outOfSampleStep, setOutOfSampleStep] = useState<number>(63); // ~1 trading quarter
   const [transactionCostBps, setTransactionCostBps] = useState<number>(10); // 10 bps = 0.001
   const [riskFreeRatePct, setRiskFreeRatePct] = useState<number>(6.5); // 6.5%
   const [minWeightPct, setMinWeightPct] = useState<number>(0); // 0%
-  const [maxWeightPct, setMaxWeightPct] = useState<number>(35); // 35% cap
+  const [maxWeightPct, setMaxWeightPct] = useState<number>(() =>
+    portfolioHoldingsCount > 0 ? Math.max(35, Math.ceil(100 / portfolioHoldingsCount)) : 35
+  );
 
   // Form error state
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // When portfolioHoldingsCount changes, ensure maxWeightPct is mathematically feasible
+  React.useEffect(() => {
+    if (portfolioHoldingsCount > 0) {
+      const minCap = Math.ceil(100 / portfolioHoldingsCount);
+      if (maxWeightPct < minCap) {
+        setMaxWeightPct(minCap);
+      }
+    }
+  }, [portfolioHoldingsCount]);
 
   // Quick preset helper
   const applyPreset = (years: number) => {
@@ -97,6 +111,10 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
 
     if (minWeightPct > maxWeightPct) {
       return 'Minimum weight floor cannot exceed maximum weight cap.';
+    }
+
+    if (portfolioHoldingsCount > 0 && (maxWeightPct / 100) * portfolioHoldingsCount < 1.0) {
+      return `Max Asset Weight Cap (${maxWeightPct}%) is mathematically infeasible for ${portfolioHoldingsCount} holdings. The upper bound must be at least ${minAllowedCap}% so that total weights can sum to 100%.`;
     }
 
     if (transactionCostBps < 0) {
@@ -153,7 +171,8 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
     setTransactionCostBps(10);
     setRiskFreeRatePct(6.5);
     setMinWeightPct(0);
-    setMaxWeightPct(35);
+    const minCap = portfolioHoldingsCount > 0 ? Math.ceil(100 / portfolioHoldingsCount) : 50;
+    setMaxWeightPct(Math.max(35, minCap));
     setValidationError(null);
   };
 
@@ -432,14 +451,19 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
           </div>
           <input
             type="number"
-            min="5"
+            min={minAllowedCap}
             max="100"
-            step="5"
+            step="1"
             value={maxWeightPct}
-            onChange={(e) => setMaxWeightPct(Number(e.target.value))}
+            onChange={(e) => {
+              setMaxWeightPct(Number(e.target.value));
+              setValidationError(null);
+            }}
             className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
           />
-          <span className="text-[10px] text-slate-500 block">Concentration limit per asset</span>
+          <span className="text-[10px] text-slate-500 block">
+            Concentration limit per asset (min {minAllowedCap}% for {portfolioHoldingsCount} holdings)
+          </span>
         </div>
       </div>
 

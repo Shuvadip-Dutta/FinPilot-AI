@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -1683,6 +1684,25 @@ class PortfolioRiskViewTestCase(TestCase):
             self.assertIn(metric, data, f"Missing top-level metric: {metric}")
             self.assertIn(metric, data["risk_metrics"], f"Missing risk_metrics field: {metric}")
             self.assertIsNotNone(data[metric], f"Metric {metric} should not be None")
+
+        self.assertIn("drawdown_series", data)
+        self.assertTrue(data["drawdown_series"])
+        self.assertEqual(len(data["drawdown_series"]), len(self.dates))
+        self.assertEqual(data["drawdown_series"][0]["date"], self.dates[0])
+        self.assertEqual(data["drawdown_series"][-1]["date"], self.dates[-1])
+        for point in data["drawdown_series"]:
+            date.fromisoformat(point["date"])
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_risk_response_does_not_fabricate_series_without_historical_observations(self, mock_fetch):
+        mock_fetch.return_value = {"candles": []}
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("drawdown_series", response.json())
 
     def test_empty_portfolio_returns_400(self):
         """4. Portfolio with no holdings returns 400 Bad Request."""
@@ -3637,4 +3657,3 @@ class PortfolioCeleryTasksTestCase(TestCase):
                 monitor_portfolio(str(self.portfolio.id))
             self.assertIn("Retry Triggered", str(ctx.exception))
             self.assertTrue(mock_retry.called)
-

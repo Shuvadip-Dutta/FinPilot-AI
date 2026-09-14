@@ -1,6 +1,6 @@
 """Typed data contracts for portfolio intelligence."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -58,4 +58,5 @@ class PortfolioRiskMetrics(BaseModel):
     annualized_return: float
     cagr: float
     total_period_return: float
+    drawdown_series: list[dict[str, Any]] | None = None
 

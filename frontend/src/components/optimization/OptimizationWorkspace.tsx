@@ -46,17 +46,49 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
   onOpenAiAudit,
   className = '',
 }) => {
+  // Derive minimum mathematically feasible max-weight percentage from active holdings count
+  const minAllowedCap = holdings.length > 0 ? Math.ceil(100 / holdings.length) : 50;
+
   // Optimization parameters (Authoritative backend solver strictly implements Sharpe ratio maximization)
   const objective: 'max_sharpe' = 'max_sharpe';
-  const [maxWeight, setMaxWeight] = useState<number>(35); // 35% cap
+  const [maxWeight, setMaxWeight] = useState<number>(() =>
+    holdings.length > 0 ? Math.max(35, Math.ceil(100 / holdings.length)) : 35
+  );
   const [minWeight, setMinWeight] = useState<number>(0); // 0% floor
   const [riskFreeRate, setRiskFreeRate] = useState<number>(6.5); // 6.5% RBI / treasury benchmark
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Track initialization/portfolio switching: do not overwrite deliberate user changes on same portfolio,
+  // but ensure maxWeight remains mathematically feasible when holdings change.
+  const lastPortfolioIdRef = React.useRef<string | number | undefined>(portfolio?.id);
+  React.useEffect(() => {
+    if (portfolio?.id !== lastPortfolioIdRef.current) {
+      lastPortfolioIdRef.current = portfolio?.id;
+      const targetMin = holdings.length > 0 ? Math.ceil(100 / holdings.length) : 50;
+      setMaxWeight(Math.max(35, targetMin));
+      setValidationError(null);
+    } else if (holdings.length > 0) {
+      const targetMin = Math.ceil(100 / holdings.length);
+      if (maxWeight < targetMin) {
+        setMaxWeight(targetMin);
+        setValidationError(null);
+      }
+    }
+  }, [portfolio?.id, holdings.length]);
 
   const portfolioValue = getPortfolioCurrentValue(portfolio);
   const currency = portfolio?.currency || 'INR';
 
   // Handle run optimization
   const handleExecute = async () => {
+    if (holdings.length > 0 && (maxWeight / 100) * holdings.length < 1.0) {
+      setValidationError(
+        `Max Asset Weight Cap (${maxWeight}%) is mathematically infeasible for ${holdings.length} holdings. The upper bound must be at least ${minAllowedCap}% so that total weights can sum to 100%.`
+      );
+      return;
+    }
+    setValidationError(null);
+
     const payload: OptimizePortfolioPayload = {
       objective: 'max_sharpe',
       max_weight: maxWeight / 100,
@@ -168,6 +200,17 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
           </div>
         </div>
 
+        {/* Feasibility Alert Notice */}
+        {validationError && (
+          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-2.5 text-xs">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-semibold text-rose-200">Constraint Feasibility Notice</span>
+              <p className="text-rose-300/90">{validationError}</p>
+            </div>
+          </div>
+        )}
+
         {/* Form Controls Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
           {/* Objective Selector */}
@@ -203,16 +246,19 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
             </div>
             <input
               type="range"
-              min="10"
+              min={minAllowedCap}
               max="100"
-              step="5"
+              step="1"
               value={maxWeight}
-              onChange={(e) => setMaxWeight(Number(e.target.value))}
+              onChange={(e) => {
+                setMaxWeight(Number(e.target.value));
+                setValidationError(null);
+              }}
               className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
             >
             </input>
             <span className="text-[10px] text-slate-500 block">
-              Upper bound constraint to curb concentration
+              Upper bound constraint (min {minAllowedCap}% for {holdings.length} assets to sum to 100%)
             </span>
           </div>
 

@@ -226,7 +226,7 @@ export const BacktestPage: React.FC = () => {
                 >
                   {portfolios.map((p) => (
                     <option key={p.id} value={String(p.id)}>
-                      {p.name} ({p.currency || 'INR'}) — {p.holdings_count || 0} holdings
+                      {p.name} ({p.currency || 'INR'}) — {p.holdings?.length ?? p.holdings_count ?? 0} holdings
                     </option>
                   ))}
                 </select>

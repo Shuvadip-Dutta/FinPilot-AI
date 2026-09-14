@@ -170,3 +170,128 @@ class PortfolioRiskEngineTestCase(TestCase):
         # 8. Infinite risk free rate
         with self.assertRaises(PortfolioRiskError):
             self.engine.calculate({"A": [100.0, 105.0, 110.0]}, {"A": 1.0}, risk_free_rate=float("inf"))
+
+
+class DrawdownSeriesTestCase(TestCase):
+    """Focused tests for the drawdown_series feature added in Phase 5."""
+
+    def setUp(self):
+        self.engine = PortfolioRiskEngine()
+        # 5 price points → 4 daily returns → wealth_path has 5 elements
+        # Day 0: 100, Day 1: 110 (+10%), Day 2: 99 (-10% from Day1),
+        # Day 3: 88 (-11.1% from Day2), Day 4: 120 (+36.4%)
+        self.prices = {"TEST": [100.0, 110.0, 99.0, 88.0, 120.0]}
+        self.weights = {"TEST": 1.0}
+        self.dates = ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"]
+
+    # ------------------------------------------------------------------
+    # 1. drawdown_series is populated when dates are supplied
+    # ------------------------------------------------------------------
+    def test_drawdown_series_populated_when_dates_supplied(self):
+        """drawdown_series must be a non-empty list when dates are passed."""
+        metrics = self.engine.calculate(self.prices, self.weights, dates=self.dates)
+        self.assertIsNotNone(metrics.drawdown_series)
+        self.assertIsInstance(metrics.drawdown_series, list)
+        self.assertGreater(len(metrics.drawdown_series), 0)
+
+    # ------------------------------------------------------------------
+    # 2. drawdown_series length equals the supplied observation-date count
+    # ------------------------------------------------------------------
+    def test_drawdown_series_length_equals_date_count(self):
+        """drawdown_series must have exactly len(dates) entries."""
+        metrics = self.engine.calculate(self.prices, self.weights, dates=self.dates)
+        self.assertEqual(len(metrics.drawdown_series), len(self.dates))
+
+    # ------------------------------------------------------------------
+    # 3. Every series point contains a valid YYYY-MM-DD date string
+    # ------------------------------------------------------------------
+    def test_drawdown_series_dates_are_valid_iso_strings(self):
+        """Every series entry must contain a 'date' key with a valid YYYY-MM-DD value."""
+        import re
+        iso_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        metrics = self.engine.calculate(self.prices, self.weights, dates=self.dates)
+        for point in metrics.drawdown_series:
+            self.assertIn("date", point)
+            self.assertRegex(point["date"], iso_pattern)
+
+    # ------------------------------------------------------------------
+    # 4. cumulative_return and drawdown are deterministic (wealth_path)
+    # ------------------------------------------------------------------
+    def test_drawdown_series_values_are_deterministic(self):
+        """cumulative_return and drawdown in the series must match wealth_path math.
+
+        Wealth path (starting from 1.0, one factor per price return):
+          t0: 1.000   → cum_ret =   0.0 %,  dd = 0.0 %   (peak = 1.0)
+          t1: 1.100   → cum_ret =  10.0 %,  dd = 0.0 %   (peak = 1.1)
+          t2: 0.990   → cum_ret =  -1.0 %,  dd = 9.09 %  (peak = 1.1)
+          t3: 0.880   → cum_ret = -12.0 %,  dd = 20.0 %  (peak = 1.1)
+          t4: 1.200   → cum_ret =  20.0 %,  dd = 0.0 %   (peak = 1.2)
+        """
+        metrics = self.engine.calculate(self.prices, self.weights, dates=self.dates)
+        series = metrics.drawdown_series
+
+        # t0
+        self.assertAlmostEqual(series[0]["cumulative_return"], 0.0, places=3)
+        self.assertAlmostEqual(series[0]["drawdown"], 0.0, places=3)
+
+        # t1: peak
+        self.assertAlmostEqual(series[1]["cumulative_return"], 10.0, places=3)
+        self.assertAlmostEqual(series[1]["drawdown"], 0.0, places=3)
+
+        # t3: deepest drawdown
+        self.assertAlmostEqual(series[3]["cumulative_return"], -12.0, places=2)
+        self.assertAlmostEqual(series[3]["drawdown"], -20.0, places=2)
+
+        # t4: new peak
+        self.assertAlmostEqual(series[4]["cumulative_return"], 20.0, places=2)
+        self.assertAlmostEqual(series[4]["drawdown"], 0.0, places=3)
+
+    # ------------------------------------------------------------------
+    # 5. dates and wealth_path are chronologically aligned
+    # ------------------------------------------------------------------
+    def test_drawdown_series_dates_chronological(self):
+        """Series date strings must appear in ascending (chronological) order."""
+        metrics = self.engine.calculate(self.prices, self.weights, dates=self.dates)
+        dates_out = [p["date"] for p in metrics.drawdown_series]
+        self.assertEqual(dates_out, sorted(dates_out))
+
+    # ------------------------------------------------------------------
+    # 6. No series fabricated when dates are not supplied
+    # ------------------------------------------------------------------
+    def test_drawdown_series_absent_when_no_dates(self):
+        """drawdown_series must be None when dates parameter is omitted."""
+        metrics = self.engine.calculate(self.prices, self.weights)
+        self.assertIsNone(metrics.drawdown_series)
+
+    # ------------------------------------------------------------------
+    # 7. Scalar risk metrics unchanged compared to dateless calculation
+    # ------------------------------------------------------------------
+    def test_scalar_metrics_unchanged_when_dates_supplied(self):
+        """All 13 scalar metrics must be identical regardless of whether dates are passed."""
+        metrics_no_dates = self.engine.calculate(self.prices, self.weights)
+        metrics_with_dates = self.engine.calculate(
+            self.prices, self.weights, dates=self.dates
+        )
+
+        scalar_fields = [
+            "volatility",
+            "downside_volatility",
+            "sharpe_ratio",
+            "sortino_ratio",
+            "calmar_ratio",
+            "max_drawdown",
+            "max_drawdown_duration_days",
+            "var_95_historical",
+            "cvar_95_historical",
+            "annualized_return",
+            "cagr",
+            "total_period_return",
+        ]
+        for field in scalar_fields:
+            v_no_dates = getattr(metrics_no_dates, field)
+            v_with_dates = getattr(metrics_with_dates, field)
+            self.assertEqual(
+                v_no_dates,
+                v_with_dates,
+                msg=f"Scalar metric '{field}' differs: {v_no_dates} vs {v_with_dates}",
+            )

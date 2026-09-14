@@ -2,6 +2,7 @@
 
 import math
 from statistics import fmean
+from typing import Any
 
 from apps.ai.portfolio.schemas import Portfolio, PortfolioRiskMetrics
 
@@ -62,6 +63,7 @@ class PortfolioRiskEngine:
         historical_prices: dict[str, list[float]],
         weights: dict[str, float],
         risk_free_rate: float = 0.0,
+        dates: list[str] | None = None,
     ) -> PortfolioRiskMetrics:
         """Calculate comprehensive risk metrics from historical prices and weights."""
         norm_weights, norm_prices = self._validate_inputs(
@@ -82,38 +84,47 @@ class PortfolioRiskEngine:
         # 1. Total Period Return & Wealth Path
         total_period_return, wealth_path = self._calculate_wealth_path(portfolio_returns)
 
-        # 2. CAGR
+        # 2. Drawdown Series
+        drawdown_series = None
+        if dates is not None:
+            if len(dates) != len(wealth_path):
+                raise PortfolioRiskError(
+                    f"Dates count ({len(dates)}) does not match historical observation count ({len(wealth_path)})."
+                )
+            drawdown_series = self.calculate_drawdown_series(wealth_path, dates)
+
+        # 3. CAGR
         cagr = self._calculate_cagr(total_period_return, obs_count)
 
-        # 3. Volatility
+        # 4. Volatility
         volatility = self._calculate_annualized_volatility(portfolio_returns, mean_daily_return)
 
-        # 4. Downside Volatility
+        # 5. Downside Volatility
         daily_rf = risk_free_rate / TRADING_PERIODS_PER_YEAR
         downside_volatility = self._calculate_downside_volatility(portfolio_returns, daily_rf)
 
-        # 5. Sharpe Ratio
+        # 6. Sharpe Ratio
         if volatility > VOLATILITY_EPSILON:
             sharpe_ratio = (annualized_return - risk_free_rate) / volatility
         else:
             sharpe_ratio = 0.0
 
-        # 6. Sortino Ratio
+        # 7. Sortino Ratio
         if downside_volatility > VOLATILITY_EPSILON:
             sortino_ratio = (annualized_return - risk_free_rate) / downside_volatility
         else:
             sortino_ratio = 0.0
 
-        # 7. Maximum Drawdown & Duration
+        # 8. Maximum Drawdown & Duration
         max_drawdown, max_drawdown_duration = self._calculate_max_drawdown(wealth_path)
 
-        # 8. Calmar Ratio
+        # 9. Calmar Ratio
         if max_drawdown > VOLATILITY_EPSILON:
             calmar_ratio = annualized_return / max_drawdown
         else:
             calmar_ratio = None
 
-        # 9. Historical VaR & CVaR (95%)
+        # 10. Historical VaR & CVaR (95%)
         var_95, cvar_95 = self._calculate_historical_var_cvar(portfolio_returns)
 
         return PortfolioRiskMetrics(
@@ -129,6 +140,7 @@ class PortfolioRiskEngine:
             annualized_return=annualized_return,
             cagr=cagr,
             total_period_return=total_period_return,
+            drawdown_series=drawdown_series,
         )
 
     def _validate_inputs(
@@ -221,6 +233,28 @@ class PortfolioRiskEngine:
             path.append(wealth)
         total_return = wealth - 1.0
         return total_return, path
+
+    @staticmethod
+    def calculate_drawdown_series(
+        wealth_path: list[float],
+        dates: list[str],
+    ) -> list[dict[str, Any]]:
+        """Calculate date-indexed cumulative return and peak-to-trough drawdown series."""
+        series: list[dict[str, Any]] = []
+        peak = wealth_path[0] if wealth_path else 1.0
+
+        for d, wealth in zip(dates, wealth_path):
+            if wealth > peak:
+                peak = wealth
+            dd = (peak - wealth) / peak if peak > 0 else 0.0
+            cum_ret = (wealth - 1.0) * 100.0
+            series.append({
+                "date": str(d),
+                "cumulative_return": round(cum_ret, 4),
+                "drawdown": round(-dd * 100.0, 4),
+            })
+
+        return series
 
     @staticmethod
     def _calculate_cagr(total_return: float, obs_count: int) -> float:
