@@ -10,9 +10,11 @@ The platform is designed to demonstrate how an agentic AI system can combine det
 
 ## Project Status
 
-FinPilot AI is currently in active development.
+FinPilot AI is now in the integration and deployment-hardening stage.
 
-The research and multi-agent backend, along with the full portfolio quantitative suite (optimization, quantitative risk, and walk-forward backtesting), is implemented and validated. SEC filing ingestion, frontend interfaces, portfolio monitoring, and conversational backtest activation are the remaining major product areas.
+The core research platform, multi-agent LangGraph workflow, RAG foundation, authentication and authorization, evidence/provenance persistence, deterministic portfolio optimization, quantitative risk analysis, walk-forward backtesting, SEC filing RAG, conversational backtest activation, portfolio monitoring, background processing, and the portfolio frontend and authenticated frontend workflows are implemented and validated.
+
+Current work is focused on production containerization, deployment hardening, and final end-to-end integration.
 
 ### Current Status
 
@@ -26,26 +28,29 @@ The research and multi-agent backend, along with the full portfolio quantitative
 | Financial Sentiment Analysis | ✅ Implemented |
 | Risk Analysis | ✅ Implemented |
 | Multi-Agent LangGraph Workflow | ✅ Implemented |
-| Authentication | ✅ Implemented |
+| Authentication & Authorization | ✅ Implemented |
 | Session & Evidence Persistence | ✅ Implemented |
 | Provider Fallback & Provenance | ✅ Implemented |
 | Model Routing | ✅ Implemented |
 | Token Budget Management | ✅ Implemented |
 | Observability | ✅ Implemented |
 | Model Evaluation | ✅ Implemented |
-| RAG Foundation | ✅ Implemented |
+| Generic RAG Foundation | ✅ Implemented |
+| SEC Filing RAG | ✅ Implemented |
 | Portfolio Intelligence | ✅ Implemented |
 | Portfolio Optimization Engine | ✅ Implemented |
 | Portfolio Quantitative Risk Engine | ✅ Implemented |
 | Portfolio Walk-Forward Backtesting | ✅ Implemented |
-| Portfolio REST API (CRUD + Backtest) | ✅ Implemented |
+| Portfolio REST API | ✅ Implemented |
 | Portfolio LangGraph Integration | ✅ Implemented |
-| SEC Filing RAG | 🚧 In Progress |
-| Frontend | 🚧 In Progress |
-| Portfolio Dashboard | 🚧 In Progress |
-| Portfolio Monitoring | 🚧 In Progress |
-| Background Processing | 🚧 In Progress |
-| Conversational Backtest Activation | 🚧 In Progress |
+| Conversational Backtest Activation | ✅ Implemented |
+| Portfolio Monitoring | ✅ Implemented |
+| Background Processing | ✅ Implemented |
+| Portfolio Alerts | ✅ Implemented |
+| Portfolio Dashboard / Frontend | ✅ Implemented |
+| Production Backend Container | ✅ Implemented |
+| Full Production Deployment | 🚧 In Progress |
+| Final End-to-End Integration | 🚧 Planned |
 
 ---
 
@@ -68,10 +73,13 @@ The research and multi-agent backend, along with the full portfolio quantitative
 - [Current Limitations](#current-limitations)
 - [Roadmap](#roadmap)
 - [Running the Project](#running-the-project)
+- [Docker Build & Deployment](#docker-build--deployment)
 - [API Overview](#api-overview)
 - [Example Research Workflow](#example-research-workflow)
 - [Portfolio Workflow](#portfolio-workflow)
 - [Backtesting](#backtesting)
+- [Portfolio Monitoring & Alerts](#portfolio-monitoring--alerts)
+- [Frontend](#frontend)
 - [Engineering Principles](#engineering-principles)
 - [Project Structure](#project-structure)
 - [Technology Stack](#technology-stack)
@@ -242,6 +250,22 @@ Implemented:
 - retrieval tools
 - RAG-specific error handling
 
+#### SEC Filing RAG
+
+Built on top of the Qdrant RAG foundation, the SEC filing workflow adds:
+
+- SEC filing source integration
+- filing retrieval and parsing
+- CIK-based company identification
+- filing metadata
+- document chunking and embedding generation for filings
+- Qdrant indexing
+- metadata-aware retrieval
+- provenance tracking
+- integration with the research/agent architecture
+
+SEC documents are treated as grounded retrieval sources, not authoritative numerical calculators.
+
 #### Portfolio Suite
 
 FinPilot includes a complete, deterministic portfolio quantitative stack, integrated end-to-end through the authenticated API and the LangGraph workflow.
@@ -301,7 +325,24 @@ FinPilot includes a complete, deterministic portfolio quantitative stack, integr
 - structured Portfolio Backtest Evidence
 - synthesis integration, so backtest results are explained rather than computed by the LLM
 
-All optimization, risk, and backtest results can be interpreted by an LLM through the Portfolio Optimization Agent, but the underlying calculations remain fully deterministic.
+**Conversational Backtest Activation**
+
+- natural-language backtest requests interpreted and routed through the AI workflow
+- intent interpretation in the conversational/agent layer, parameter extraction in the workflow layer
+- numerical simulation still runs entirely in `PortfolioBacktestEngine` / `PortfolioBacktestEvaluator`
+
+**Portfolio Monitoring & Alerts**
+
+- deterministic monitoring checks (concentration, drawdown, unrealized loss) against configurable thresholds
+- alert persistence, acknowledgement, and cooldown/deduplication
+- concurrency-safe alert creation
+
+**Background Processing**
+
+- Celery workers and Celery Beat scheduling, backed by Redis
+- periodic portfolio monitoring fan-out with retry handling for transient failures
+
+All optimization, risk, backtest, and monitoring results can be interpreted by an LLM, but the underlying calculations remain fully deterministic. See [Backtesting](#backtesting) and [Portfolio Monitoring & Alerts](#portfolio-monitoring--alerts) for details.
 
 #### Persistence
 
@@ -366,6 +407,20 @@ FinPilot includes an evaluation layer for:
 - failure rate
 - consistency
 - end-to-end workflow behaviour
+
+#### Frontend
+
+A React/Vite frontend covers the implemented research and portfolio workflows, including:
+
+- authentication
+- portfolio views and portfolio dashboard
+- portfolio optimization interface
+- quantitative risk presentation
+- backtest interaction
+- portfolio alerts and monitoring actions, including alert acknowledgement
+- integration with the authenticated backend APIs
+
+See [Frontend](#frontend) for more detail.
 
 ---
 
@@ -718,22 +773,26 @@ Supported metadata filtering includes:
 
 Retrieval also supports a score threshold.
 
-### Current Limitation
+### SEC Filing RAG
 
-The RAG system currently provides a generic document retrieval foundation. It does not yet provide a complete SEC filing ingestion workflow.
+FinPilot now includes an SEC filing retrieval workflow built on top of the Qdrant RAG foundation.
 
-The following SEC-specific components remain to be implemented:
+The SEC workflow includes:
 
 - SEC filing source integration
-- filing download
+- filing retrieval
 - filing parsing
-- CIK-based ingestion
+- CIK-based company identification
 - filing metadata
-- SEC document indexing
-- SEC-specific retrieval
-- production ingestion lifecycle
+- document chunking
+- embedding generation
+- Qdrant indexing
+- metadata-aware retrieval
+- provenance tracking
+- SEC-specific retrieval workflow
+- integration with the research/agent architecture
 
-Therefore: the RAG foundation is implemented, but SEC filing RAG is still in progress.
+SEC documents remain grounded retrieval sources rather than authoritative numerical calculators.
 
 ---
 
@@ -976,14 +1035,16 @@ Sensitive information is filtered/redacted where appropriate.
 
 FinPilot has an extensive automated test suite.
 
-Current repository validation:
+The last fully verified full-suite baseline was:
 
 | Metric | Value |
-|---|---|
+|---|---:|
 | Tests | 705 |
 | Passed | 705 |
 | Failures | 0 |
 | Errors | 0 |
+
+The suite has since expanded through Phases 13–16. A fresh complete-suite count will be recorded after final deployment integration.
 
 Tests cover areas including:
 
@@ -1058,60 +1119,52 @@ Canonical company identities, ISIN resolution, provider symbols, Upstox fundamen
 **Phase 12 — API & Workflow Finalization ✅**
 Canonical ResearchContext, canonical LangGraph API execution path, AI service facade, provider architecture, provenance integration, authenticated AI workflow, persistence integration, model-specific Groq reasoning behaviour, live workflow verification, final automated test suite.
 
-**Phase 13 — Portfolio Quantitative Integration ✅**
-Portfolio Django persistence, holding persistence, authenticated Portfolio CRUD API, portfolio market-data adapter, `PortfolioWorkflowInputBuilder`, date-aware historical alignment, deterministic `PortfolioOptimizationEngine`, deterministic `PortfolioRiskEngine`, walk-forward `PortfolioBacktestEngine`, `PortfolioBacktestEvaluator`, buy-and-hold baseline, benchmark comparison, relative performance metrics, actual persisted portfolio initial weights, `PortfolioBacktestInputBuilder`, authenticated Portfolio Backtest REST API, live Upstox validation, LangGraph portfolio backtest node, conditional backtest routing, structured Portfolio Backtest Evidence, synthesis integration, and live AgentService → LangGraph → portfolio → optimization → risk → backtest → synthesis validation.
+**Phase 13 — SEC Filing RAG ✅**
+SEC filing ingestion and retrieval workflow, SEC document processing, CIK-based identification, filing metadata, document indexing, Qdrant integration, SEC-specific retrieval, provenance, and integration with the research workflow.
 
-Current validation: **705 tests, 705 passed, 0 failures, 0 errors.**
+**Phase 14 — Conversational Backtest ✅**
+Natural-language backtest activation, conversational parameter handling, routing into the deterministic portfolio backtest workflow, and LLM explanation of structured backtest results.
+
+**Phase 15 — Portfolio Monitoring & Background Processing ✅**
+Deterministic portfolio monitoring, configurable monitoring thresholds, portfolio concentration detection, drawdown detection, unrealized loss detection, alert persistence, acknowledgement, cooldown/deduplication, concurrency-safe alert creation, Celery worker tasks, Celery Beat scheduling, Redis integration, retry handling, and portfolio monitoring fan-out.
+
+**Phase 16 — Deployment Hardening 🚧**
+Production Django configuration hardening, startup secret validation, production `DEBUG`/`ALLOWED_HOSTS` handling, static-file configuration, Gunicorn integration, production backend Docker image, non-root container execution, startup migrations, `collectstatic`, container health checks, and deployment preparation.
+
+**Phase 17 — Final Integration & Evaluation ⏳**
+Full backend/frontend integration, complete container stack validation, production deployment, end-to-end user workflow verification, final regression suite, performance checks, failure handling verification, and final project demonstration.
+
+**Test suite status:** 705 tests / 705 passed / 0 failures / 0 errors was the last fully verified full-suite count, taken after the portfolio optimization, quantitative risk, and walk-forward backtesting work was completed. The suite has grown further through Phases 13–15, but a fresh full-suite count has not yet been confirmed — this README will be updated with the final verified number once deployment work (Phases 16–17) completes. See [Testing and Evaluation](#testing-and-evaluation).
 
 ---
 
 ## Current Limitations
 
-The following areas are intentionally not yet considered fully complete.
+FinPilot is feature-complete across the core research, portfolio, RAG, monitoring, and conversational workflows, but final production integration is still in progress.
 
-### SEC Filing RAG
+### Production Deployment
 
-The current RAG implementation is a generic financial-document retrieval foundation and lacks a complete document-ingestion management workflow. SEC-specific ingestion (source integration, filing download/parsing, CIK-based ingestion, filing metadata, indexing, retrieval) is not yet implemented.
+The backend production container is implemented and validated locally.
 
-### Frontend
+Remaining deployment work includes:
 
-The current repository does not yet contain the final production frontend experience.
+- production Compose integration
+- frontend production container
+- Celery worker and Beat services as part of the orchestrated stack
+- complete multi-service integration
+- managed PostgreSQL / Redis configuration
+- production Qdrant configuration
+- cloud deployment
+- production environment configuration
+- deployment smoke tests
 
-Planned interfaces include:
+### Final Integration
 
-- authentication
-- research chatbot
-- research dashboard
-- evidence display
-- risk view
-- portfolio optimization view
-- portfolio backtest view
-- portfolio dashboard
+The remaining work focuses on validating the complete system as a single deployable platform rather than adding major new application capabilities.
 
-### Portfolio Dashboard
+### Minor Technical Debt
 
-A dedicated portfolio dashboard (holdings, optimization results, risk metrics, and backtest performance) is not yet implemented. It is planned as part of the frontend work in Phase 14.
-
-### Portfolio Monitoring
-
-Automated portfolio monitoring is not yet implemented.
-
-Future work may include:
-
-- scheduled portfolio refreshes
-- portfolio health checks
-- event detection
-- alerts
-
-### Background Processing
-
-Celery and Redis are not currently part of the active production workflow. They should only be introduced when scheduled ingestion, portfolio monitoring, or other background processing requirements justify them.
-
-### Conversational Backtest Activation
-
-Triggering a portfolio backtest through natural language in the AI chat / AgentService flow is not yet implemented. Backtests are currently triggered directly through the authenticated Backtest REST API (`include_backtest`); conversational activation from a chat message is planned for a future phase.
-
-Some minor technical debt remains across the codebase and is tracked incrementally as part of ongoing hardening.
+Some smaller technical improvements remain and will be addressed incrementally without changing the core architecture.
 
 ---
 
@@ -1119,41 +1172,55 @@ Some minor technical debt remains across the codebase and is tracked incremental
 
 ### Completed
 
-Core research, the multi-agent AI system, model evaluation, evidence and session persistence, authentication and authorization, the canonical provider architecture, and the full portfolio quantitative suite (optimization, quantitative risk, and walk-forward backtesting) are implemented and validated. See [Development Phases](#development-phases) for the complete phase-by-phase history.
+- Core financial research platform
+- Provider abstraction and provenance
+- Multi-agent LangGraph workflow
+- Model evaluation
+- Evidence and session persistence
+- Authentication and authorization
+- RAG foundation
+- SEC Filing RAG
+- Portfolio intelligence
+- Portfolio optimization
+- Quantitative portfolio risk
+- Walk-forward backtesting
+- Conversational backtest activation
+- Portfolio monitoring
+- Alerts
+- Celery/Redis background processing
+- Portfolio frontend
+- Production backend containerization
 
-### Next
+### Current
 
-**Phase 14 — Frontend / Research & Portfolio Dashboard**
-Planned: registration/login, JWT handling, research chatbot, research dashboard, evidence panel, provenance panel, risk summary, portfolio optimization interface, portfolio backtest interface, portfolio dashboard.
+**Module 16 — Deployment**
 
-### Future
+Current focus:
 
-**Phase 15 — SEC Filing RAG**
-Planned: SEC source integration, filing retrieval, filing parser, metadata, indexing, provenance, retrieval, financial-agent integration.
+- production configuration
+- backend containerization
+- Gunicorn
+- production startup
+- frontend production container
+- full service orchestration
+- container integration testing
+- cloud deployment preparation
 
-**Phase 16 — Conversational Backtest Activation**
-Planned: natural-language backtest triggering from AgentService, intent detection for backtest requests, conversational parameter extraction (date ranges, benchmark selection), routed into the existing LangGraph backtest node without requiring a direct API call.
+### Final
 
-**Phase 17 — Portfolio Monitoring & Background Processing**
+**Module 17 — Final Integration & Evaluation**
 
-```text
-Stored Portfolio
-      ↓
-Scheduled Refresh
-      ↓
-Market / Research Data
-      ↓
-Portfolio Analysis
-      ↓
-Risk / Change Detection
-      ↓
-    Alert
-```
+Planned:
 
-Planned: scheduled portfolio refreshes, portfolio health checks, event detection, alerts. Celery and Redis are introduced at this stage, once scheduled/background requirements justify them.
+- full-stack integration
+- complete end-to-end workflow
+- deployment verification
+- regression testing
+- performance and reliability validation
+- final evaluation
+- final project demonstration
 
-**Phase 18 — Final Integration & Evaluation**
-Final validation will include: complete backend integration, frontend integration, SEC RAG workflow, authenticated user flow, PostgreSQL persistence, LangGraph checkpoint persistence, Qdrant retrieval, provider integration, model evaluation, token usage, latency, failure handling, final demo workflow.
+See [Development Phases](#development-phases) for the detailed phase-by-phase history behind this roadmap.
 
 ---
 
@@ -1163,7 +1230,7 @@ Final validation will include: complete backend integration, frontend integratio
 
 Recommended environment:
 
-- Python 3.11+
+- Python 3.12
 - PostgreSQL
 - Docker
 - Git
@@ -1254,6 +1321,16 @@ Create a superuser if required:
 python manage.py createsuperuser
 ```
 
+### Collect Static Files
+
+For local/manual execution:
+
+```bash
+python manage.py collectstatic --noinput
+```
+
+Static files are collected into Django's configured `STATIC_ROOT`. The production Docker image runs `collectstatic` automatically during container startup, before Gunicorn launches.
+
 ### Run Development Server
 
 ```bash
@@ -1278,6 +1355,76 @@ Expected current result:
 0 failures
 0 errors
 ```
+
+---
+
+## Docker Build & Deployment
+
+FinPilot AI includes a production-oriented Docker image for the Django backend.
+
+The current backend container:
+
+- uses Python 3.12
+- runs Django through Gunicorn
+- runs database migrations automatically at startup
+- runs `collectstatic` automatically at startup
+- uses a non-root runtime user
+- exposes port `8000`
+- includes a container health check
+- supports `SKIP_DJANGO_STARTUP=true` for future Celery worker/Beat containers
+
+### Build the Backend Image
+
+From the repository root:
+
+```bash
+docker build -f Dockerfile -t finpilot-backend:phase2 .
+```
+
+### Run the Backend Container
+
+The backend requires a Django secret key and PostgreSQL host.
+
+```bash
+docker run -p 8000:8000 \
+  -e DJANGO_SECRET_KEY=<your-secret> \
+  -e POSTGRES_HOST=<postgres-host> \
+  finpilot-backend:phase2
+```
+
+The example above demonstrates the required startup variables. A fully functional deployment also requires the configured PostgreSQL, Qdrant, Redis, provider, and LLM environment variables.
+
+### Container Startup
+
+The container starts through `backend/docker/entrypoint.sh`.
+
+Startup sequence:
+
+```text
+Container Start
+      ↓
+Environment Validation
+      ↓
+Django Migrations
+      ↓
+Collect Static Files
+      ↓
+   Gunicorn
+      ↓
+Django WSGI Application
+```
+
+Gunicorn serves `config.wsgi:application` on `0.0.0.0:8000`.
+
+### Celery Worker / Beat Extension
+
+The backend image is designed to be reusable for future Celery worker and Beat services.
+
+Set `SKIP_DJANGO_STARTUP=true` to skip automatic migrations and static-file collection and directly execute the supplied container command.
+
+### Container Health Check
+
+The image uses the existing health endpoint, `GET /api/v1/health/`, and exposes a Docker `HEALTHCHECK` against that endpoint.
 
 ---
 
@@ -1500,6 +1647,81 @@ Backtesting is available through:
 - the authenticated `POST /api/v1/portfolio/<portfolio_id>/backtest/` REST endpoint, and
 - an optional LangGraph portfolio backtest node, gated by `include_backtest` (default `False`), so it only runs when explicitly requested.
 
+### Conversational Backtest Activation
+
+FinPilot supports conversational activation of portfolio backtesting through the AI workflow.
+
+Natural-language backtest requests can be interpreted and routed into the existing deterministic portfolio backtest engine.
+
+The architecture keeps:
+
+- intent interpretation in the conversational/agent layer
+- parameter extraction in the workflow layer
+- numerical simulation in `PortfolioBacktestEngine`
+- metric calculation in `PortfolioBacktestEvaluator`
+- final explanation in the LLM layer
+
+The LLM does not calculate authoritative backtest metrics.
+
+---
+
+## Portfolio Monitoring & Alerts
+
+FinPilot includes deterministic portfolio monitoring and alert generation.
+
+Current monitoring checks include:
+
+- portfolio concentration above the configured threshold
+- historical maximum drawdown above the configured threshold
+- unrealized portfolio loss below the configured threshold
+
+Monitoring thresholds are configurable through `MonitoringConfig`.
+
+Alerts support:
+
+- authenticated portfolio ownership checks
+- alert persistence
+- acknowledgement
+- cooldown / duplicate suppression
+- ticker-aware concentration deduplication
+- concurrency-safe alert creation
+
+Monitoring can be triggered through the portfolio API and is also integrated with background processing.
+
+### Background Processing
+
+FinPilot includes Celery and Redis for scheduled portfolio monitoring.
+
+Current background-processing architecture includes:
+
+- Redis as the broker/backend infrastructure
+- Celery worker tasks
+- Celery Beat scheduling
+- periodic portfolio monitoring
+- portfolio-level monitoring fan-out
+- retry handling for transient failures
+
+The current production containerization work is preparing the backend image for separate web, worker, and Beat services. The full production Compose stack that orchestrates all three together is the next deployment phase — see [Current Limitations](#current-limitations).
+
+---
+
+## Frontend
+
+The repository includes a React/Vite frontend for the implemented research and portfolio workflows.
+
+Current frontend capabilities include:
+
+- authentication
+- portfolio views
+- portfolio dashboard
+- portfolio optimization interface
+- quantitative risk presentation
+- backtest interaction
+- portfolio alerts
+- monitoring actions
+- alert acknowledgement
+- integration with authenticated backend APIs
+
 ---
 
 ## Engineering Principles
@@ -1625,9 +1847,16 @@ FinPilot-AI/
 │   │   ├── settings.py
 │   │   └── urls.py
 │   │
+│   ├── docker/
+│   │   └── entrypoint.sh
+│   │
 │   └── manage.py
 │
 ├── frontend/
+│
+├── Dockerfile
+│
+├── .dockerignore
 │
 ├── docker-compose.yml
 │
@@ -1655,6 +1884,22 @@ Current: `BAAI/bge-small-en-v1.5` — Device: CPU — Dimension: 384
 ### Database
 
 Current relational database: **PostgreSQL**, used for application persistence, research sessions, evidence, workflow persistence, and LangGraph checkpoint storage.
+
+### Backend Server
+
+- Django
+- Django REST Framework
+- Gunicorn
+
+### Background Processing
+
+- Celery
+- Redis
+
+### Containerization
+
+- Docker
+- Docker Compose
 
 ### Production-Oriented Design
 
@@ -1710,21 +1955,19 @@ Portfolio Optimization
 
 Potential future extensions include:
 
-- SEC filing ingestion
 - richer financial document RAG
-- more sophisticated quantitative risk metrics
-- portfolio monitoring
-- scheduled research refreshes
-- alerting
-- additional providers
+- additional quantitative risk metrics
+- additional financial-data providers
 - expanded geographic market support
 - richer frontend visualizations
 - report export
 - stronger model routing
 - improved live evaluation infrastructure
-- production deployment
+- production observability and tracing
+- scalability and performance optimization
+- additional portfolio monitoring rules
 
-These are intentionally secondary to the core research and portfolio workflow.
+These are secondary to the currently implemented core platform.
 
 ### Final Project Vision
 
