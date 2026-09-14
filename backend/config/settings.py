@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from urllib.parse import quote
 load_dotenv()
@@ -24,13 +25,29 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+# DJANGO_SECRET_KEY must be explicitly generated and supplied in every environment.
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY environment variable is not set. "
+        "Generate a secure key and supply it via the environment."
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# Defaults to False; set DJANGO_DEBUG=True only for local development.
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = [host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS","",).split(",") if host.strip()]
+# Production: DJANGO_ALLOWED_HOSTS must be explicitly configured (no wildcard default).
+# Development (DEBUG=True): falls back to localhost loopback addresses.
+_raw_allowed_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "")
+if _raw_allowed_hosts.strip():
+    ALLOWED_HOSTS = [host.strip() for host in _raw_allowed_hosts.split(",") if host.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+else:
+    # Production with no DJANGO_ALLOWED_HOSTS set — leave empty so Django rejects all hosts
+    # until the operator explicitly configures DJANGO_ALLOWED_HOSTS.
+    ALLOWED_HOSTS = []
 
 MARKETAUX_API_TOKEN = os.getenv("MARKETAUX_API_TOKEN")
 UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
@@ -260,6 +277,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+
+# Aggregated static files directory for collectstatic.
+# Run: python manage.py collectstatic --noinput
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # Email
