@@ -197,6 +197,9 @@ REST_FRAMEWORK = {
         "anon": os.getenv("DRF_THROTTLE_ANON_RATE", "100/day"),
         "user": os.getenv("DRF_THROTTLE_USER_RATE", "1000/day"),
         "ai_heavy": os.getenv("DRF_THROTTLE_AI_HEAVY_RATE", "60/minute"),
+        # Dedicated scope for JWT obtain/refresh — generous per-minute rate so
+        # repeated local login/refresh cycles never exhaust the global anon bucket.
+        "auth": os.getenv("DRF_THROTTLE_AUTH_RATE", "30/minute"),
     },
 }
 
