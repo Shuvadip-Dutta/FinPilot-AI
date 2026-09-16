@@ -33,6 +33,7 @@ RUN groupadd --gid 1001 finpilot \
     && mkdir -p /app/backend/staticfiles \
     && rm -rf /app/backend/media \
     && mkdir -p /app/backend/media \
+    && mkdir -p /app/backend/run \
     && chmod 755 /home/finpilot \
     && chown -R finpilot:finpilot /home/finpilot /app
 

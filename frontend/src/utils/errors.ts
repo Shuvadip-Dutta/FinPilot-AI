@@ -102,7 +102,7 @@ export function createClientError(type: 'network' | 'timeout' | 'generic', error
   if (type === 'network') {
     return {
       status: 0,
-      message: 'Unable to connect to the FinPilot server. Please ensure the Django backend is running at http://127.0.0.1:8000.',
+      message: 'Unable to connect to the server. Please check your connection and try again.',
       isNetworkError: true,
     };
   }

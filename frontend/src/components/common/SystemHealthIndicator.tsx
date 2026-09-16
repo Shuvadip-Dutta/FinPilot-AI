@@ -86,7 +86,7 @@ export const SystemHealthIndicator: React.FC<{ compact?: boolean }> = ({ compact
     unavailable: {
       dot: 'bg-rose-400',
       text: 'Offline',
-      label: 'Django API Offline (http://127.0.0.1:8000)',
+      label: 'Django API Offline',
     },
   }[status];
 

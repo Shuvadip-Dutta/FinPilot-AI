@@ -51,7 +51,7 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
       const apiErr = err as ApiError;
       if (apiErr.isNetworkError) {
         setError(
-          'Unable to connect to the FinPilot server. Please ensure the Django backend is running at http://127.0.0.1:8000.'
+          'Unable to connect to the server. Please check your connection and try again.'
         );
       } else if (apiErr.status === 404) {
         setError(apiErr.detail || apiErr.message || `Company not found for ticker: ${ticker}`);

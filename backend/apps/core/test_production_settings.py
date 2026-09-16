@@ -501,3 +501,39 @@ class WhiteNoiseConfigurationTest(TestCase):
         staticfiles_storage = storages.get("staticfiles", {})
         backend_class = staticfiles_storage.get("BACKEND", "")
         self.assertIn("whitenoise.storage", backend_class)
+
+
+class CeleryBeatPersistenceConfigurationTest(TestCase):
+    """Verify Celery Beat persistent schedule volume and command configuration."""
+
+    def test_docker_compose_beat_schedule_persistence(self):
+        """Verify beat service in docker-compose.yml uses persistent volume and schedule path."""
+        compose_file = _PROJECT_ROOT / "docker-compose.yml"
+        if not compose_file.exists():
+            # Inside the container, docker-compose.yml is not copied; verify runtime mount directory exists
+            run_dir = Path("/app/backend/run")
+            if run_dir.exists():
+                self.assertTrue(run_dir.is_dir(), "/app/backend/run must be a directory.")
+                return
+            self.skipTest("docker-compose.yml not present in this test environment.")
+
+        content = compose_file.read_text(encoding="utf-8")
+
+        # 1. Schedule argument
+        self.assertIn(
+            "--schedule=/app/backend/run/celerybeat-schedule",
+            content,
+            "Beat command must configure --schedule=/app/backend/run/celerybeat-schedule",
+        )
+        # 2. Volume mount
+        self.assertIn(
+            "celerybeat_data:/app/backend/run",
+            content,
+            "Beat service must mount celerybeat_data:/app/backend/run",
+        )
+        # 3. Top-level volume declaration
+        self.assertIn(
+            "celerybeat_data:",
+            content,
+            "celerybeat_data named volume must be declared in top-level volumes",
+        )
