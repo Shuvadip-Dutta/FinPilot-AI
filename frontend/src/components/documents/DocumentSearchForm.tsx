@@ -40,7 +40,7 @@ export const DocumentSearchForm: React.FC<DocumentSearchFormProps> = ({
             disabled={isLoading}
             className="pl-10"
           />
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
         {/* Ticker Filter */}
@@ -59,7 +59,7 @@ export const DocumentSearchForm: React.FC<DocumentSearchFormProps> = ({
             value={topK}
             onChange={(e) => setTopK(Number(e.target.value))}
             disabled={isLoading}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-hidden focus:border-cyan-500"
+            className="w-full bg-surface border border-border-theme rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
           >
             <option value={3}>Top 3</option>
             <option value={5}>Top 5</option>

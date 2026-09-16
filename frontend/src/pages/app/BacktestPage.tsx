@@ -183,7 +183,7 @@ export const BacktestPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => navigate(`/app/portfolio/${selectedPortfolioId}/risk`)}
-                leftIcon={<ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />}
+                leftIcon={<ShieldAlert className="w-3.5 h-3.5 text-status-warning" />}
               >
                 Risk Profile
               </Button>
@@ -193,7 +193,7 @@ export const BacktestPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => navigate(`/app/portfolio/${selectedPortfolioId}/optimization`)}
-                leftIcon={<Sliders className="w-3.5 h-3.5 text-emerald-400" />}
+                leftIcon={<Sliders className="w-3.5 h-3.5 text-accent-primary" />}
               >
                 Optimize
               </Button>
@@ -203,26 +203,26 @@ export const BacktestPage: React.FC = () => {
       />
 
       {/* Portfolio Selector Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-4 shadow-md">
+      <div className="bg-surface border border-border-theme rounded-2xl p-4 flex items-center justify-between flex-wrap gap-4 shadow-card">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="p-2 rounded-xl bg-slate-800 text-cyan-400">
+          <div className="p-2 rounded-xl bg-accent-soft text-accent-primary">
             <Briefcase className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
+            <span className="text-[10px] uppercase font-mono tracking-wider text-text-muted block">
               Active Evaluation Target
             </span>
             <div className="flex items-center gap-2 mt-0.5">
               {isLoadingPortfolios ? (
-                <span className="text-xs text-slate-400">Loading portfolios...</span>
+                <span className="text-xs text-text-muted">Loading portfolios...</span>
               ) : portfolios.length === 0 ? (
-                <span className="text-xs text-rose-400">No portfolios found</span>
+                <span className="text-xs text-status-danger">No portfolios found</span>
               ) : (
                 <select
                   value={selectedPortfolioId ? String(selectedPortfolioId) : ''}
                   onChange={handlePortfolioChange}
                   disabled={isRunningBacktest}
-                  className="bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-white font-semibold focus:outline-none focus:border-cyan-500"
+                  className="bg-surface-secondary border border-border-theme rounded-lg px-3 py-1.5 text-xs text-text-primary font-semibold focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
                 >
                   {portfolios.map((p) => (
                     <option key={p.id} value={String(p.id)}>
@@ -236,13 +236,13 @@ export const BacktestPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-2 text-slate-400">
+          <div className="flex items-center gap-2 text-text-muted">
             <span>Holdings:</span>
-            <strong className="text-white font-mono">{holdings.length}</strong>
+            <strong className="text-text-primary font-mono">{holdings.length}</strong>
           </div>
-          <div className="flex items-center gap-2 text-slate-400">
+          <div className="flex items-center gap-2 text-text-muted">
             <span>Base Currency:</span>
-            <strong className="text-cyan-300 font-mono">{currency}</strong>
+            <strong className="text-accent-primary font-mono">{currency}</strong>
           </div>
           {backtestResponse && (
             <Button
@@ -262,20 +262,20 @@ export const BacktestPage: React.FC = () => {
 
       {/* Loading Experience: Running Historical Evaluation */}
       {isRunningBacktest && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center shadow-2xl max-w-xl mx-auto space-y-5 animate-pulse">
-          <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mx-auto text-cyan-400">
+        <div className="bg-surface border border-border-theme rounded-2xl p-12 text-center shadow-card max-w-xl mx-auto space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-accent-soft border border-accent-primary/30 flex items-center justify-center mx-auto text-accent-primary">
             <GitFork className="w-7 h-7 animate-spin" />
           </div>
           <div className="space-y-1.5">
-            <h3 className="text-base font-bold text-white">
+            <h3 className="text-base font-bold text-text-primary">
               Running Historical Walk-Forward Evaluation...
             </h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+            <p className="text-xs text-text-muted max-w-sm mx-auto leading-relaxed">
               Calibrating covariance matrices, solving sequential quadratic programs, applying transaction friction, and recording out-of-sample events on the authoritative backend engine.
             </p>
           </div>
-          <div className="flex items-center justify-center gap-2 text-[11px] font-mono text-cyan-400">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+          <div className="flex items-center justify-center gap-2 text-[11px] font-mono text-accent-primary">
+            <span className="w-2 h-2 rounded-full bg-accent-primary animate-ping" />
             <span>Please wait while the server processes multiple historical intervals</span>
           </div>
         </div>
@@ -294,12 +294,12 @@ export const BacktestPage: React.FC = () => {
 
       {/* Empty State: No Portfolio */}
       {!isRunningBacktest && !isLoadingPortfolios && portfolios.length === 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center max-w-md mx-auto shadow-xl space-y-4">
-          <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
+        <div className="bg-surface border border-border-theme rounded-2xl p-12 text-center max-w-md mx-auto shadow-card space-y-4">
+          <div className="w-12 h-12 rounded-xl bg-surface-secondary flex items-center justify-center mx-auto text-text-muted">
             <Briefcase className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">Create a Portfolio Before Running a Backtest</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <h3 className="text-base font-bold text-text-primary">Create a Portfolio Before Running a Backtest</h3>
+          <p className="text-xs text-text-muted leading-relaxed">
             Historical walk-forward backtesting requires an active portfolio with registered asset holdings to construct covariance matrices and generate rebalance schedules.
           </p>
           <Button
@@ -338,14 +338,14 @@ export const BacktestPage: React.FC = () => {
           />
 
           {/* Sub-Navigation Tabs */}
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto text-xs">
+          <div className="flex items-center gap-2 border-b border-border-theme pb-2 overflow-x-auto text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'overview'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
               }`}
             >
               <TrendingUp className="w-4 h-4" />
@@ -355,10 +355,10 @@ export const BacktestPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('drawdown')}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'drawdown'
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
               }`}
             >
               <ShieldAlert className="w-4 h-4" />
@@ -368,10 +368,10 @@ export const BacktestPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('metrics')}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'metrics'
-                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
               }`}
             >
               <Layers className="w-4 h-4" />
@@ -381,10 +381,10 @@ export const BacktestPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('rebalance')}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'rebalance'
-                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
               }`}
             >
               <GitFork className="w-4 h-4" />
@@ -394,10 +394,10 @@ export const BacktestPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('methodology')}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'methodology'
-                  ? 'bg-slate-800 text-slate-200 border border-slate-700'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
               }`}
             >
               <BookOpen className="w-4 h-4" />

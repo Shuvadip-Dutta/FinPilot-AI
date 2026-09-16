@@ -33,60 +33,60 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
   return (
     <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${className}`}>
       {/* Total Invested Capital (Cost Basis) */}
-      <div className="bg-slate-900/80 border border-slate-800/90 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+      <div className="bg-surface border border-border-theme rounded-xl p-5 shadow-card flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             Total Invested Capital
           </span>
-          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary">
             <DollarSign className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-3">
-          <div className="text-2xl font-bold font-mono text-slate-100 tracking-tight">
+          <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
             {investedValue !== null ? formatCurrency(investedValue, 'INR') : '—'}
           </div>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary"></span>
             Authoritative cost basis from holdings
           </p>
         </div>
       </div>
 
       {/* Live Market Valuation (Authoritative from AI Analysis) */}
-      <div className="bg-slate-900/80 border border-slate-800/90 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+      <div className="bg-surface border border-border-theme rounded-xl p-5 shadow-card flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             Live Market Valuation
           </span>
-          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+          <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary">
             <PieChart className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-3">
-          <div className="text-2xl font-bold font-mono text-slate-100 tracking-tight">
+          <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
             {liveValuation !== null ? formatCurrency(liveValuation, 'INR') : '—'}
           </div>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${liveValuation !== null ? 'bg-cyan-400' : 'bg-slate-600'}`}></span>
+          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${liveValuation !== null ? 'bg-accent-primary' : 'bg-text-muted'}`}></span>
             {liveValuation !== null ? 'Live quote valuation' : 'Run AI Analysis for live quotes'}
           </p>
         </div>
       </div>
 
       {/* Net Profit / Loss */}
-      <div className="bg-slate-900/80 border border-slate-800/90 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+      <div className="bg-surface border border-border-theme rounded-xl p-5 shadow-card flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             Unrealized P/L
           </span>
           <div
             className={`w-8 h-8 rounded-lg flex items-center justify-center ${
               isProfitable === null
-                ? 'bg-slate-800 text-slate-400'
+                ? 'bg-surface-secondary text-text-muted'
                 : isProfitable
-                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                ? 'bg-status-positive-soft border border-status-positive/20 text-status-positive'
+                : 'bg-status-negative-soft border border-status-negative/20 text-status-negative'
             }`}
           >
             {isProfitable === null ? (
@@ -102,10 +102,10 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           <div
             className={`text-2xl font-bold font-mono tracking-tight flex items-baseline gap-2 ${
               isProfitable === null
-                ? 'text-slate-400'
+                ? 'text-text-muted'
                 : isProfitable
-                ? 'text-emerald-400'
-                : 'text-rose-400'
+                ? 'text-status-positive'
+                : 'text-status-negative'
             }`}
           >
             <span>{livePnl !== null ? formatCurrency(livePnl, 'INR') : '—'}</span>
@@ -115,14 +115,14 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
                 isProfitable === null
-                  ? 'bg-slate-600'
+                  ? 'bg-text-muted'
                   : isProfitable
-                  ? 'bg-emerald-400'
-                  : 'bg-rose-400'
+                  ? 'bg-status-positive'
+                  : 'bg-status-negative'
               }`}
             ></span>
             {livePnl !== null ? 'Live quote return' : 'Requires AI Analysis'}
@@ -131,21 +131,21 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
       </div>
 
       {/* Holdings Count */}
-      <div className="bg-slate-900/80 border border-slate-800/90 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+      <div className="bg-surface border border-border-theme rounded-xl p-5 shadow-card flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             Active Holdings
           </span>
-          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+          <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary">
             <Layers className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-3">
-          <div className="text-2xl font-bold font-mono text-slate-100 tracking-tight">
+          <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
             {count} {count === 1 ? 'Position' : 'Positions'}
           </div>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-cyan-400" />
+          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-accent-primary" />
             <span>Persisted ledger assets</span>
           </p>
         </div>

@@ -102,12 +102,12 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
   };
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
+    <div className="bg-surface border border-border-theme rounded-2xl p-4 sm:p-5 shadow-card">
       {/* Ticker & Market Configuration Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/60">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-border-subtle">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 font-mono">
-            <Search className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-xs font-semibold text-text-muted flex items-center gap-1.5 font-mono">
+            <Search className="w-3.5 h-3.5 text-accent-primary" />
             TARGET ASSET:
           </span>
 
@@ -118,7 +118,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
               placeholder="e.g. RELIANCE"
-              className="w-32 px-2.5 py-1 text-xs font-mono font-bold uppercase rounded-lg bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-32 px-2.5 py-1 text-xs font-mono font-bold uppercase rounded-lg bg-surface-secondary border border-border-theme text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
             />
           </div>
 
@@ -126,14 +126,14 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
           <select
             value={market}
             onChange={(e) => setMarket(e.target.value)}
-            className="px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-700 text-cyan-300 focus:outline-none focus:border-cyan-500 cursor-pointer"
+            className="px-2.5 py-1 text-xs font-mono rounded-lg bg-surface-secondary border border-border-theme text-text-primary focus:outline-none focus:border-accent-primary cursor-pointer"
           >
             <option value="IN">India (NSE/BSE)</option>
             <option value="US">United States (US)</option>
           </select>
 
           {/* Quick Ticker Chips */}
-          <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px] text-slate-500 font-mono">
+          <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px] text-text-muted font-mono">
             <span>Quick:</span>
             {POPULAR_TICKERS.map((t) => (
               <button
@@ -143,10 +143,10 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
                   setTicker(t.ticker);
                   setMarket(t.market);
                 }}
-                className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded-md text-[11px] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                   ticker === t.ticker
-                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs ring-1 ring-accent-primary/20'
+                    : 'bg-surface-secondary text-text-secondary hover:text-text-primary hover:bg-surface border border-border-theme'
                 }`}
               >
                 {t.ticker}
@@ -159,7 +159,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
           <button
             type="button"
             onClick={() => setPrompt('')}
-            className="text-slate-500 hover:text-slate-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
+            className="text-text-muted hover:text-text-primary text-xs flex items-center gap-1 cursor-pointer transition-colors"
           >
             <X className="w-3 h-3" />
             <span>Clear</span>
@@ -178,14 +178,14 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
             onKeyDown={handleKeyDown}
             disabled={isLoading}
             placeholder={placeholder}
-            className="w-full px-3.5 py-3 rounded-xl bg-slate-950/80 border border-slate-800 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/40 resize-none leading-relaxed transition-all disabled:opacity-50"
+            className="w-full px-3.5 py-3 rounded-xl bg-surface-secondary border border-border-theme text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 selection:bg-accent-soft selection:text-text-primary resize-none leading-relaxed transition-all disabled:opacity-50"
           />
         </div>
 
         {/* Preset Prompt Recommendations */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-[11px] font-mono text-slate-500 shrink-0 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-cyan-400" />
+          <span className="text-[11px] font-mono text-text-muted shrink-0 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-accent-primary" />
             Presets:
           </span>
           {PRESET_PROMPTS.map((preset, index) => {
@@ -196,9 +196,9 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
                 type="button"
                 onClick={() => applyPreset(preset.template)}
                 disabled={isLoading}
-                className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 text-[11px] text-slate-300 hover:text-cyan-300 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                className="shrink-0 px-2.5 py-1 rounded-lg bg-surface-secondary hover:bg-surface border border-border-subtle text-[11px] text-text-muted hover:text-accent-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
               >
-                <Icon className="w-3 h-3 text-cyan-400" />
+                <Icon className="w-3 h-3 text-accent-primary" />
                 <span>{preset.label}</span>
               </button>
             );
@@ -207,7 +207,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
 
         {/* Footer with Action & Shortcut Hint */}
         <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+          <div className="flex items-center gap-2 text-[11px] text-text-muted font-mono">
             <span className="hidden sm:inline-flex items-center gap-1">
               <Command className="w-3 h-3" />
               <span>or Ctrl +</span>
@@ -223,7 +223,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
             isLoading={isLoading}
             disabled={!prompt.trim() || isLoading}
             rightIcon={<Send className="w-4 h-4" />}
-            className="font-semibold shadow-md shadow-cyan-500/20"
+            className="font-semibold shadow-md shadow-accent-primary/20"
           >
             Ask FinPilot AI
           </Button>

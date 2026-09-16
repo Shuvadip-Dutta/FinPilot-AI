@@ -86,32 +86,32 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
             </p>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <div className="flex items-center gap-1.5 text-slate-400 text-[10.5px] mb-1">
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="p-2.5 rounded-lg bg-surface-secondary/70 border border-border-subtle">
+            <div className="flex items-center gap-1.5 text-text-muted text-[10.5px] mb-1">
+              <Clock className="w-3.5 h-3.5 text-accent-primary" />
               <span>Latency</span>
             </div>
-            <p className="font-mono text-xs font-semibold text-cyan-300">
+            <p className="font-mono text-xs font-semibold text-accent-primary">
               {provenance.execution_time_ms ? `${provenance.execution_time_ms} ms` : '—'}
             </p>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <div className="flex items-center gap-1.5 text-slate-400 text-[10.5px] mb-1">
-              <Layers className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="p-2.5 rounded-lg bg-surface-secondary/70 border border-border-subtle">
+            <div className="flex items-center gap-1.5 text-text-muted text-[10.5px] mb-1">
+              <Layers className="w-3.5 h-3.5 text-status-success" />
               <span>Agents Run</span>
             </div>
-            <p className="font-mono text-xs font-semibold text-emerald-300">
+            <p className="font-mono text-xs font-semibold text-status-success">
               {agentNames.length > 0 ? agentNames.length : steps.length > 0 ? steps.length : '1+'}
             </p>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <div className="flex items-center gap-1.5 text-slate-400 text-[10.5px] mb-1">
-              <Database className="w-3.5 h-3.5 text-amber-400" />
+          <div className="p-2.5 rounded-lg bg-surface-secondary/70 border border-border-subtle">
+            <div className="flex items-center gap-1.5 text-text-muted text-[10.5px] mb-1">
+              <Database className="w-3.5 h-3.5 text-status-warning" />
               <span>RAG Chunks</span>
             </div>
-            <p className="font-mono text-xs font-semibold text-amber-300">
+            <p className="font-mono text-xs font-semibold text-status-warning">
               {provenance.rag_documents_retrieved ?? '—'}
             </p>
           </div>
@@ -120,16 +120,16 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
         {/* Involved Agents list */}
         {agentNames.length > 0 && (
           <div>
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono block mb-1.5">
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-mono block mb-1.5">
               Participating Agents
             </span>
             <div className="flex flex-wrap gap-1.5">
               {agentNames.map((agent, i) => (
                 <span
                   key={i}
-                  className="px-2 py-1 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-300 font-mono flex items-center gap-1.5"
+                  className="px-2 py-1 rounded bg-surface-secondary border border-border-subtle text-[11px] text-text-secondary font-mono flex items-center gap-1.5"
                 >
-                  <Activity className="w-3 h-3 text-cyan-400" />
+                  <Activity className="w-3 h-3 text-accent-primary" />
                   {agent}
                 </span>
               ))}
@@ -140,7 +140,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
         {/* Execution Steps */}
         {steps.length > 0 && (
           <div className="space-y-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono block">
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-mono block">
               Node Execution Details
             </span>
 
@@ -153,32 +153,32 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
                 return (
                   <div
                     key={idx}
-                    className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-1.5"
+                    className="p-3 rounded-lg bg-surface-secondary/60 border border-border-subtle space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="font-semibold text-slate-200 font-mono">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
+                        <span className="font-semibold text-text-primary font-mono">
                           {stepName}
                         </span>
                       </div>
                       {duration !== undefined && (
-                        <span className="text-[10px] font-mono text-slate-500">
+                        <span className="text-[10px] font-mono text-text-muted">
                           {duration}ms
                         </span>
                       )}
                     </div>
 
                     {step.summary && (
-                      <p className="text-slate-400 text-[11px] leading-relaxed">
+                      <p className="text-text-muted text-[11px] leading-relaxed">
                         {step.summary}
                       </p>
                     )}
 
                     {tools.length > 0 && (
                       <div className="pt-1 flex items-center gap-1 flex-wrap">
-                        <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
-                          <Wrench className="w-2.5 h-2.5 text-cyan-400" />
+                        <span className="text-[10px] text-text-muted font-mono flex items-center gap-1">
+                          <Wrench className="w-2.5 h-2.5 text-accent-primary" />
                           Tools:
                         </span>
                         {tools.map((tool, tIdx) => {
@@ -186,7 +186,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
                           return (
                             <span
                               key={tIdx}
-                              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300"
+                              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface border border-border-subtle text-accent-primary font-medium"
                             >
                               {toolName}
                             </span>
@@ -203,9 +203,9 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
 
         {/* Workflow Raw Signature */}
         {provenance.workflow && (
-          <div className="p-2.5 rounded bg-slate-950/80 border border-slate-900 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-            <span className="text-slate-400">Workflow Graph:</span>
-            <span className="text-cyan-400">{String(provenance.workflow)}</span>
+          <div className="p-2.5 rounded bg-surface-secondary/80 border border-border-subtle text-[11px] font-mono text-text-muted flex items-center justify-between">
+            <span className="text-text-muted">Workflow Graph:</span>
+            <span className="text-accent-primary font-semibold">{String(provenance.workflow)}</span>
           </div>
         )}
       </div>

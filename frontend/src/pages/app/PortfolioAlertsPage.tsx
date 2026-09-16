@@ -125,7 +125,7 @@ export const PortfolioAlertsPage: React.FC = () => {
               value={selectedPortfolioId || ''}
               onChange={handleSelectPortfolio}
               aria-label="Select portfolio"
-              className="bg-slate-900 border border-slate-700/80 text-slate-200 text-xs rounded-lg pl-8 pr-8 py-1.5 focus:outline-hidden focus:ring-1 focus:ring-cyan-500 appearance-none font-medium cursor-pointer hover:border-slate-600 transition-colors"
+              className="bg-surface-secondary border border-border-theme text-text-primary text-xs rounded-lg pl-8 pr-8 py-1.5 focus:outline-hidden focus:ring-1 focus:ring-accent-primary appearance-none font-medium cursor-pointer hover:border-border-theme transition-colors"
             >
               {portfolios.map((p) => (
                 <option key={p.id} value={p.id}>

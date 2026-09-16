@@ -22,19 +22,19 @@ export const Card: React.FC<CardProps> = ({
 
   return (
     <div
-      className={`bg-slate-900/70 border border-slate-800/90 rounded-xl backdrop-blur-xs shadow-sm overflow-hidden flex flex-col ${className}`}
+      className={`bg-surface border border-border-theme rounded-xl shadow-card transition-shadow duration-200 overflow-hidden flex flex-col ${className}`}
       {...props}
     >
       {(title || subtitle || action) && (
-        <div className={`flex items-start justify-between border-b border-slate-800/80 ${compact ? 'px-4 py-3' : 'px-6 py-4'}`}>
+        <div className={`flex items-start justify-between border-b border-border-subtle ${compact ? 'px-4 py-3' : 'px-6 py-4'}`}>
           <div>
             {title && (
-              <h3 className="text-sm font-semibold text-slate-100 tracking-wide">
+              <h3 className="text-sm font-semibold text-text-primary tracking-wide">
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+              <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>
             )}
           </div>
           {action && <div className="ml-4 shrink-0">{action}</div>}
@@ -45,7 +45,7 @@ export const Card: React.FC<CardProps> = ({
 
       {footer && (
         <div
-          className={`border-t border-slate-800/80 bg-slate-950/40 ${
+          className={`border-t border-border-subtle bg-surface-secondary/40 ${
             compact ? 'px-4 py-2.5' : 'px-6 py-3.5'
           }`}
         >

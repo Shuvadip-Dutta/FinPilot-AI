@@ -123,27 +123,27 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
           const costVal = Number(event.transaction_cost ?? event.cost);
 
           return (
-            <div key={idx} className="transition-colors">
+            <div key={idx} className="transition-colors border-b border-border-theme last:border-0">
               {/* Row Header Button */}
               <button
                 type="button"
                 onClick={() => toggleExpand(idx)}
-                className="w-full text-left p-4 hover:bg-slate-850/50 transition-colors flex items-center justify-between flex-wrap gap-4 text-xs font-mono"
+                className="w-full text-left p-4 hover:bg-surface-secondary/50 transition-colors flex items-center justify-between flex-wrap gap-4 text-xs font-mono cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="text-slate-400">
+                  <div className="text-text-muted">
                     {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-cyan-400" />
+                      <ChevronDown className="w-4 h-4 text-accent-primary" />
                     ) : (
                       <ChevronRight className="w-4 h-4" />
                     )}
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-md bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] font-bold">
+                    <span className="w-6 h-6 rounded-md bg-surface-secondary text-text-primary flex items-center justify-center text-[10px] font-bold border border-border-theme">
                       {idx + 1}
                     </span>
-                    <span className="font-bold text-white text-sm">
+                    <span className="font-bold text-text-primary text-sm">
                       {formatDate(dateStr)}
                     </span>
                   </div>
@@ -152,24 +152,24 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
                 <div className="flex items-center gap-6">
                   {/* Turnover */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-slate-400 font-sans">Turnover:</span>
-                    <span className="font-bold text-slate-200">
+                    <span className="text-text-muted font-sans">Turnover:</span>
+                    <span className="font-bold text-text-primary">
                       {!isNaN(turnoverVal) ? `${turnoverVal.toFixed(1)}%` : '—'}
                     </span>
                   </div>
 
                   {/* Transaction Cost */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-slate-400 font-sans">Cost:</span>
-                    <span className="font-bold text-amber-400">
+                    <span className="text-text-muted font-sans">Cost:</span>
+                    <span className="font-bold text-status-warning">
                       {!isNaN(costVal) ? formatCurrency(costVal, currency) : '—'}
                     </span>
                   </div>
 
                   {/* Positions altered */}
-                  <div className="hidden sm:flex items-center gap-1.5 text-slate-400 font-sans">
+                  <div className="hidden sm:flex items-center gap-1.5 text-text-muted font-sans">
                     <span>Assets:</span>
-                    <span className="font-mono text-cyan-300 font-bold">{weights.length}</span>
+                    <span className="font-mono text-accent-primary font-bold">{weights.length}</span>
                   </div>
 
                   <Badge variant={isExpanded ? 'info' : 'default'} size="sm">
@@ -180,12 +180,12 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
 
               {/* Expanded Weight Detail Table */}
               {isExpanded && (
-                <div className="bg-slate-950/70 p-4 border-t border-slate-800/80">
+                <div className="bg-surface-secondary/40 p-4 border-t border-border-theme">
                   {weights.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
                         <thead>
-                          <tr className="text-slate-400 border-b border-slate-800 font-mono text-[10px] uppercase">
+                          <tr className="text-text-muted border-b border-border-theme font-mono text-[10px] uppercase">
                             <th className="py-2 px-3">Asset Ticker</th>
                             <th className="py-2 px-3 text-right">Previous Weight</th>
                             <th className="py-2 px-3 text-center">Shift</th>
@@ -194,7 +194,7 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
                             <th className="py-2 px-3 text-center">Action</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/40 font-mono">
+                        <tbody className="divide-y divide-border-theme font-mono">
                           {weights.map((w) => {
                             const isNew = w.prev === 0 && w.target > 0;
                             const isExit = w.prev > 0 && w.target === 0;
@@ -202,26 +202,26 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
                             const isDown = w.delta < -0.05;
 
                             return (
-                              <tr key={w.ticker} className="hover:bg-slate-900/50">
-                                <td className="py-2.5 px-3 font-bold text-white">
+                              <tr key={w.ticker} className="hover:bg-surface-secondary/60">
+                                <td className="py-2.5 px-3 font-bold text-text-primary">
                                   {w.ticker}
                                 </td>
-                                <td className="py-2.5 px-3 text-right text-slate-400">
+                                <td className="py-2.5 px-3 text-right text-text-muted">
                                   {w.prev.toFixed(1)}%
                                 </td>
-                                <td className="py-2.5 px-3 text-center text-slate-600">
+                                <td className="py-2.5 px-3 text-center text-text-muted">
                                   <ArrowRight className="w-3.5 h-3.5 mx-auto" />
                                 </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-cyan-300">
+                                <td className="py-2.5 px-3 text-right font-bold text-accent-primary">
                                   {w.target.toFixed(1)}%
                                 </td>
                                 <td
                                   className={`py-2.5 px-3 text-right font-bold ${
                                     w.delta > 0
-                                      ? 'text-emerald-400'
+                                      ? 'text-status-positive'
                                       : w.delta < 0
-                                      ? 'text-rose-400'
-                                      : 'text-slate-400'
+                                      ? 'text-status-negative'
+                                      : 'text-text-muted'
                                   }`}
                                 >
                                   {w.delta > 0 ? '+' : ''}
@@ -229,23 +229,23 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
                                   {isNew ? (
-                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 font-sans">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-status-positive-soft text-status-positive border border-status-positive/30 font-sans">
                                       New Entry
                                     </span>
                                   ) : isExit ? (
-                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-rose-950/60 text-rose-400 border border-rose-800/40 font-sans">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-status-negative-soft text-status-negative border border-status-negative/30 font-sans">
                                       Exit Position
                                     </span>
                                   ) : isUp ? (
-                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-cyan-950/60 text-cyan-400 border border-cyan-800/40 font-sans">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-accent-soft text-accent-primary border border-accent-primary/30 font-sans">
                                       Increase
                                     </span>
                                   ) : isDown ? (
-                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-amber-950/60 text-amber-400 border border-amber-800/40 font-sans">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-status-warning-soft text-status-warning border border-status-warning/30 font-sans">
                                       Trim
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-slate-800 text-slate-400 font-sans">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-sm bg-surface-secondary text-text-muted border border-border-theme font-sans">
                                       Hold
                                     </span>
                                   )}
@@ -257,7 +257,7 @@ export const RebalanceTable: React.FC<RebalanceTableProps> = ({
                       </table>
                     </div>
                   ) : (
-                    <div className="text-center py-4 text-slate-500 text-xs font-sans">
+                    <div className="text-center py-4 text-text-muted text-xs font-sans">
                       No individual asset breakdown details provided for this event.
                     </div>
                   )}

@@ -115,7 +115,7 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
     >
       <form id="holding-modal-form" onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg">
+          <div className="p-3 bg-status-negative-soft border border-status-negative/30 text-status-negative text-xs rounded-lg font-medium">
             {error}
           </div>
         )}
@@ -134,14 +134,14 @@ export const HoldingModal: React.FC<HoldingModalProps> = ({
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1.5">
               Market
             </label>
             <select
               value={market}
               onChange={(e) => setMarket(e.target.value as 'IN' | 'US')}
               disabled={isEdit}
-              className="w-full bg-slate-900/90 text-slate-100 text-sm rounded-lg border border-slate-700/80 px-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
+              className="w-full bg-surface text-text-primary text-sm rounded-lg border border-border-theme px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <option value="IN">IN (India)</option>
               <option value="US">US (United States)</option>

@@ -188,27 +188,27 @@ export const PlaceholderPage: React.FC = () => {
           </Card>
 
           <Card title="Session & Security Architecture" subtitle="Token lifecycle & concurrency protection">
-            <div className="space-y-3 text-xs text-slate-300">
+            <div className="space-y-3 text-xs text-text-secondary">
               <p className="leading-relaxed">
                 Tokens are stored in client-side secure web storage and automatically attached to all API requests via the{' '}
-                <code className="text-cyan-300 font-mono">Authorization: Bearer &lt;token&gt;</code> header.
+                <code className="text-accent-primary font-mono">Authorization: Bearer &lt;token&gt;</code> header.
               </p>
               <p className="leading-relaxed">
                 When an access token expires (HTTP 401), the centralized API client executes an automated token refresh against{' '}
-                <code className="text-cyan-300 font-mono">/api/v1/auth/token/refresh/</code> with a concurrency mutex to prevent duplicate token rotation calls.
+                <code className="text-accent-primary font-mono">/api/v1/auth/token/refresh/</code> with a concurrency mutex to prevent duplicate token rotation calls.
               </p>
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5 font-mono text-[11px]">
-                <div className="flex items-center justify-between text-slate-400">
+              <div className="p-3 rounded-lg bg-surface-secondary border border-border-subtle space-y-1.5 font-mono text-[11px]">
+                <div className="flex items-center justify-between text-text-muted">
                   <span>Header Attachment:</span>
-                  <span className="text-emerald-400">Active</span>
+                  <span className="text-status-success">Active</span>
                 </div>
-                <div className="flex items-center justify-between text-slate-400">
+                <div className="flex items-center justify-between text-text-muted">
                   <span>Concurrency Mutex:</span>
-                  <span className="text-emerald-400">Enabled</span>
+                  <span className="text-status-success">Enabled</span>
                 </div>
-                <div className="flex items-center justify-between text-slate-400">
+                <div className="flex items-center justify-between text-text-muted">
                   <span>Refresh Endpoint:</span>
-                  <span className="text-cyan-400">/auth/token/refresh/</span>
+                  <span className="text-accent-primary">/auth/token/refresh/</span>
                 </div>
               </div>
             </div>
@@ -218,12 +218,12 @@ export const PlaceholderPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card title="Backend API Configuration" subtitle="Environment-based Django REST endpoint">
             <div className="space-y-3 text-xs">
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-                <p className="text-slate-400 font-mono text-[11px] mb-1">Current Base URL:</p>
-                <code className="text-cyan-400 font-mono text-xs break-all">{API_BASE_URL}</code>
+              <div className="p-3 rounded-lg bg-surface-secondary border border-border-subtle">
+                <p className="text-text-muted font-mono text-[11px] mb-1">Current Base URL:</p>
+                <code className="text-accent-primary font-mono text-xs break-all">{API_BASE_URL}</code>
               </div>
-              <p className="text-slate-400 leading-relaxed">
-                Configured through <code className="text-slate-300 font-mono">VITE_API_BASE_URL</code> in the container environment.
+              <p className="text-text-muted leading-relaxed">
+                Configured through <code className="text-text-primary font-mono">VITE_API_BASE_URL</code> in the container environment.
               </p>
               <div className="pt-2">
                 <Button
@@ -233,7 +233,7 @@ export const PlaceholderPage: React.FC = () => {
                     localStorage.clear();
                     window.location.reload();
                   }}
-                  className="text-amber-400 border-amber-800/60 hover:bg-amber-950/30"
+                  className="text-status-warning border-status-warning/40 hover:bg-status-warning-soft"
                 >
                   Clear Cached Session Storage
                 </Button>
@@ -242,7 +242,7 @@ export const PlaceholderPage: React.FC = () => {
           </Card>
 
           <Card title="Platform Architecture & Verified Capabilities" subtitle="Phases A through E production integrated">
-            <div className="space-y-2.5 text-xs text-slate-300 leading-relaxed">
+            <div className="space-y-2.5 text-xs text-text-secondary leading-relaxed">
               <div className="flex items-center justify-between">
                 <span>Phase A — Auth & Core Client</span>
                 <Badge variant="success" size="sm">Verified</Badge>
@@ -276,11 +276,11 @@ export const PlaceholderPage: React.FC = () => {
             onAction={() => navigate('/app/dashboard')}
           />
 
-          <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 font-mono">
+          <div className="mt-4 pt-4 border-t border-border-subtle flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-text-muted font-mono">
             <div className="flex items-center gap-2">
-              <Server className="w-3.5 h-3.5 text-cyan-400" />
+              <Server className="w-3.5 h-3.5 text-accent-primary" />
               <span>Target Endpoint:</span>
-              <span className="text-slate-200">{config.endpoint}</span>
+              <span className="text-text-primary">{config.endpoint}</span>
             </div>
             <div>
               <span>Status: Active Terminal Module</span>

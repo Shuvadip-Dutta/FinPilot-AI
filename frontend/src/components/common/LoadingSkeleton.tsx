@@ -7,7 +7,7 @@ export interface SkeletonProps {
 export const Skeleton: React.FC<SkeletonProps> = ({ className = '' }) => {
   return (
     <div
-      className={`animate-pulse bg-slate-800/80 rounded-md ${className}`}
+      className={`animate-pulse bg-surface-secondary/80 rounded-md ${className}`}
       aria-hidden="true"
     />
   );
@@ -29,7 +29,7 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
 
 export const MetricCardSkeleton: React.FC = () => {
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-3">
+    <div className="bg-surface border border-border-theme rounded-xl p-5 space-y-3">
       <div className="flex justify-between items-center">
         <Skeleton className="h-3.5 w-24" />
         <Skeleton className="h-5 w-5 rounded-md" />
@@ -45,7 +45,7 @@ export const MetricCardSkeleton: React.FC = () => {
 
 export const TableRowSkeleton: React.FC<{ columns?: number }> = ({ columns = 5 }) => {
   return (
-    <div className="flex items-center justify-between py-3.5 px-4 border-b border-slate-800/60">
+    <div className="flex items-center justify-between py-3.5 px-4 border-b border-border-subtle">
       {Array.from({ length: columns }).map((_, i) => (
         <Skeleton
           key={i}
@@ -58,7 +58,7 @@ export const TableRowSkeleton: React.FC<{ columns?: number }> = ({ columns = 5 }
 
 export const CardSkeleton: React.FC<{ lines?: number }> = ({ lines = 3 }) => {
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+    <div className="bg-surface border border-border-theme rounded-xl p-6 space-y-4">
       <Skeleton className="h-5 w-40" />
       <div className="space-y-2.5">
         {Array.from({ length: lines }).map((_, i) => (

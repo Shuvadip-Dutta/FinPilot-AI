@@ -151,59 +151,59 @@ export const DocumentsPage: React.FC = () => {
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               Total Documents
             </div>
-            <FileText className="w-4 h-4 text-cyan-400" />
+            <FileText className="w-4 h-4 text-accent-primary" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">{documents.length}</span>
-            <span className="text-xs text-slate-400">
+            <span className="text-2xl font-bold text-text-primary">{documents.length}</span>
+            <span className="text-xs text-text-muted">
               ({completedDocs} indexed)
             </span>
           </div>
         </Card>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               Vectorized Chunks
             </div>
-            <Layers className="w-4 h-4 text-indigo-400" />
+            <Layers className="w-4 h-4 text-status-info" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">{totalChunks}</span>
-            <span className="text-xs text-slate-400">dense embeddings in Qdrant</span>
+            <span className="text-2xl font-bold text-text-primary">{totalChunks}</span>
+            <span className="text-xs text-text-muted">dense embeddings in Qdrant</span>
           </div>
         </Card>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               RAG Foundation Status
             </div>
-            <Database className="w-4 h-4 text-emerald-400" />
+            <Database className="w-4 h-4 text-status-success" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-sm font-semibold text-emerald-400 flex items-center gap-1">
+            <span className="text-sm font-semibold text-status-success flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
               Active & Isolated
             </span>
-            <span className="text-xs text-slate-400">user-scoped tenant filter</span>
+            <span className="text-xs text-text-muted">user-scoped tenant filter</span>
           </div>
         </Card>
       </div>
 
       {/* Semantic Search Section */}
-      <Card className="p-5 border-slate-800 bg-slate-900/70">
+      <Card className="p-5">
         <div className="mb-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Search className="w-4 h-4 text-cyan-400" />
+          <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+            <Search className="w-4 h-4 text-accent-primary" />
             Semantic Corpus Search
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-text-muted mt-0.5">
             Query across vectorized documents using dense cosine-similarity retrieval.
           </p>
         </div>
@@ -211,13 +211,13 @@ export const DocumentsPage: React.FC = () => {
         <DocumentSearchForm onSearch={handleSearch} isLoading={isSearching} />
 
         {searchError && (
-          <div className="mt-4 p-3 bg-rose-950/40 border border-rose-800 rounded-lg flex items-start gap-2 text-xs text-rose-300">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="mt-4 p-3 bg-status-danger-soft border border-status-danger/30 rounded-lg flex items-start gap-2 text-xs text-status-danger">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>{searchError}</div>
           </div>
         )}
 
-        <div className="mt-6 pt-5 border-t border-slate-800/80">
+        <div className="mt-6 pt-5 border-t border-border-subtle">
           <DocumentSearchResults
             results={searchResults}
             query={lastQuery}
@@ -227,14 +227,14 @@ export const DocumentsPage: React.FC = () => {
       </Card>
 
       {/* Document Library Section */}
-      <Card className="p-5 border-slate-800 bg-slate-900/70">
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <FileText className="w-4 h-4 text-cyan-400" />
+            <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+              <FileText className="w-4 h-4 text-accent-primary" />
               Document Library
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-text-muted mt-0.5">
               Manage uploaded filings and inspect per-document vector ingestion status.
             </p>
           </div>

@@ -167,16 +167,16 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
 
           <div className="flex items-center gap-4 text-xs font-mono">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-              <span className="text-cyan-300 font-semibold">Strategy</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-accent-primary" />
+              <span className="text-accent-primary font-semibold">Strategy</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-              <span className="text-amber-300 font-semibold">Buy & Hold</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-status-warning" />
+              <span className="text-status-warning font-semibold">Buy & Hold</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
-              <span className="text-purple-300 font-semibold">Benchmark</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-status-info" />
+              <span className="text-status-info font-semibold">Benchmark</span>
             </div>
           </div>
         </div>
@@ -184,23 +184,23 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/70 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
+              <tr className="border-b border-border-theme bg-surface-secondary/50 text-text-muted font-mono text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-5 font-semibold">Metric</th>
-                <th className="py-3 px-4 font-semibold text-cyan-400 text-right">
+                <th className="py-3 px-4 font-semibold text-accent-primary text-right">
                   Strategy (Rolling WF)
                 </th>
-                <th className="py-3 px-4 font-semibold text-amber-400 text-right">
+                <th className="py-3 px-4 font-semibold text-status-warning text-right">
                   Buy & Hold
                 </th>
-                <th className="py-3 px-4 font-semibold text-purple-400 text-right">
+                <th className="py-3 px-4 font-semibold text-status-info text-right">
                   Benchmark ({response.benchmark || '^NSEI'})
                 </th>
-                <th className="py-3 px-4 font-semibold text-slate-400 text-right">
+                <th className="py-3 px-4 font-semibold text-text-muted text-right">
                   Strategy vs BM
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono">
+            <tbody className="divide-y divide-border-theme font-mono">
               {metricRows.map((row, idx) => {
                 // Determine if strategy beat benchmark
                 const hasBoth = !isNaN(row.rawStrat) && !isNaN(row.rawBm);
@@ -213,8 +213,8 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
                     <span
                       className={`text-[10px] font-semibold px-2 py-0.5 rounded-sm border ${
                         outperforming
-                          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40'
-                          : 'bg-rose-950/60 text-rose-400 border-rose-800/40'
+                          ? 'bg-status-positive-soft text-status-positive border-status-positive/30'
+                          : 'bg-status-negative-soft text-status-negative border-status-negative/30'
                       }`}
                     >
                       {outperforming ? 'Outperforming' : 'Underperforming'}
@@ -225,25 +225,25 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
                 return (
                   <tr
                     key={row.label}
-                    className={`hover:bg-slate-850/50 transition-colors ${
-                      idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-transparent'
+                    className={`hover:bg-surface-secondary/40 transition-colors ${
+                      idx % 2 === 0 ? 'bg-surface-secondary/20' : 'bg-transparent'
                     }`}
                   >
                     <td className="py-3.5 px-5 font-sans">
-                      <div className="font-semibold text-slate-200">{row.label}</div>
-                      <div className="text-[10px] text-slate-500 font-normal">{row.description}</div>
+                      <div className="font-semibold text-text-primary">{row.label}</div>
+                      <div className="text-[10px] text-text-muted font-normal">{row.description}</div>
                     </td>
-                    <td className="py-3.5 px-4 text-right font-bold text-cyan-300 text-sm">
+                    <td className="py-3.5 px-4 text-right font-bold text-accent-primary text-sm">
                       {row.strat}
                     </td>
-                    <td className="py-3.5 px-4 text-right text-slate-300">
+                    <td className="py-3.5 px-4 text-right text-text-secondary">
                       {row.bnh}
                     </td>
-                    <td className="py-3.5 px-4 text-right text-slate-300">
+                    <td className="py-3.5 px-4 text-right text-text-secondary">
                       {row.bm}
                     </td>
                     <td className="py-3.5 px-4 text-right font-sans">
-                      {diffBadge || <span className="text-slate-600">—</span>}
+                      {diffBadge || <span className="text-text-muted">—</span>}
                     </td>
                   </tr>
                 );
@@ -256,10 +256,10 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
       {/* 2. Relative Benchmark Metrics & Execution Friction Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Relative Metrics Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <Activity className="w-4 h-4 text-cyan-400" />
+        <div className="bg-surface border border-border-theme rounded-2xl p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-theme">
+            <h5 className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <Activity className="w-4 h-4 text-accent-primary" />
               <span>Relative Risk & Benchmark Sensitivity</span>
             </h5>
             <Badge variant="neutral" size="sm">Hurdle Relative</Badge>
@@ -267,100 +267,100 @@ export const MetricComparison: React.FC<MetricComparisonProps> = ({
 
           {hasRelativeMetrics ? (
             <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 uppercase font-mono block mb-1">
+              <div className="p-3 rounded-xl bg-surface-secondary/40 border border-border-theme">
+                <span className="text-[10px] text-text-muted uppercase font-mono block mb-1">
                   Information Ratio
                 </span>
-                <span className="text-lg font-bold font-mono text-cyan-300">
+                <span className="text-lg font-bold font-mono text-accent-primary">
                   {fmtRatio(rel.information_ratio)}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
+                <span className="text-[10px] text-text-muted block mt-0.5">
                   Excess return per unit tracking error
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 uppercase font-mono block mb-1">
+              <div className="p-3 rounded-xl bg-surface-secondary/40 border border-border-theme">
+                <span className="text-[10px] text-text-muted uppercase font-mono block mb-1">
                   Tracking Error
                 </span>
-                <span className="text-lg font-bold font-mono text-slate-200">
+                <span className="text-lg font-bold font-mono text-text-primary">
                   {fmtPct(rel.tracking_error)}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
+                <span className="text-[10px] text-text-muted block mt-0.5">
                   Standard dev of excess returns
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 uppercase font-mono block mb-1">
+              <div className="p-3 rounded-xl bg-surface-secondary/40 border border-border-theme">
+                <span className="text-[10px] text-text-muted uppercase font-mono block mb-1">
                   Jensen's Alpha
                 </span>
                 <span
                   className={`text-lg font-bold font-mono ${
-                    Number(rel.alpha) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    Number(rel.alpha) >= 0 ? 'text-status-positive' : 'text-status-negative'
                   }`}
                 >
                   {fmtPct(rel.alpha, true)}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
+                <span className="text-[10px] text-text-muted block mt-0.5">
                   Uncorrelated excess return
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 uppercase font-mono block mb-1">
+              <div className="p-3 rounded-xl bg-surface-secondary/40 border border-border-theme">
+                <span className="text-[10px] text-text-muted uppercase font-mono block mb-1">
                   Beta to Benchmark
                 </span>
-                <span className="text-lg font-bold font-mono text-slate-200">
+                <span className="text-lg font-bold font-mono text-text-primary">
                   {fmtRatio(rel.beta)}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
+                <span className="text-[10px] text-text-muted block mt-0.5">
                   Systematic market covariance
                 </span>
               </div>
             </div>
           ) : (
-            <div className="p-6 rounded-xl bg-slate-950/50 border border-slate-800/80 text-center text-xs text-slate-500">
+            <div className="p-6 rounded-xl bg-surface-secondary/30 border border-border-theme text-center text-xs text-text-muted">
               Relative metrics (Information Ratio, Tracking Error, Alpha, Beta) not included in this backend response.
             </div>
           )}
         </div>
 
         {/* Execution Friction & Operational Realism Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <ArrowRightLeft className="w-4 h-4 text-amber-400" />
+        <div className="bg-surface border border-border-theme rounded-2xl p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-theme">
+            <h5 className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-status-warning" />
               <span>Turnover & Friction Realism</span>
             </h5>
             <Badge variant="warning" size="sm">Friction Model</Badge>
           </div>
 
           <div className="space-y-3 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800/80">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-surface-secondary/40 border border-border-theme">
               <div>
-                <span className="font-semibold text-slate-200 block">Total Transaction Costs</span>
-                <span className="text-[10px] text-slate-500">Cumulative friction deducted from equity</span>
+                <span className="font-semibold text-text-primary block">Total Transaction Costs</span>
+                <span className="text-[10px] text-text-muted">Cumulative friction deducted from equity</span>
               </div>
-              <span className="text-base font-bold font-mono text-amber-400">
+              <span className="text-base font-bold font-mono text-status-warning">
                 {fmtCurrency(response.total_transaction_costs ?? strat?.total_transaction_costs)}
               </span>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800/80">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-surface-secondary/40 border border-border-theme">
               <div>
-                <span className="font-semibold text-slate-200 block">Cumulative Turnover</span>
-                <span className="text-[10px] text-slate-500">Total rebalance volume scaled by portfolio value</span>
+                <span className="font-semibold text-text-primary block">Cumulative Turnover</span>
+                <span className="text-[10px] text-text-muted">Total rebalance volume scaled by portfolio value</span>
               </div>
-              <span className="text-base font-bold font-mono text-slate-200">
+              <span className="text-base font-bold font-mono text-text-primary">
                 {response.total_turnover !== undefined
                   ? `${(Number(response.total_turnover) * (Number(response.total_turnover) < 2 ? 100 : 1)).toFixed(1)}%`
                   : '—'}
               </span>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
-              <strong className="text-slate-200 block mb-1">Institutional Realism Guard:</strong>
+            <div className="p-3 rounded-xl bg-surface-secondary/40 border border-border-theme text-[11px] text-text-secondary leading-relaxed">
+              <strong className="text-text-primary block mb-1">Institutional Realism Guard:</strong>
               Unlike naive backtests that assume cost-free rebalancing, this engine explicitly deducts transaction fees
               and slippage at each walk-forward step, ensuring that high-turnover noise does not artificially inflate reported returns.
             </div>

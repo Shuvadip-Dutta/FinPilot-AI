@@ -146,21 +146,21 @@ export const ResearchHistoryPage: React.FC = () => {
         }
       />
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* Search & Market Filter Bar */}
+      <div className="p-4 rounded-2xl bg-surface border border-border-theme flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search by query, ticker, or route..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950/80 border border-slate-700 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-border-theme text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto text-xs font-mono">
-          <span className="text-slate-500 text-[11px] shrink-0">Market:</span>
+          <span className="text-text-muted text-[11px] shrink-0">Market:</span>
           {[
             { key: 'ALL', label: 'ALL' },
             { key: 'IN', label: 'IN (India)' },
@@ -169,10 +169,10 @@ export const ResearchHistoryPage: React.FC = () => {
             <button
               key={m.key}
               onClick={() => setMarketFilter(m.key)}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-lg transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 marketFilter === m.key
-                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 font-semibold'
-                  : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs ring-1 ring-accent-primary/20'
+                  : 'bg-surface-secondary text-text-secondary hover:text-text-primary hover:bg-surface border border-border-theme'
               }`}
             >
               {m.label}
@@ -201,16 +201,16 @@ export const ResearchHistoryPage: React.FC = () => {
 
       {/* Empty State */}
       {!isLoading && !error && filteredSessions.length === 0 && (
-        <div className="p-12 rounded-2xl bg-slate-900/40 border border-slate-800 text-center flex flex-col items-center">
-          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
+        <div className="p-12 rounded-2xl bg-surface border border-border-theme text-center flex flex-col items-center">
+          <div className="w-12 h-12 rounded-xl bg-surface-secondary border border-border-subtle flex items-center justify-center text-text-muted mb-3">
             <History className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">
+          <h3 className="text-base font-bold text-text-primary">
             {searchTerm || marketFilter !== 'ALL'
               ? 'No matching research sessions'
               : 'No research sessions found'}
           </h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm">
+          <p className="text-xs text-text-muted mt-1 max-w-sm">
             {searchTerm || marketFilter !== 'ALL'
               ? 'Try changing your search keywords or resetting the market filter.'
               : 'Start your first equity or macro investigation with the LangGraph research engine.'}
@@ -241,7 +241,7 @@ export const ResearchHistoryPage: React.FC = () => {
                 <div
                   key={session.id}
                   onClick={() => navigate(`/app/research/${session.id}`)}
-                  className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800/90 hover:border-cyan-500/50 hover:bg-slate-900 transition-all cursor-pointer group flex flex-col justify-between space-y-4 shadow-sm"
+                  className="p-5 rounded-2xl bg-surface border border-border-theme hover:border-accent-primary/40 hover:bg-surface-secondary/40 transition-all cursor-pointer group flex flex-col justify-between space-y-4 shadow-card"
                 >
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -258,40 +258,40 @@ export const ResearchHistoryPage: React.FC = () => {
                         )}
                         {getStatusBadge(session.status)}
                         {session.route && (
-                          <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                          <span className="text-[10px] font-mono text-text-muted bg-surface-secondary px-1.5 py-0.5 rounded border border-border-subtle">
                             {session.route}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                      <span className="text-[10px] font-mono text-text-muted flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {formatDate(session.created_at, { format: 'relative' })}
                       </span>
                     </div>
 
-                    <h3 className="font-semibold text-slate-100 text-sm group-hover:text-cyan-300 transition-colors line-clamp-2">
+                    <h3 className="font-semibold text-text-primary text-sm group-hover:text-accent-primary transition-colors line-clamp-2">
                       {displayTitle}
                     </h3>
 
-                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-text-muted line-clamp-2 leading-relaxed">
                       {previewText}
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-mono">
+                  <div className="pt-3 border-t border-border-subtle flex items-center justify-between text-xs text-text-muted font-mono">
                     <div className="flex items-center gap-3">
                       {session.latency_ms && (
-                        <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                          <Activity className="w-3 h-3 text-cyan-400" />
+                        <span className="flex items-center gap-1 text-[11px] text-text-muted">
+                          <Activity className="w-3 h-3 text-accent-primary" />
                           {session.latency_ms > 1000
                             ? `${(session.latency_ms / 1000).toFixed(1)}s`
                             : `${Math.round(session.latency_ms)}ms`}
                         </span>
                       )}
-                      <span className="text-slate-500">ID #{shortId}</span>
+                      <span className="text-text-muted">ID #{shortId}</span>
                     </div>
 
-                    <span className="text-cyan-400 group-hover:translate-x-1 transition-transform flex items-center gap-1 text-[11px]">
+                    <span className="text-accent-primary group-hover:translate-x-1 transition-transform flex items-center gap-1 text-[11px] font-medium">
                       <span>Open</span>
                       <ArrowRight className="w-3 h-3" />
                     </span>
@@ -303,7 +303,7 @@ export const ResearchHistoryPage: React.FC = () => {
 
           {/* Client-side Pagination Controls (presentation only) */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-800 pt-4 px-2 text-xs font-mono text-slate-400">
+            <div className="flex items-center justify-between border-t border-border-theme pt-4 px-2 text-xs font-mono text-text-secondary">
               <span>
                 Showing {(currentPage - 1) * SESSIONS_PER_PAGE + 1}–
                 {Math.min(currentPage * SESSIONS_PER_PAGE, filteredSessions.length)} of{' '}
@@ -319,7 +319,7 @@ export const ResearchHistoryPage: React.FC = () => {
                 >
                   Prev
                 </Button>
-                <span className="px-2 py-1 text-slate-300">
+                <span className="px-2 py-1 text-text-primary font-semibold">
                   {currentPage} / {totalPages}
                 </span>
                 <Button

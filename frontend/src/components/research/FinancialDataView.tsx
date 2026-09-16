@@ -173,8 +173,8 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
             <p className="text-xs text-amber-300/80 mt-1 max-w-md leading-relaxed">
               Financial statements and valuation metrics are currently integrated exclusively for the Indian market (<span className="font-mono text-amber-200">IN</span> / NSE / BSE).
             </p>
-            <p className="text-[11px] text-slate-400 mt-2">
-              To inspect financial statements, search for Indian equities such as <span className="font-mono text-cyan-300">RELIANCE</span> or <span className="font-mono text-cyan-300">TCS</span> on the <span className="font-mono text-cyan-300">IN</span> market.
+            <p className="text-[11px] text-text-muted mt-2">
+              To inspect financial statements, search for Indian equities such as <span className="font-mono text-accent-primary font-medium">RELIANCE</span> or <span className="font-mono text-accent-primary font-medium">TCS</span> on the <span className="font-mono text-accent-primary font-medium">IN</span> market.
             </p>
           </div>
         </div>
@@ -507,10 +507,10 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                   return (
                     <div
                       key={category}
-                      className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3"
+                      className="p-4 rounded-xl bg-surface-secondary/50 border border-border-theme space-y-3"
                     >
-                      <span className="text-xs font-bold text-slate-200 font-mono uppercase tracking-wider flex items-center gap-1.5">
-                        <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-xs font-bold text-text-primary font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-accent-primary" />
                         {getCategoryLabel(category)}
                       </span>
 
@@ -522,15 +522,15 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                           return (
                             <div
                               key={idx}
-                              className="p-3 rounded-lg bg-slate-900/60 border border-slate-800/60 flex items-center justify-between"
+                              className="p-3 rounded-lg bg-surface border border-border-theme flex items-center justify-between"
                             >
                               <div className="space-y-0.5">
-                                <p className="text-xs text-slate-300 font-medium">{m.name}</p>
-                                <p className="text-[10px] text-slate-400 font-mono">{m.key}</p>
+                                <p className="text-xs text-text-primary font-medium">{m.name}</p>
+                                <p className="text-[10px] text-text-muted font-mono">{m.key}</p>
                               </div>
                               <span
                                 className={`text-sm font-bold font-mono ${
-                                  isNegative ? 'text-rose-400' : 'text-slate-100'
+                                  isNegative ? 'text-status-negative' : 'text-text-primary'
                                 }`}
                               >
                                 {displayValue}
@@ -548,14 +548,14 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
         )}
 
         {/* Provenance Footer */}
-        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-400 font-mono">
+        <div className="pt-2 border-t border-border-theme flex flex-wrap items-center justify-between gap-3 text-[11px] text-text-muted font-mono">
           <div className="flex items-center gap-2">
-            <span>Market: <strong className="text-slate-300">{market.toUpperCase()}</strong></span>
+            <span>Market: <strong className="text-text-secondary">{market.toUpperCase()}</strong></span>
             <span>•</span>
-            <span>Currency: <strong className="text-slate-300">{currency}</strong></span>
+            <span>Currency: <strong className="text-text-secondary">{currency}</strong></span>
           </div>
           <div>
-            Source: <span className="text-slate-400 font-mono">Django REST Research Service</span>
+            Source: <span className="text-text-muted font-mono">Django REST Research Service</span>
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   AlertTriangle,
+  AlertCircle,
   Info,
   CheckCircle2,
   RefreshCw,
@@ -169,12 +170,12 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
   const getSeverityIcon = (severity: string) => {
     switch (severity?.toLowerCase()) {
       case 'critical':
-        return <ShieldAlert className="w-4 h-4 text-rose-400" />;
+        return <ShieldAlert className="w-4 h-4 text-status-negative" />;
       case 'warning':
-        return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+        return <AlertTriangle className="w-4 h-4 text-status-warning" />;
       case 'info':
       default:
-        return <Info className="w-4 h-4 text-cyan-400" />;
+        return <Info className="w-4 h-4 text-status-info" />;
     }
   };
 
@@ -194,14 +195,14 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
   return (
     <Card id="portfolio-alert-center" className={`overflow-hidden ${className}`}>
       {/* Header with Title, Stats & Run Action */}
-      <div className="p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-900/50">
+      <div className="p-5 border-b border-border-theme flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-surface-secondary/40">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-status-warning-soft border border-status-warning/20 flex items-center justify-center text-status-warning">
               <Bell className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
                 <span>Alert Center</span>
                 {counts.active > 0 && (
                   <Badge variant="danger" size="sm" dot>
@@ -214,7 +215,7 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                   </Badge>
                 )}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 Quantitative risk breach detection, drawdown monitoring, and threshold alerts
               </p>
             </div>
@@ -241,7 +242,6 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
             leftIcon={
               <Activity className={`w-3.5 h-3.5 ${isMonitoring ? 'animate-spin' : ''}`} />
             }
-            className="border-cyan-500/40 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-200"
           >
             {isMonitoring ? 'Evaluating...' : 'Run Monitoring'}
           </Button>
@@ -253,42 +253,39 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
         <div
           className={`px-5 py-3 text-xs flex items-center justify-between border-b ${
             feedback.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-800/50 text-rose-300'
+              ? 'bg-status-positive-soft text-status-positive border-status-positive/20'
+              : 'bg-status-negative-soft text-status-negative border-status-negative/20'
           }`}
         >
           <div className="flex items-center gap-2">
             {feedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-4 h-4" />
             ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <AlertCircle className="w-4 h-4" />
             )}
             <span>{feedback.message}</span>
           </div>
           <button
             type="button"
             onClick={() => setFeedback(null)}
-            className="text-slate-400 hover:text-slate-200 p-1"
+            className="text-text-muted hover:text-text-primary p-0.5 rounded cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" />
+            &times;
           </button>
         </div>
       )}
 
-      {/* Filter and Overview Toolbar */}
-      <div className="px-5 py-3 border-b border-slate-800/60 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Status Filter Buttons */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-slate-400 mr-1 flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider">
-            <Filter className="w-3 h-3" /> Status:
-          </span>
+      {/* Filter / Search Controls Strip */}
+      <div className="px-5 py-3 border-b border-border-theme bg-surface-secondary/20 flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-surface border border-border-theme">
           <button
             type="button"
             onClick={() => setStatusFilter('ALL')}
-            className={`px-2.5 py-1 rounded-md transition-colors ${
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               statusFilter === 'ALL'
-                ? 'bg-slate-800 text-white font-medium shadow-xs'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
             }`}
           >
             All ({counts.total})
@@ -296,10 +293,10 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
           <button
             type="button"
             onClick={() => setStatusFilter('ACTIVE')}
-            className={`px-2.5 py-1 rounded-md transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-warning ${
               statusFilter === 'ACTIVE'
-                ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60 font-medium'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-status-warning-soft text-status-warning border border-status-warning font-semibold shadow-xs'
+                : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
             }`}
           >
             Active ({counts.active})
@@ -307,10 +304,10 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
           <button
             type="button"
             onClick={() => setStatusFilter('ACKNOWLEDGED')}
-            className={`px-2.5 py-1 rounded-md transition-colors ${
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-info ${
               statusFilter === 'ACKNOWLEDGED'
-                ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-medium'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-status-info-soft text-status-info border border-status-info font-semibold shadow-xs'
+                : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
             }`}
           >
             Acknowledged ({counts.acknowledged})
@@ -318,10 +315,10 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
           <button
             type="button"
             onClick={() => setStatusFilter('RESOLVED')}
-            className={`px-2.5 py-1 rounded-md transition-colors ${
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-positive ${
               statusFilter === 'RESOLVED'
-                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-medium'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-status-positive-soft text-status-positive border border-status-positive font-semibold shadow-xs'
+                : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
             }`}
           >
             Resolved ({counts.resolved})
@@ -330,7 +327,7 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
 
         {/* Severity Filter Dropdown/Pills */}
         <div className="flex items-center gap-1.5">
-          <span className="text-slate-400 mr-1 font-mono text-[11px] uppercase tracking-wider">
+          <span className="text-text-muted mr-1 font-mono text-[11px] uppercase tracking-wider">
             Severity:
           </span>
           {(['ALL', 'critical', 'warning', 'info'] as const).map((sev) => (
@@ -338,10 +335,10 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
               key={sev}
               type="button"
               onClick={() => setSeverityFilter(sev)}
-              className={`px-2 py-0.5 rounded text-[11px] font-mono capitalize transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-mono capitalize transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 severityFilter === sev
-                  ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/50 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/70'
               }`}
             >
               {sev}
@@ -383,16 +380,16 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
 
         {/* Filtered Empty State (Alerts exist, but none match current filter) */}
         {!isLoading && !error && alerts.length > 0 && filteredAlerts.length === 0 && (
-          <div className="py-12 text-center text-slate-400 text-sm">
-            <Info className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
-            <p className="font-medium text-slate-300">No alerts match the selected filters.</p>
+          <div className="py-12 text-center text-text-muted text-sm">
+            <Info className="w-8 h-8 mx-auto mb-2 text-text-muted opacity-60" />
+            <p className="font-medium text-text-primary">No alerts match the selected filters.</p>
             <button
               type="button"
               onClick={() => {
                 setStatusFilter('ALL');
                 setSeverityFilter('ALL');
               }}
-              className="mt-2 text-xs text-cyan-400 hover:underline"
+              className="mt-2 text-xs text-accent-primary hover:underline cursor-pointer"
             >
               Reset all filters
             </button>
@@ -409,15 +406,15 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
 
               // Severity border accent
               const borderAccent = isCritical
-                ? 'border-l-4 border-l-rose-500 bg-rose-950/10'
+                ? 'border-l-4 border-l-status-negative bg-status-negative-soft/10'
                 : isWarning
-                ? 'border-l-4 border-l-amber-500 bg-amber-950/10'
-                : 'border-l-4 border-l-cyan-500 bg-cyan-950/10';
+                ? 'border-l-4 border-l-status-warning bg-status-warning-soft/10'
+                : 'border-l-4 border-l-status-info bg-status-info-soft/10';
 
               return (
                 <div
                   key={alert.id}
-                  className={`rounded-xl border border-slate-800 p-4 transition-all duration-150 ${borderAccent} hover:border-slate-700`}
+                  className={`rounded-xl border border-border-theme p-4 transition-all duration-150 ${borderAccent} hover:border-accent-primary/40`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                     {/* Left: Metadata Badges + Title & Description */}
@@ -458,7 +455,7 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                         )}
 
                         {/* Timestamp */}
-                        <span className="flex items-center gap-1 text-[11px] text-slate-400 ml-auto lg:ml-2">
+                        <span className="flex items-center gap-1 text-[11px] text-text-muted ml-auto lg:ml-2">
                           <Clock className="w-3 h-3" />
                           {formatDate(alert.created_at, { format: 'relative' })}
                         </span>
@@ -466,23 +463,23 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
 
                       {/* Alert Title and Message */}
                       <div>
-                        <h4 className="text-sm font-semibold text-slate-100">{alert.title}</h4>
-                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                        <h4 className="text-sm font-semibold text-text-primary">{alert.title}</h4>
+                        <p className="text-xs text-text-secondary mt-1 leading-relaxed">
                           {alert.message}
                         </p>
                       </div>
 
                       {/* Metric Comparison Grid */}
                       <div className="inline-flex items-center gap-4 pt-1 text-xs">
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900/80 border border-slate-800">
-                          <span className="text-slate-400 text-[11px]">Breach Metric:</span>
-                          <span className="font-mono font-semibold text-slate-200">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-secondary border border-border-theme">
+                          <span className="text-text-muted text-[11px]">Breach Metric:</span>
+                          <span className="font-mono font-semibold text-text-primary">
                             {alert.metric_value}%
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900/80 border border-slate-800">
-                          <span className="text-slate-400 text-[11px]">Threshold:</span>
-                          <span className="font-mono font-medium text-slate-400">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-secondary border border-border-theme">
+                          <span className="text-text-muted text-[11px]">Threshold:</span>
+                          <span className="font-mono font-medium text-text-muted">
                             {alert.threshold_value}%
                           </span>
                         </div>
@@ -490,7 +487,7 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                     </div>
 
                     {/* Right: Actions & State */}
-                    <div className="flex items-center lg:items-end flex-col justify-between shrink-0 gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800/60">
+                    <div className="flex items-center lg:items-end flex-col justify-between shrink-0 gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-border-theme">
                       {alert.status === 'ACTIVE' && (
                         <Button
                           variant="secondary"
@@ -501,22 +498,22 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                             isAcknowledging ? (
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             ) : (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <Check className="w-3.5 h-3.5 text-status-positive" />
                             )
                           }
-                          className="hover:border-emerald-500/40 text-xs w-full sm:w-auto"
+                          className="hover:border-accent-primary text-xs w-full sm:w-auto"
                         >
                           {isAcknowledging ? 'Acknowledging...' : 'Acknowledge'}
                         </Button>
                       )}
 
                       {alert.status === 'ACKNOWLEDGED' && (
-                        <div className="flex items-center gap-1.5 text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-800/40 px-2.5 py-1 rounded-md">
-                          <CheckCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        <div className="flex items-center gap-1.5 text-xs text-status-info bg-status-info-soft border border-status-info/40 font-medium px-3 py-1.5 rounded-lg shadow-xs">
+                          <CheckCheck className="w-3.5 h-3.5 text-status-info shrink-0" />
                           <span>
                             Acknowledged
                             {alert.acknowledged_at && (
-                              <span className="text-slate-400 ml-1 text-[11px]">
+                              <span className="text-text-muted ml-1 text-[11px] font-normal">
                                 {formatDate(alert.acknowledged_at, { format: 'relative' })}
                               </span>
                             )}
@@ -525,8 +522,8 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                       )}
 
                       {alert.status === 'RESOLVED' && (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-1 rounded-md">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <div className="flex items-center gap-1.5 text-xs text-status-positive bg-status-positive-soft border border-status-positive/40 font-medium px-3 py-1.5 rounded-lg shadow-xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-status-positive shrink-0" />
                           <span>Condition Normalized</span>
                         </div>
                       )}

@@ -25,12 +25,14 @@ import { PortfolioAlertsPage } from './pages/app/PortfolioAlertsPage';
 import { DocumentsPage } from './pages/app/DocumentsPage';
 import { PlaceholderPage } from './pages/app/PlaceholderPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ThemeProvider } from './context/ThemeContext';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
 
@@ -106,5 +108,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
   );
 }

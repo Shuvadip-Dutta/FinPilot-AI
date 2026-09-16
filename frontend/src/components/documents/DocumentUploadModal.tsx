@@ -146,8 +146,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
           onClick={() => fileInputRef.current?.click()}
           className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
             file
-              ? 'border-cyan-500/70 bg-cyan-950/20'
-              : 'border-slate-700/80 hover:border-slate-500 bg-slate-950/40 hover:bg-slate-900/40'
+              ? 'border-accent-primary bg-accent-soft/30'
+              : 'border-border-theme hover:border-accent-primary/40 bg-surface-secondary/40 hover:bg-surface-secondary/70'
           }`}
         >
           <input
@@ -159,22 +159,22 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
           />
 
           <div className="flex flex-col items-center justify-center space-y-2">
-            <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-cyan-400">
+            <div className="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center text-accent-primary">
               {file ? <FileText className="w-6 h-6" /> : <Upload className="w-6 h-6" />}
             </div>
             {file ? (
               <div>
-                <p className="text-sm font-medium text-white">{file.name}</p>
-                <p className="text-xs text-slate-400">
+                <p className="text-sm font-medium text-text-primary">{file.name}</p>
+                <p className="text-xs text-text-muted">
                   {(file.size / (1024 * 1024)).toFixed(2)} MB • {file.type || 'text/document'}
                 </p>
               </div>
             ) : (
               <div>
-                <p className="text-sm font-medium text-slate-200">
+                <p className="text-sm font-medium text-text-primary">
                   Click to browse or drag and drop your file here
                 </p>
-                <p className="text-xs text-slate-400">PDF or UTF-8 TXT (Max 10 MB)</p>
+                <p className="text-xs text-text-muted">PDF or UTF-8 TXT (Max 10 MB)</p>
               </div>
             )}
           </div>
@@ -183,7 +183,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
         {/* Optional Metadata */}
         <div className="grid grid-cols-2 gap-3 pt-2">
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-medium text-text-secondary mb-1">
               Associated Ticker (Optional)
             </label>
             <Input
@@ -194,14 +194,14 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-medium text-text-secondary mb-1">
               Market (Optional)
             </label>
             <select
               value={market}
               onChange={(e) => setMarket(e.target.value)}
               disabled={isUploading}
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-surface border border-border-theme rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
             >
               <option value="IN">IN (India / NSE / BSE)</option>
               <option value="US">US (United States / NYSE / NASDAQ)</option>
@@ -210,7 +210,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-theme">
           <Button
             type="button"
             variant="outline"

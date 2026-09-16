@@ -41,11 +41,11 @@ export const DocumentSearchResults: React.FC<DocumentSearchResultsProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+      <div className="flex items-center justify-between text-xs text-text-muted px-1">
         <span>
-          Found <strong className="text-cyan-400">{results.length}</strong> relevant chunk{results.length > 1 ? 's' : ''} for &ldquo;{query}&rdquo;
+          Found <strong className="text-accent-primary">{results.length}</strong> relevant chunk{results.length > 1 ? 's' : ''} for &ldquo;{query}&rdquo;
         </span>
-        <span className="font-mono text-[11px] text-slate-400">Ranked by Cosine Similarity</span>
+        <span className="font-mono text-[11px] text-text-muted">Ranked by Cosine Similarity</span>
       </div>
 
       <div className="space-y-3">
@@ -56,13 +56,13 @@ export const DocumentSearchResults: React.FC<DocumentSearchResultsProps> = ({
           return (
             <Card
               key={`${result.chunk_id}-${idx}`}
-              className="p-4 border-slate-800/80 bg-slate-900/60 hover:border-slate-700 transition-all"
+              className="p-4 border-border-theme bg-surface hover:border-accent-primary/40 transition-all shadow-card"
             >
               {/* Provenance Header */}
-              <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/60">
+              <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-border-theme">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 font-medium text-xs text-cyan-300">
-                    <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                  <div className="flex items-center gap-1.5 font-medium text-xs text-text-primary">
+                    <FileText className="w-3.5 h-3.5 text-accent-primary" />
                     <span>{result.document_name}</span>
                   </div>
 
@@ -78,7 +78,7 @@ export const DocumentSearchResults: React.FC<DocumentSearchResultsProps> = ({
                     </Badge>
                   )}
 
-                  <Badge variant="neutral" size="sm" className="font-mono text-slate-400">
+                  <Badge variant="neutral" size="sm" className="font-mono text-text-muted">
                     Page {pageDisplay}
                   </Badge>
                 </div>
@@ -95,12 +95,12 @@ export const DocumentSearchResults: React.FC<DocumentSearchResultsProps> = ({
               </div>
 
               {/* Chunk Snippet Text */}
-              <div className="text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-wrap bg-slate-950/60 p-3 rounded-lg border border-slate-800/40 font-mono">
+              <div className="text-xs text-text-primary leading-relaxed font-sans whitespace-pre-wrap bg-surface-secondary/50 p-3 rounded-lg border border-border-theme font-mono">
                 {result.text}
               </div>
 
               {/* Metadata Provenance Footer */}
-              <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 font-mono">
+              <div className="flex items-center justify-between text-[11px] text-text-muted mt-2 font-mono">
                 <span>Chunk ID: {result.chunk_id}</span>
                 <span>Doc ID: {result.document_id.slice(0, 8)}...</span>
               </div>

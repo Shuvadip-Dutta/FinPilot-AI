@@ -101,15 +101,15 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
       onClose={onClose}
       maxWidth="3xl"
       title={
-        <div className="flex items-center gap-2 text-cyan-400">
-          <Bot className="w-5 h-5 text-cyan-400" />
+        <div className="flex items-center gap-2 text-accent-primary">
+          <Bot className="w-5 h-5 text-accent-primary" />
           <span>FinPilot AI Portfolio Audit</span>
         </div>
       }
       subtitle={`Multi-agent quantitative diagnostic for ${portfolio?.name || 'Portfolio'}`}
       footer={
         <div className="w-full flex items-center justify-between">
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-text-muted">
             {holdings.length} {holdings.length === 1 ? 'position' : 'positions'} analyzed
           </div>
           <div className="flex items-center gap-2">
@@ -137,16 +137,16 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
     >
       <div className="space-y-4">
         {/* Analysis controls header */}
-        <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+        <div className="p-4 bg-surface-secondary/50 border border-border-theme rounded-xl space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-300">Analysis Focus:</span>
+            <span className="text-xs font-semibold text-text-secondary">Analysis Focus:</span>
             <button
               type="button"
               onClick={() => setAnalysisType('comprehensive')}
-              className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+              className={`px-3 py-1 text-xs rounded-lg border transition-colors cursor-pointer ${
                 analysisType === 'comprehensive'
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  ? 'bg-accent-soft text-accent-primary border-accent-primary/40 font-semibold shadow-xs'
+                  : 'bg-surface text-text-muted border-border-theme hover:text-text-primary hover:bg-surface-secondary/60'
               }`}
             >
               Comprehensive Audit
@@ -154,10 +154,10 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
             <button
               type="button"
               onClick={() => setAnalysisType('risk')}
-              className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+              className={`px-3 py-1 text-xs rounded-lg border transition-colors cursor-pointer ${
                 analysisType === 'risk'
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  ? 'bg-accent-soft text-accent-primary border-accent-primary/40 font-semibold shadow-xs'
+                  : 'bg-surface text-text-muted border-border-theme hover:text-text-primary hover:bg-surface-secondary/60'
               }`}
             >
               Stress Test & Concentration Risk
@@ -165,10 +165,10 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
             <button
               type="button"
               onClick={() => setAnalysisType('rebalance')}
-              className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+              className={`px-3 py-1 text-xs rounded-lg border transition-colors cursor-pointer ${
                 analysisType === 'rebalance'
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  ? 'bg-accent-soft text-accent-primary border-accent-primary/40 font-semibold shadow-xs'
+                  : 'bg-surface text-text-muted border-border-theme hover:text-text-primary hover:bg-surface-secondary/60'
               }`}
             >
               Rebalancing & Tactical Alpha
@@ -181,7 +181,7 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
               placeholder="Optional: Specify custom question (e.g. How vulnerable are we to rate cuts?)"
               value={customQuery}
               onChange={(e) => setCustomQuery(e.target.value)}
-              className="flex-1 bg-slate-900 text-xs text-slate-200 placeholder:text-slate-500 border border-slate-700/80 rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500"
+              className="flex-1 bg-surface text-xs text-text-primary placeholder:text-text-muted border border-border-theme rounded-lg px-3 py-2 focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
             />
             <Button
               variant="primary"
@@ -197,7 +197,7 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
 
         {/* Error notification */}
         {error && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg flex items-start gap-2">
+          <div className="p-3 bg-status-negative-soft border border-status-negative/20 text-status-negative text-xs rounded-lg flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -205,15 +205,15 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
 
         {/* Loading state */}
         {isGenerating && (
-          <div className="p-8 text-center bg-slate-950/40 border border-slate-800 rounded-xl space-y-4">
-            <div className="w-12 h-12 mx-auto rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+          <div className="p-8 text-center bg-surface-secondary/30 border border-border-theme rounded-xl space-y-4">
+            <div className="w-12 h-12 mx-auto rounded-xl bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary">
               <RefreshCw className="w-6 h-6 animate-spin" />
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-slate-200">
+              <h4 className="text-sm font-semibold text-text-primary">
                 LangGraph Multi-Agent Portfolio Synthesizer Active
               </h4>
-              <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+              <p className="text-xs text-text-muted max-w-md mx-auto mt-1">
                 Evaluating company fundamentals, sector concentrations, valuation multiples, and macro correlations for {portfolio?.name}...
               </p>
             </div>
@@ -224,53 +224,53 @@ export const PortfolioAiAnalysisModal: React.FC<PortfolioAiAnalysisModalProps> =
         {!isGenerating && report && (
           <div className="space-y-4">
             {structuredValuation && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-surface-secondary/60 border border-border-theme rounded-xl">
                 <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Invested Capital</span>
-                  <div className="text-sm font-bold font-mono text-slate-100 mt-0.5">
+                  <span className="text-[10px] font-semibold text-text-muted uppercase">Invested Capital</span>
+                  <div className="text-sm font-bold font-mono text-text-primary mt-0.5">
                     {formatCurrency(structuredValuation.invested_value, structuredValuation.currency === 'USD' ? 'USD' : 'INR')}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Live Market Value</span>
-                  <div className="text-sm font-bold font-mono text-cyan-400 mt-0.5">
+                  <span className="text-[10px] font-semibold text-text-muted uppercase">Live Market Value</span>
+                  <div className="text-sm font-bold font-mono text-accent-primary mt-0.5">
                     {formatCurrency(structuredValuation.current_value, structuredValuation.currency === 'USD' ? 'USD' : 'INR')}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Live P/L</span>
-                  <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className="text-[10px] font-semibold text-text-muted uppercase">Live P/L</span>
+                  <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-status-positive' : 'text-status-negative'}`}>
                     {formatCurrency(structuredValuation.profit_loss, structuredValuation.currency === 'USD' ? 'USD' : 'INR')}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Return (%)</span>
-                  <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className="text-[10px] font-semibold text-text-muted uppercase">Return (%)</span>
+                  <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-status-positive' : 'text-status-negative'}`}>
                     {formatPercent(structuredValuation.profit_loss_percentage, true)}
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="p-5 bg-slate-950/60 border border-slate-800/80 rounded-xl max-h-[55vh] overflow-y-auto">
+            <div className="p-5 bg-surface-secondary/30 border border-border-theme rounded-xl max-h-[55vh] overflow-y-auto">
               <MarkdownContent content={report} />
             </div>
 
-            <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-lg text-[11px] text-slate-400 flex items-center justify-between">
+            <div className="p-3 bg-surface-secondary/50 border border-border-theme rounded-lg text-[11px] text-text-muted flex items-center justify-between">
               <span>FinPilot AI quantitative portfolio diagnostic. For informational purposes only.</span>
-              <span className="text-slate-500 font-mono">Route: portfolio</span>
+              <span className="text-text-muted font-mono">Route: portfolio</span>
             </div>
           </div>
         )}
 
         {/* Empty placeholder before initial run */}
         {!isGenerating && !report && !error && (
-          <div className="p-8 text-center bg-slate-950/20 border border-dashed border-slate-800/80 rounded-xl">
-            <Bot className="w-8 h-8 mx-auto text-cyan-400/60 mb-2" />
-            <h4 className="text-sm font-semibold text-slate-200">
+          <div className="p-8 text-center bg-surface-secondary/20 border border-dashed border-border-theme rounded-xl">
+            <Bot className="w-8 h-8 mx-auto text-accent-primary mb-2" />
+            <h4 className="text-sm font-semibold text-text-primary">
               Ready to Audit {portfolio?.name}
             </h4>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4">
+            <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 mb-4">
               Select your diagnostic focus and click "Generate AI Audit" to initiate a real-time multi-agent quantitative review of your holdings.
             </p>
             <Button

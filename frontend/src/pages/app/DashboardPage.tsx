@@ -255,12 +255,12 @@ export const DashboardPage: React.FC = () => {
       {/* PHASE 2: Dynamic KPI Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Total Invested Capital */}
-        <Card className="p-4 bg-slate-900/70 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               Total Invested Capital
             </div>
-            <Wallet className="w-4 h-4 text-cyan-400" />
+            <Wallet className="w-4 h-4 text-accent-primary" />
           </div>
           {isLoading ? (
             <div className="mt-2 space-y-1.5">
@@ -269,10 +269,10 @@ export const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="mt-2">
-              <span className="text-2xl font-bold text-white font-mono">
+              <span className="text-2xl font-bold text-text-primary font-mono">
                 {formatCurrency(totalInvestedCapital, 'INR', { compact: true })}
               </span>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 Across {allHoldings.length} total holdings
               </p>
             </div>
@@ -280,12 +280,12 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         {/* KPI 2: Active Portfolios */}
-        <Card className="p-4 bg-slate-900/70 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               Active Portfolios
             </div>
-            <PieChart className="w-4 h-4 text-indigo-400" />
+            <PieChart className="w-4 h-4 text-accent-primary" />
           </div>
           {isLoading ? (
             <div className="mt-2 space-y-1.5">
@@ -295,14 +295,14 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <div className="mt-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white font-mono">
+                <span className="text-2xl font-bold text-text-primary font-mono">
                   {activePortfoliosCount}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-text-muted">
                   workspaces
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 Deterministic tracking
               </p>
             </div>
@@ -310,12 +310,12 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         {/* KPI 3: Research Sessions */}
-        <Card className="p-4 bg-slate-900/70 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               Research Sessions
             </div>
-            <History className="w-4 h-4 text-emerald-400" />
+            <History className="w-4 h-4 text-accent-primary" />
           </div>
           {isLoading ? (
             <div className="mt-2 space-y-1.5">
@@ -325,14 +325,14 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <div className="mt-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white font-mono">
+                <span className="text-2xl font-bold text-text-primary font-mono">
                   {totalResearchCount}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-text-muted">
                   syntheses
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 Multi-agent LangGraph logs
               </p>
             </div>
@@ -340,12 +340,12 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         {/* KPI 4: RAG Indexed Chunks */}
-        <Card className="p-4 bg-slate-900/70 border-slate-800">
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">
               RAG Indexed Chunks
             </div>
-            <Database className="w-4 h-4 text-amber-400" />
+            <Database className="w-4 h-4 text-status-warning" />
           </div>
           {isLoading ? (
             <div className="mt-2 space-y-1.5">
@@ -355,14 +355,14 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <div className="mt-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white font-mono">
+                <span className="text-2xl font-bold text-text-primary font-mono">
                   {totalIndexedChunks}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-text-muted">
                   dense vectors
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 From {documents.length} financial filings
               </p>
             </div>
@@ -390,8 +390,8 @@ export const DashboardPage: React.FC = () => {
             }
           >
             {portfolioError ? (
-              <div className="p-3 bg-rose-950/40 border border-rose-800 rounded-lg flex items-start gap-2 text-xs text-rose-300">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="p-3 bg-status-danger-soft border border-status-danger/30 rounded-lg flex items-start gap-2 text-xs text-status-danger">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>{portfolioError}</div>
               </div>
             ) : isLoading ? (
@@ -411,31 +411,31 @@ export const DashboardPage: React.FC = () => {
             ) : (
               <div className="space-y-5">
                 {/* PHASE 4: Market Exposure Bar */}
-                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
+                <div className="p-3.5 rounded-xl bg-surface-secondary border border-border-subtle space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-200">
-                      <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                    <div className="flex items-center gap-1.5 font-semibold text-text-primary">
+                      <Globe className="w-3.5 h-3.5 text-accent-primary" />
                       <span>Market Exposure</span>
                     </div>
                     <div className="flex items-center gap-4 text-xs font-mono">
-                      <span className="text-cyan-400">
+                      <span className="text-accent-primary font-semibold">
                         IN: {formatPercent(marketExposure.inPercent, false)} ({formatCurrency(marketExposure.inAmount, 'INR', { compact: true })})
                       </span>
-                      <span className="text-indigo-400">
+                      <span className="text-status-info font-semibold">
                         US: {formatPercent(marketExposure.usPercent, false)} ({formatCurrency(marketExposure.usAmount, 'INR', { compact: true })})
                       </span>
                     </div>
                   </div>
 
                   {/* Dual-tone allocation progress bar */}
-                  <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden flex">
+                  <div className="h-2 w-full bg-border-subtle rounded-full overflow-hidden flex">
                     <div
-                      className="h-full bg-cyan-500 transition-all duration-500"
+                      className="h-full bg-accent-primary transition-all duration-500"
                       style={{ width: `${marketExposure.inPercent}%` }}
                       title={`India (IN): ${marketExposure.inPercent.toFixed(1)}%`}
                     />
                     <div
-                      className="h-full bg-indigo-500 transition-all duration-500"
+                      className="h-full bg-status-info transition-all duration-500"
                       style={{ width: `${marketExposure.usPercent}%` }}
                       title={`US Markets: ${marketExposure.usPercent.toFixed(1)}%`}
                     />
@@ -446,7 +446,7 @@ export const DashboardPage: React.FC = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold bg-slate-950/30">
+                      <tr className="border-b border-border-subtle text-text-muted uppercase tracking-wider font-semibold bg-surface-secondary/50">
                         <th className="py-2.5 px-3">Asset</th>
                         <th className="py-2.5 px-3">Market</th>
                         <th className="py-2.5 px-3 text-right">Quantity</th>
@@ -455,16 +455,16 @@ export const DashboardPage: React.FC = () => {
                         <th className="py-2.5 px-3 text-right">Weight</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/50">
+                    <tbody className="divide-y divide-border-subtle">
                       {topHoldings.map((h, idx) => (
                         <tr
                           key={`${h.portfolioId}-${h.ticker}-${idx}`}
-                          className="hover:bg-slate-900/40 transition-colors"
+                          className="hover:bg-surface-secondary/40 transition-colors"
                         >
-                          <td className="py-2.5 px-3 font-semibold text-white">
+                          <td className="py-2.5 px-3 font-semibold text-text-primary">
                             <div className="flex items-center gap-2">
                               <span>{h.ticker}</span>
-                              <span className="text-[10px] text-slate-400 font-normal truncate max-w-[100px]">
+                              <span className="text-[10px] text-text-muted font-normal truncate max-w-[100px]">
                                 ({h.portfolioName})
                               </span>
                             </div>
@@ -474,16 +474,16 @@ export const DashboardPage: React.FC = () => {
                               {h.market}
                             </Badge>
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                          <td className="py-2.5 px-3 text-right font-mono text-text-secondary">
                             {h.parsedQty.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                          <td className="py-2.5 px-3 text-right font-mono text-text-secondary">
                             {formatCurrency(h.parsedAvg, h.market === 'US' ? 'USD' : 'INR')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-white">
+                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-text-primary">
                             {formatCurrency(h.investedValue, 'INR')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-cyan-400 font-semibold">
+                          <td className="py-2.5 px-3 text-right font-mono text-accent-primary font-semibold">
                             {formatPercent(h.allocationPercentage, false)}
                           </td>
                         </tr>
@@ -500,18 +500,18 @@ export const DashboardPage: React.FC = () => {
             {/* Action 1: Research */}
             <div
               onClick={() => navigate('/app/research')}
-              className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-cyan-500/50 hover:bg-slate-900 transition-all cursor-pointer group"
+              className="p-4 rounded-xl bg-surface border border-border-theme hover:border-accent-primary/50 hover:bg-surface-secondary/50 transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-cyan-950/60 border border-cyan-800/40 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary group-hover:scale-110 transition-transform">
                   <BrainCircuit className="w-4 h-4" />
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-3.5 h-3.5 text-text-muted group-hover:text-accent-primary group-hover:translate-x-0.5 transition-all" />
               </div>
-              <h4 className="text-xs font-semibold text-slate-200 group-hover:text-cyan-400 transition-colors">
+              <h4 className="text-xs font-semibold text-text-primary group-hover:text-accent-primary transition-colors">
                 AI Research
               </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-text-muted mt-0.5 line-clamp-1">
                 Multi-agent synthesis
               </p>
             </div>
@@ -519,18 +519,18 @@ export const DashboardPage: React.FC = () => {
             {/* Action 2: Portfolio */}
             <div
               onClick={() => navigate('/app/portfolio')}
-              className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-900 transition-all cursor-pointer group"
+              className="p-4 rounded-xl bg-surface border border-border-theme hover:border-accent-primary/50 hover:bg-surface-secondary/50 transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary group-hover:scale-110 transition-transform">
                   <PieChart className="w-4 h-4" />
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-3.5 h-3.5 text-text-muted group-hover:text-accent-primary group-hover:translate-x-0.5 transition-all" />
               </div>
-              <h4 className="text-xs font-semibold text-slate-200 group-hover:text-indigo-400 transition-colors">
+              <h4 className="text-xs font-semibold text-text-primary group-hover:text-accent-primary transition-colors">
                 Portfolios
               </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-text-muted mt-0.5 line-clamp-1">
                 Holdings & weights
               </p>
             </div>
@@ -538,18 +538,18 @@ export const DashboardPage: React.FC = () => {
             {/* Action 3: Risk */}
             <div
               onClick={() => navigate('/app/risk')}
-              className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-amber-500/50 hover:bg-slate-900 transition-all cursor-pointer group"
+              className="p-4 rounded-xl bg-surface border border-border-theme hover:border-accent-primary/50 hover:bg-surface-secondary/50 transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-amber-950/60 border border-amber-800/40 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-status-warning-soft border border-status-warning/20 flex items-center justify-center text-status-warning group-hover:scale-110 transition-transform">
                   <ShieldAlert className="w-4 h-4" />
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-3.5 h-3.5 text-text-muted group-hover:text-status-warning group-hover:translate-x-0.5 transition-all" />
               </div>
-              <h4 className="text-xs font-semibold text-slate-200 group-hover:text-amber-400 transition-colors">
+              <h4 className="text-xs font-semibold text-text-primary group-hover:text-status-warning transition-colors">
                 Risk Engine
               </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-text-muted mt-0.5 line-clamp-1">
                 Sharpe, VaR & CVaR
               </p>
             </div>
@@ -557,18 +557,18 @@ export const DashboardPage: React.FC = () => {
             {/* Action 4: Backtest */}
             <div
               onClick={() => navigate('/app/backtest')}
-              className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-900 transition-all cursor-pointer group"
+              className="p-4 rounded-xl bg-surface border border-border-theme hover:border-accent-primary/50 hover:bg-surface-secondary/50 transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary group-hover:scale-110 transition-transform">
                   <GitFork className="w-4 h-4" />
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-3.5 h-3.5 text-text-muted group-hover:text-accent-primary group-hover:translate-x-0.5 transition-all" />
               </div>
-              <h4 className="text-xs font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors">
+              <h4 className="text-xs font-semibold text-text-primary group-hover:text-accent-primary transition-colors">
                 Backtesting
               </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-text-muted mt-0.5 line-clamp-1">
                 Walk-forward evaluation
               </p>
             </div>
@@ -586,15 +586,15 @@ export const DashboardPage: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate('/app/research/history')}
-                className="text-xs text-cyan-400 hover:text-cyan-300"
+                className="text-xs text-accent-primary hover:text-accent-hover font-medium"
               >
                 View History
               </Button>
             }
           >
             {researchError ? (
-              <div className="p-3 bg-rose-950/40 border border-rose-800 rounded-lg flex items-start gap-2 text-xs text-rose-300">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="p-3 bg-status-danger-soft border border-status-danger/30 rounded-lg flex items-start gap-2 text-xs text-status-danger">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>{researchError}</div>
               </div>
             ) : isLoading ? (
@@ -616,7 +616,7 @@ export const DashboardPage: React.FC = () => {
                   <div
                     key={session.id}
                     onClick={() => navigate(`/app/research/${session.id}`)}
-                    className="p-3 rounded-lg bg-slate-950/50 border border-slate-800/80 hover:border-slate-700 transition-colors cursor-pointer group"
+                    className="p-3 rounded-lg bg-surface-secondary/50 border border-border-subtle hover:border-accent-primary/40 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-1.5 min-w-0">
@@ -630,7 +630,7 @@ export const DashboardPage: React.FC = () => {
                             {session.market}
                           </Badge>
                         )}
-                        <span className="text-xs font-semibold text-slate-200 truncate group-hover:text-cyan-400 transition-colors">
+                        <span className="text-xs font-semibold text-text-primary truncate group-hover:text-accent-primary transition-colors">
                           {session.user_message || session.title || 'Research Session'}
                         </span>
                       </div>
@@ -642,7 +642,7 @@ export const DashboardPage: React.FC = () => {
                         {session.status}
                       </Badge>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
                       <span className="font-mono">{session.route || 'synthesis'}</span>
                       <span>{formatDate(session.created_at, { format: 'relative' })}</span>
                     </div>
@@ -661,15 +661,15 @@ export const DashboardPage: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate('/app/documents')}
-                className="text-xs text-cyan-400 hover:text-cyan-300"
+                className="text-xs text-accent-primary hover:text-accent-hover font-medium"
               >
                 Corpus Library
               </Button>
             }
           >
             {documentsError ? (
-              <div className="p-3 bg-rose-950/40 border border-rose-800 rounded-lg flex items-start gap-2 text-xs text-rose-300">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="p-3 bg-status-danger-soft border border-status-danger/30 rounded-lg flex items-start gap-2 text-xs text-status-danger">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>{documentsError}</div>
               </div>
             ) : isLoading ? (
@@ -691,21 +691,21 @@ export const DashboardPage: React.FC = () => {
                   <div
                     key={doc.id}
                     onClick={() => navigate('/app/documents')}
-                    className="p-3 rounded-lg bg-slate-950/50 border border-slate-800/80 hover:border-slate-700 transition-colors cursor-pointer group"
+                    className="p-3 rounded-lg bg-surface-secondary/50 border border-border-subtle hover:border-accent-primary/40 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span className="text-xs font-semibold text-slate-200 truncate group-hover:text-cyan-400 transition-colors">
+                        <FileText className="w-3.5 h-3.5 text-accent-primary shrink-0" />
+                        <span className="text-xs font-semibold text-text-primary truncate group-hover:text-accent-primary transition-colors">
                           {doc.filename}
                         </span>
                       </div>
                       {getDocStatusBadge(doc.ingestion_status)}
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
                       <div className="flex items-center gap-1.5 font-mono">
                         {doc.ticker && <span>{doc.ticker} •</span>}
-                        <span className="text-indigo-400">{doc.chunk_count} chunks</span>
+                        <span className="text-text-secondary">{doc.chunk_count} chunks</span>
                       </div>
                       <span>{formatDate(doc.created_at, { format: 'relative' })}</span>
                     </div>

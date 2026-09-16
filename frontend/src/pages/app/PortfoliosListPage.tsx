@@ -133,18 +133,18 @@ export const PortfoliosListPage: React.FC = () => {
       />
 
       {/* Controls Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 border border-slate-800/80 p-3 sm:p-4 rounded-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface border border-border-theme p-3 sm:p-4 rounded-xl">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             placeholder="Search portfolios by name or mandate..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950/80 text-slate-200 placeholder:text-slate-500 text-xs rounded-lg border border-slate-700/80 pl-9 pr-3 py-2 focus:outline-none focus:border-cyan-500 transition-colors"
+            className="w-full bg-surface-secondary text-text-primary placeholder:text-text-muted text-xs rounded-lg border border-border-theme pl-9 pr-3 py-2 focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 transition-colors"
           />
         </div>
-        <div className="text-xs text-slate-400 font-mono">
+        <div className="text-xs text-text-muted font-mono">
           Showing {filteredPortfolios.length} of {portfolios.length} portfolios
         </div>
       </div>
@@ -162,13 +162,13 @@ export const PortfoliosListPage: React.FC = () => {
       {isLoading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div key={i} className="bg-surface border border-border-theme rounded-xl p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <LoadingSkeleton height="h-5" width="w-36" />
                 <LoadingSkeleton height="h-4" width="w-12" />
               </div>
               <LoadingSkeleton height="h-3" width="w-full" />
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800/60">
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border-subtle">
                 <LoadingSkeleton height="h-10" width="w-full" />
                 <LoadingSkeleton height="h-10" width="w-full" />
               </div>
@@ -191,8 +191,8 @@ export const PortfoliosListPage: React.FC = () => {
 
       {/* Filtered Empty State */}
       {!isLoading && !error && portfolios.length > 0 && filteredPortfolios.length === 0 && (
-        <div className="text-center py-12 bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">
-          <p className="text-sm text-slate-400">
+        <div className="text-center py-12 bg-surface-secondary/40 border border-dashed border-border-theme rounded-xl">
+          <p className="text-sm text-text-muted">
             No portfolios match "{searchQuery}".
           </p>
         </div>
@@ -208,7 +208,7 @@ export const PortfoliosListPage: React.FC = () => {
             return (
               <div
                 key={p.id}
-                className="bg-slate-900/70 hover:bg-slate-900 border border-slate-800/90 hover:border-slate-700/80 rounded-xl p-5 transition-all shadow-sm flex flex-col justify-between group"
+                className="bg-surface hover:bg-surface-secondary/30 border border-border-theme hover:border-accent-primary/40 rounded-xl p-5 transition-all shadow-card flex flex-col justify-between group"
               >
                 {/* Header */}
                 <div>
@@ -216,11 +216,11 @@ export const PortfoliosListPage: React.FC = () => {
                     <div className="min-w-0">
                       <h3
                         onClick={() => navigate(`/app/portfolio/${p.id}`)}
-                        className="text-base font-semibold text-slate-100 group-hover:text-cyan-400 transition-colors cursor-pointer truncate"
+                        className="text-base font-semibold text-text-primary group-hover:text-accent-primary transition-colors cursor-pointer truncate"
                       >
                         {p.name}
                       </h3>
-                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                      <p className="text-[11px] text-text-muted font-mono mt-0.5">
                         ID: {p.id.slice(0, 8)}...
                       </p>
                     </div>
@@ -234,7 +234,7 @@ export const PortfoliosListPage: React.FC = () => {
                           e.stopPropagation();
                           setDeletingPortfolio(p);
                         }}
-                        className="p-1 text-slate-400 hover:text-rose-400 rounded-md hover:bg-rose-500/10 transition-colors"
+                        className="p-1 text-text-muted hover:text-status-negative rounded-md hover:bg-status-negative-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-negative cursor-pointer"
                         title="Delete portfolio"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -243,21 +243,21 @@ export const PortfoliosListPage: React.FC = () => {
                   </div>
 
                   {/* Financial Metrics Strip */}
-                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-800/80">
+                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-border-subtle">
                     <div>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted block">
                         Invested Capital
                       </span>
-                      <span className="text-sm font-bold font-mono text-slate-100 mt-0.5 block">
+                      <span className="text-sm font-bold font-mono text-text-primary mt-0.5 block">
                         {investedVal !== null ? formatCurrency(investedVal, 'INR') : '—'}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted block">
                         Holdings
                       </span>
-                      <span className="text-sm font-mono text-slate-300 mt-0.5 block">
+                      <span className="text-sm font-mono text-text-secondary mt-0.5 block">
                         {count} {count === 1 ? 'position' : 'positions'}
                       </span>
                     </div>
@@ -265,9 +265,9 @@ export const PortfoliosListPage: React.FC = () => {
                 </div>
 
                 {/* Footer Actions */}
-                <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <Layers className="w-3.5 h-3.5 text-slate-400" />
+                <div className="mt-5 pt-4 border-t border-border-subtle flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                    <Layers className="w-3.5 h-3.5 text-text-muted" />
                     <span>{count} assets</span>
                   </div>
 

@@ -221,24 +221,24 @@ export const RiskMetricCards: React.FC<RiskMetricCardsProps> = ({ riskData, isLo
     switch (tone) {
       case 'positive':
         return {
-          text: 'text-emerald-400',
-          badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+          text: 'text-status-positive',
+          badge: 'bg-status-positive-soft text-status-positive border-status-positive/20',
         };
       case 'negative':
         return {
-          text: 'text-rose-400',
-          badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+          text: 'text-status-negative',
+          badge: 'bg-status-negative-soft text-status-negative border-status-negative/20',
         };
       case 'accent':
         return {
-          text: 'text-cyan-400',
-          badge: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+          text: 'text-accent-primary',
+          badge: 'bg-accent-soft text-accent-primary border-accent-primary/30',
         };
       case 'neutral':
       default:
         return {
-          text: 'text-slate-100',
-          badge: 'bg-slate-800 text-slate-300 border-slate-700',
+          text: 'text-text-primary',
+          badge: 'bg-surface-secondary text-text-secondary border-border-theme',
         };
     }
   };
@@ -249,14 +249,14 @@ export const RiskMetricCards: React.FC<RiskMetricCardsProps> = ({ riskData, isLo
         {Array.from({ length: 12 }).map((_, i) => (
           <div
             key={`risk-skeleton-${i}`}
-            className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 animate-pulse space-y-3"
+            className="p-4 rounded-xl bg-surface border border-border-theme animate-pulse space-y-3"
           >
             <div className="flex items-center justify-between">
-              <div className="h-4 w-28 bg-slate-800 rounded" />
-              <div className="h-6 w-6 bg-slate-800 rounded-full" />
+              <div className="h-4 w-28 bg-surface-secondary rounded" />
+              <div className="h-6 w-6 bg-surface-secondary rounded-full" />
             </div>
-            <div className="h-8 w-20 bg-slate-800 rounded" />
-            <div className="h-3 w-40 bg-slate-800/60 rounded" />
+            <div className="h-8 w-20 bg-surface-secondary rounded" />
+            <div className="h-3 w-40 bg-surface-secondary/60 rounded" />
           </div>
         ))}
       </div>
@@ -267,13 +267,13 @@ export const RiskMetricCards: React.FC<RiskMetricCardsProps> = ({ riskData, isLo
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+          <Shield className="w-4 h-4 text-accent-primary" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
             Historical Quantitative Risk Profile
           </h3>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+        <div className="flex items-center gap-1.5 text-[11px] font-mono text-text-muted bg-surface-secondary px-2.5 py-1 rounded-md border border-border-theme">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse" />
           Authoritative Backend Calculations
         </div>
       </div>
@@ -288,15 +288,15 @@ export const RiskMetricCards: React.FC<RiskMetricCardsProps> = ({ riskData, isLo
             <div
               key={metric.id}
               id={metric.id}
-              className="p-4 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700/80 transition-all flex flex-col justify-between group relative"
+              className="p-4 rounded-xl bg-surface border border-border-theme hover:border-accent-primary/40 transition-all flex flex-col justify-between group relative shadow-card"
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-xs font-medium text-slate-400 leading-tight">
+                  <span className="text-xs font-medium text-text-muted leading-tight">
                     {metric.label}
                   </span>
                   <div
-                    className="text-slate-500 hover:text-slate-300 transition-colors cursor-help shrink-0"
+                    className="text-text-muted hover:text-text-primary transition-colors cursor-help shrink-0"
                     title={metric.tooltip}
                   >
                     <HelpCircle className="w-3.5 h-3.5" />
@@ -310,11 +310,11 @@ export const RiskMetricCards: React.FC<RiskMetricCardsProps> = ({ riskData, isLo
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-800/60 mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 truncate max-w-[200px]" title={metric.description}>
+              <div className="pt-2 border-t border-border-theme mt-2 flex items-center justify-between">
+                <span className="text-[11px] text-text-muted truncate max-w-[200px]" title={metric.description}>
                   {metric.description}
                 </span>
-                <div className="p-1 rounded-md bg-slate-800/60 text-slate-400 shrink-0">
+                <div className="p-1 rounded-md bg-surface-secondary text-text-muted shrink-0">
                   <Icon className="w-3 h-3" />
                 </div>
               </div>

@@ -128,12 +128,12 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
       title={
         <div className="flex items-center justify-between gap-3 w-full">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-cyan-400 font-bold font-mono">
+            <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-primary/30 flex items-center justify-center text-accent-primary font-bold font-mono">
               <Building2 className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-white text-base">{companyName}</span>
+                <span className="font-bold text-text-primary text-base">{companyName}</span>
                 <Badge variant="info" size="sm" className="font-mono">
                   {company.ticker || ticker}
                 </Badge>
@@ -153,7 +153,7 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
 
           <button
             onClick={fetchCompany}
-            className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
             title="Refresh company data"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -167,19 +167,19 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
         {/* Key Metrics Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {/* Real-time Market Price */}
-          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mb-1">
-              <DollarSign className="w-3 h-3 text-cyan-400" />
+          <div className="p-3 rounded-lg bg-surface border border-border-theme">
+            <span className="text-[11px] text-text-muted font-mono flex items-center gap-1 mb-1">
+              <DollarSign className="w-3 h-3 text-accent-primary" />
               Latest Price
             </span>
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <p className="text-sm font-bold text-slate-100 font-mono">
+              <p className="text-sm font-bold text-text-primary font-mono">
                 {primaryPrice !== null ? formatCurrency(primaryPrice, currency) : '—'}
               </p>
               {percentChange !== null && (
                 <span
                   className={`text-[11px] font-mono flex items-center ${
-                    percentChange >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    percentChange >= 0 ? 'text-status-positive' : 'text-status-negative'
                   }`}
                 >
                   {percentChange >= 0 ? (
@@ -194,34 +194,34 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
           </div>
 
           {/* Sector */}
-          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mb-1">
-              <Layers className="w-3 h-3 text-indigo-400" />
+          <div className="p-3 rounded-lg bg-surface border border-border-theme">
+            <span className="text-[11px] text-text-muted font-mono flex items-center gap-1 mb-1">
+              <Layers className="w-3 h-3 text-status-info" />
               Sector
             </span>
-            <p className="text-xs font-semibold text-slate-200 truncate" title={company.sector || '—'}>
+            <p className="text-xs font-semibold text-text-primary truncate" title={company.sector || '—'}>
               {company.sector || '—'}
             </p>
           </div>
 
           {/* Industry */}
-          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mb-1">
-              <Briefcase className="w-3 h-3 text-emerald-400" />
+          <div className="p-3 rounded-lg bg-surface border border-border-theme">
+            <span className="text-[11px] text-text-muted font-mono flex items-center gap-1 mb-1">
+              <Briefcase className="w-3 h-3 text-accent-primary" />
               Industry
             </span>
-            <p className="text-xs font-semibold text-slate-200 truncate" title={company.industry || '—'}>
+            <p className="text-xs font-semibold text-text-primary truncate" title={company.industry || '—'}>
               {company.industry || '—'}
             </p>
           </div>
 
           {/* Range / Day Trading Span */}
-          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80">
-            <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mb-1">
-              <Globe className="w-3 h-3 text-amber-400" />
+          <div className="p-3 rounded-lg bg-surface border border-border-theme">
+            <span className="text-[11px] text-text-muted font-mono flex items-center gap-1 mb-1">
+              <Globe className="w-3 h-3 text-status-warning" />
               {isArrayQuotes ? '52-Week Range' : 'Day Range'}
             </span>
-            <p className="text-xs font-semibold text-slate-200 font-mono truncate">
+            <p className="text-xs font-semibold text-text-primary font-mono truncate">
               {isArrayQuotes && indiaQuotes[0]
                 ? `${indiaQuotes[0].year_low !== null ? formatCurrency(indiaQuotes[0].year_low, currency, { compact: true }) : '—'} - ${indiaQuotes[0].year_high !== null ? formatCurrency(indiaQuotes[0].year_high, currency, { compact: true }) : '—'}`
                 : usQuote
@@ -233,18 +233,18 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
 
         {/* Multi-Exchange Indian Quotes Strip if applicable */}
         {isArrayQuotes && indiaQuotes.length > 1 && (
-          <div className="p-2.5 rounded-lg bg-slate-950/50 border border-slate-800/60 flex items-center gap-4 flex-wrap text-xs">
-            <span className="text-[11px] text-slate-400 font-mono">Exchange Quotes:</span>
+          <div className="p-2.5 rounded-lg bg-surface-secondary/50 border border-border-theme flex items-center gap-4 flex-wrap text-xs">
+            <span className="text-[11px] text-text-muted font-mono">Exchange Quotes:</span>
             {indiaQuotes.map((q, idx) => (
               <div key={idx} className="flex items-center gap-1.5 font-mono text-[11px]">
                 <Badge variant="neutral" size="sm">
                   {q.exchange || 'EXCH'}
                 </Badge>
-                <span className="text-slate-200 font-bold">
+                <span className="text-text-primary font-bold">
                   {q.price !== null ? formatCurrency(q.price, currency) : '—'}
                 </span>
                 {q.percent_change !== null && (
-                  <span className={q.percent_change >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                  <span className={q.percent_change >= 0 ? 'text-status-positive' : 'text-status-negative'}>
                     ({q.percent_change >= 0 ? `+${q.percent_change}%` : `${q.percent_change}%`})
                   </span>
                 )}
@@ -255,20 +255,20 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
 
         {/* US Market Day Detail Strip if applicable */}
         {usQuote && (usQuote.open !== null || usQuote.previous_close !== null) && (
-          <div className="p-2.5 rounded-lg bg-slate-950/50 border border-slate-800/60 flex items-center gap-4 flex-wrap text-xs font-mono">
+          <div className="p-2.5 rounded-lg bg-surface-secondary/50 border border-border-theme flex items-center gap-4 flex-wrap text-xs font-mono">
             {usQuote.open !== null && (
-              <span className="text-slate-400 text-[11px]">
-                Open: <span className="text-slate-200 font-semibold">{formatCurrency(usQuote.open, currency)}</span>
+              <span className="text-text-muted text-[11px]">
+                Open: <span className="text-text-primary font-semibold">{formatCurrency(usQuote.open, currency)}</span>
               </span>
             )}
             {usQuote.previous_close !== null && (
-              <span className="text-slate-400 text-[11px]">
-                Prev Close: <span className="text-slate-200 font-semibold">{formatCurrency(usQuote.previous_close, currency)}</span>
+              <span className="text-text-muted text-[11px]">
+                Prev Close: <span className="text-text-primary font-semibold">{formatCurrency(usQuote.previous_close, currency)}</span>
               </span>
             )}
             {usQuote.change !== null && (
-              <span className="text-slate-400 text-[11px]">
-                Day Change: <span className={`font-semibold ${usQuote.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{usQuote.change >= 0 ? `+${usQuote.change}` : usQuote.change}</span>
+              <span className="text-text-muted text-[11px]">
+                Day Change: <span className={`font-semibold ${usQuote.change >= 0 ? 'text-status-positive' : 'text-status-negative'}`}>{usQuote.change >= 0 ? `+${usQuote.change}` : usQuote.change}</span>
               </span>
             )}
           </div>
@@ -276,42 +276,42 @@ export const CompanyResearchView: React.FC<CompanyResearchViewProps> = ({
 
         {/* Business Description */}
         <div>
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono block mb-1.5">
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-mono block mb-1.5">
             Business Overview
           </span>
-          <p className="text-slate-300 leading-relaxed bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/60 font-sans text-xs sm:text-[13px]">
+          <p className="text-text-secondary leading-relaxed bg-surface-secondary/50 p-3.5 rounded-xl border border-border-theme font-sans text-xs sm:text-[13px]">
             {description}
           </p>
         </div>
 
         {/* Identifiers & Provenance Footer */}
-        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-400 font-mono">
+        <div className="pt-2 border-t border-border-theme flex flex-wrap items-center justify-between gap-3 text-[11px] text-text-muted font-mono">
           <div className="flex items-center gap-4 flex-wrap">
             {company.isin && (
               <span className="flex items-center gap-1">
-                <Hash className="w-3 h-3 text-cyan-400/80" />
-                ISIN: <span className="text-slate-200">{company.isin}</span>
+                <Hash className="w-3 h-3 text-accent-primary" />
+                ISIN: <span className="text-text-primary">{company.isin}</span>
               </span>
             )}
             {company.nse_symbol && (
               <span className="flex items-center gap-1">
-                NSE: <span className="text-slate-200">{company.nse_symbol}</span>
+                NSE: <span className="text-text-primary">{company.nse_symbol}</span>
               </span>
             )}
             {company.bse_code && (
               <span className="flex items-center gap-1">
-                BSE: <span className="text-slate-200">{company.bse_code}</span>
+                BSE: <span className="text-text-primary">{company.bse_code}</span>
               </span>
             )}
             {company.exchange && !company.nse_symbol && !company.bse_code && (
               <span className="flex items-center gap-1">
-                Exchange: <span className="text-slate-200">{company.exchange}</span>
+                Exchange: <span className="text-text-primary">{company.exchange}</span>
               </span>
             )}
           </div>
 
-          <div className="text-[10px] text-slate-400">
-            Source: <span className="text-slate-400 font-mono">Django REST Research API</span>
+          <div className="text-[10px] text-text-muted">
+            Source: <span className="text-text-muted font-mono">Django REST Research API</span>
           </div>
         </div>
       </div>

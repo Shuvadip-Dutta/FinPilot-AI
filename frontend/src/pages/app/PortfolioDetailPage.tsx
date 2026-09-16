@@ -227,8 +227,8 @@ export const PortfolioDetailPage: React.FC = () => {
               variant="secondary"
               size="sm"
               onClick={() => setIsAiAnalysisOpen(true)}
-              className="border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
-              leftIcon={<Bot className="w-4 h-4 text-cyan-400" />}
+              className="border-accent-primary/30 text-accent-primary hover:bg-accent-soft"
+              leftIcon={<Bot className="w-4 h-4 text-accent-primary" />}
             >
               AI Audit
             </Button>
@@ -238,8 +238,8 @@ export const PortfolioDetailPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => navigate(`/app/portfolio/${portfolioId}/risk`)}
-              className="border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
-              leftIcon={<ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />}
+              className="border-border-theme text-text-primary hover:bg-surface-secondary"
+              leftIcon={<ShieldAlert className="w-3.5 h-3.5 text-status-warning" />}
             >
               Risk Profile
             </Button>

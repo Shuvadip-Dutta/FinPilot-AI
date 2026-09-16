@@ -25,7 +25,7 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
 }) => {
   if (!comparisons || comparisons.length === 0) {
     return (
-      <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-xl text-slate-500 text-xs">
+      <div className="p-8 text-center bg-surface-secondary/40 border border-border-theme rounded-xl text-text-muted text-xs">
         No comparative allocation records available. Run the optimization algorithm to generate weights.
       </div>
     );
@@ -35,7 +35,7 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
     const isZero = Math.abs(delta) < 0.25; // negligible threshold
     if (isZero) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-secondary text-text-secondary border border-border-theme">
           <Minus className="w-2.5 h-2.5" /> Hold
         </span>
       );
@@ -45,7 +45,7 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
       const cur = typeof item.current_weight === 'string' ? parseFloat(item.current_weight) : item.current_weight;
       const isNew = !cur || cur <= 0.01;
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-positive-soft text-status-positive border border-status-positive/20">
           <ArrowUpRight className="w-2.5 h-2.5" />
           {isNew ? 'New Entry' : `Overweight (+${delta.toFixed(1)}%)`}
         </span>
@@ -55,7 +55,7 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
     const tgt = typeof item.target_weight === 'string' ? parseFloat(item.target_weight) : item.target_weight;
     const isExit = !tgt || tgt <= 0.01;
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-negative-soft text-status-negative border border-status-negative/20">
         <ArrowDownRight className="w-2.5 h-2.5" />
         {isExit ? 'Full Exit' : `Underweight (${delta.toFixed(1)}%)`}
       </span>
@@ -66,27 +66,27 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
     <div className={`space-y-3 ${className}`}>
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary">
             Target Weight Rebalance Schedule
           </h4>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className="text-[11px] text-text-muted mt-0.5">
             Theoretical target weight adjustments derived mathematically under optimizer bounds
           </p>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+      <div className="overflow-x-auto rounded-xl border border-border-theme bg-surface shadow-card">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <tr className="border-b border-border-theme bg-surface-secondary/50 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               <th className="py-3 px-4">Asset / Ticker</th>
               <th className="py-3 px-4 text-right">
                 Current Weight
-                <span className="block text-[9px] font-normal text-cyan-400">"What I own"</span>
+                <span className="block text-[9px] font-normal text-accent-primary">"What I own"</span>
               </th>
               <th className="py-3 px-4 text-right">
                 Target Weight
-                <span className="block text-[9px] font-normal text-emerald-400">"Optimizer"</span>
+                <span className="block text-[9px] font-normal text-status-positive">"Optimizer"</span>
               </th>
               <th className="py-3 px-4 text-right">Weight Delta</th>
               {portfolioValue ? (
@@ -95,7 +95,7 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
               <th className="py-3 px-4 text-center">Mathematical Direction</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60 text-slate-300">
+          <tbody className="divide-y divide-border-theme text-text-secondary">
             {comparisons.map((item, idx) => {
               const curWeight =
                 typeof item.current_weight === 'string'
@@ -120,24 +120,24 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
               return (
                 <tr
                   key={`asset-comp-${item.ticker || idx}`}
-                  className="hover:bg-slate-800/40 transition-colors"
+                  className="hover:bg-surface-secondary/40 transition-colors"
                 >
-                  <td className="py-3 px-4 font-mono font-bold text-slate-100">
+                  <td className="py-3 px-4 font-mono font-bold text-text-primary">
                     <div className="flex items-center gap-2">
-                      <span className="text-cyan-400">{item.ticker || item.symbol}</span>
+                      <span className="text-accent-primary">{item.ticker || item.symbol}</span>
                       {item.name && (
-                        <span className="text-[11px] font-sans font-normal text-slate-400 truncate max-w-[140px]">
+                        <span className="text-[11px] font-sans font-normal text-text-muted truncate max-w-[140px]">
                           {item.name}
                         </span>
                       )}
                     </div>
                   </td>
 
-                  <td className="py-3 px-4 text-right font-mono font-semibold text-slate-200">
+                  <td className="py-3 px-4 text-right font-mono font-semibold text-text-primary">
                     {formatPercent(curWeight, false)}
                   </td>
 
-                  <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
+                  <td className="py-3 px-4 text-right font-mono font-bold text-status-positive">
                     {formatPercent(tgtWeight, false)}
                   </td>
 
@@ -145,10 +145,10 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
                     <span
                       className={
                         delta > 0
-                          ? 'text-emerald-400'
+                          ? 'text-status-positive'
                           : delta < 0
-                          ? 'text-rose-400'
-                          : 'text-slate-400'
+                          ? 'text-status-negative'
+                          : 'text-text-muted'
                       }
                     >
                       {delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`}
@@ -156,7 +156,7 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
                   </td>
 
                   {portfolioValue ? (
-                    <td className="py-3 px-4 text-right font-mono text-slate-300">
+                    <td className="py-3 px-4 text-right font-mono text-text-primary">
                       {targetCapValue !== null ? formatCurrency(targetCapValue, currency) : '—'}
                     </td>
                   ) : null}

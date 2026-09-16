@@ -45,7 +45,7 @@ export const Modal: React.FC<ModalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity animate-in fade-in"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -53,20 +53,20 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Modal Container */}
       <div className="relative z-10 min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
         <div
-          className={`w-full ${maxWidthClasses[maxWidth]} bg-slate-900 border border-slate-800 rounded-xl shadow-2xl text-left overflow-hidden transition-all transform animate-in fade-in zoom-in-95`}
+          className={`w-full ${maxWidthClasses[maxWidth]} bg-surface border border-border-theme rounded-xl shadow-card-hover text-left overflow-hidden transition-all transform animate-in fade-in zoom-in-95`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           {(title || subtitle) && (
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/80 bg-slate-950/40">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-surface-secondary/40">
               <div>
-                {title && <h3 className="text-base font-semibold text-slate-100">{title}</h3>}
-                {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+                {title && <h3 className="text-base font-semibold text-text-primary">{title}</h3>}
+                {subtitle && <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800/80 transition-colors"
+                className="text-text-muted hover:text-text-primary p-1.5 rounded-lg hover:bg-surface-secondary transition-colors"
                 aria-label="Close dialog"
               >
                 <X className="w-4 h-4" />
@@ -75,11 +75,11 @@ export const Modal: React.FC<ModalProps> = ({
           )}
 
           {/* Body */}
-          <div className="px-6 py-5 max-h-[75vh] overflow-y-auto">{children}</div>
+          <div className="px-6 py-5 max-h-[75vh] overflow-y-auto text-text-primary">{children}</div>
 
           {/* Footer */}
           {footer && (
-            <div className="px-6 py-3.5 border-t border-slate-800/80 bg-slate-950/40 flex items-center justify-end gap-2.5">
+            <div className="px-6 py-3.5 border-t border-border-subtle bg-surface-secondary/40 flex items-center justify-end gap-2.5">
               {footer}
             </div>
           )}

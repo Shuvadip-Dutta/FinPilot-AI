@@ -102,39 +102,39 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f17] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-app flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Subtle background ambient glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-accent-soft/40 rounded-full blur-3xl pointer-events-none" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-3">
-            <Sparkles className="w-6 h-6 text-slate-950 stroke-[2.5]" />
+          <div className="w-12 h-12 rounded-2xl bg-accent-primary flex items-center justify-center shadow-xs mb-3">
+            <Sparkles className="w-6 h-6 text-accent-text stroke-[2.5]" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-            FINPILOT <span className="text-cyan-400 font-mono text-xs font-semibold px-2 py-0.5 rounded-sm bg-cyan-950/80 border border-cyan-800/50">AI</span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-text-primary flex items-center gap-2">
+            FINPILOT <span className="text-accent-primary font-mono text-xs font-semibold px-2 py-0.5 rounded-sm bg-accent-soft border border-accent-primary/30">AI</span>
           </h1>
-          <p className="mt-1 text-xs text-slate-400 font-mono">
+          <p className="mt-1 text-xs text-text-muted font-mono">
             Create an Analyst Account
           </p>
         </div>
 
         {/* Register Card */}
-        <div className="mt-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
+        <div className="mt-8 bg-surface border border-border-theme rounded-2xl p-6 sm:p-8 shadow-card">
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-slate-100">Register New Account</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h2 className="text-lg font-semibold text-text-primary">Register New Account</h2>
+            <p className="text-xs text-text-muted mt-0.5">
               Access the LangGraph research workflows and quantitative portfolio engines.
             </p>
           </div>
 
           {error && (
             <div
-              className="mb-5 p-3 rounded-lg bg-rose-950/40 border border-rose-800/60 flex items-start gap-2.5 text-xs text-rose-300 animate-in fade-in"
+              className="mb-5 p-3 rounded-lg bg-status-negative-soft border border-status-negative/30 flex items-start gap-2.5 text-xs text-status-negative animate-in fade-in"
               role="alert"
             >
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 text-status-negative shrink-0 mt-0.5" />
               <div className="flex-1 leading-relaxed">{error}</div>
             </div>
           )}
@@ -181,7 +181,7 @@ export const RegisterPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="p-1 text-slate-400 hover:text-slate-200 focus:outline-none cursor-pointer"
+                  className="p-1 text-text-muted hover:text-text-primary focus:outline-none cursor-pointer"
                   tabIndex={-1}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
@@ -217,21 +217,21 @@ export const RegisterPage: React.FC = () => {
             </div>
           </form>
 
-          <div className="mt-5 pt-4 border-t border-slate-800/80 text-center">
+          <div className="mt-5 pt-4 border-t border-border-subtle text-center">
             <Link
               to="/login"
-              className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="text-xs text-text-muted hover:text-text-primary transition-colors"
             >
-              Already have an account? <span className="text-cyan-400 font-medium">Sign In</span>
+              Already have an account? <span className="text-accent-primary font-medium">Sign In</span>
             </Link>
           </div>
         </div>
 
         {/* Backend Target Indicator */}
-        <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-mono">
-          <Server className="w-3.5 h-3.5 text-slate-400" />
+        <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-text-muted font-mono">
+          <Server className="w-3.5 h-3.5 text-text-muted" />
           <span>Django Auth Endpoint:</span>
-          <span className="text-slate-400 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+          <span className="text-text-secondary bg-surface-secondary px-2 py-0.5 rounded border border-border-theme">
             {API_BASE_URL}auth/register/
           </span>
         </div>

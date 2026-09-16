@@ -237,12 +237,12 @@ export const ResearchSessionDetailPage: React.FC = () => {
               size="sm"
               leftIcon={<ArrowLeft className="w-3.5 h-3.5" />}
               onClick={() => navigate('/app/research/history')}
-              className="text-slate-400 hover:text-white px-2 py-1 h-auto"
+              className="text-text-muted hover:text-text-primary px-2 py-1 h-auto"
             >
               History
             </Button>
-            <span className="text-slate-600">/</span>
-            <span className="font-mono text-cyan-400 text-xs font-semibold">
+            <span className="text-border-theme">/</span>
+            <span className="font-mono text-accent-primary text-xs font-semibold">
               Session #{shortId}
             </span>
             {ticker && (
@@ -252,30 +252,30 @@ export const ResearchSessionDetailPage: React.FC = () => {
             )}
             {getStatusBadge(session.status)}
             {session.route && (
-              <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+              <span className="text-[10px] font-mono text-text-muted bg-surface-secondary px-2 py-0.5 rounded border border-border-subtle">
                 Route: {session.route}
               </span>
             )}
           </div>
 
-          <h1 className="text-xl font-bold text-white tracking-tight">
+          <h1 className="text-xl font-bold text-text-primary tracking-tight">
             {session.user_message || session.title || 'Research Session Detail'}
           </h1>
 
-          <div className="flex items-center gap-4 text-xs text-slate-400 font-mono flex-wrap">
+          <div className="flex items-center gap-4 text-xs text-text-muted font-mono flex-wrap">
             <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <Clock className="w-3.5 h-3.5 text-text-muted" />
               Created {formatDate(session.created_at, { includeTime: true })}
             </span>
             {session.latency_ms && (
-              <span className="flex items-center gap-1 text-slate-400">
-                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="flex items-center gap-1 text-text-muted">
+                <Activity className="w-3.5 h-3.5 text-accent-primary" />
                 Latency: {session.latency_ms > 1000 ? `${(session.latency_ms / 1000).toFixed(2)}s` : `${Math.round(session.latency_ms)}ms`}
               </span>
             )}
             {session.evidence_items && (
-              <span className="flex items-center gap-1 text-slate-400">
-                <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="flex items-center gap-1 text-text-muted">
+                <BookOpen className="w-3.5 h-3.5 text-status-info" />
                 {session.evidence_items.length} specialist {session.evidence_items.length === 1 ? 'agent' : 'agents'}
               </span>
             )}
@@ -303,13 +303,13 @@ export const ResearchSessionDetailPage: React.FC = () => {
       </div>
 
       {/* View Switcher Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3 text-xs font-mono">
+      <div className="flex items-center gap-2 border-b border-border-subtle pb-3 text-xs font-mono">
         <button
           onClick={() => setActiveView('conversation')}
           className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
             activeView === 'conversation'
-              ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 font-semibold'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-accent-soft text-accent-primary border border-accent-primary/30 font-semibold'
+              : 'text-text-muted hover:text-text-primary hover:bg-surface-secondary/60'
           }`}
         >
           <MessageSquare className="w-3.5 h-3.5" />
@@ -320,8 +320,8 @@ export const ResearchSessionDetailPage: React.FC = () => {
           onClick={() => setActiveView('evidence')}
           className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
             activeView === 'evidence'
-              ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 font-semibold'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-accent-soft text-accent-primary border border-accent-primary/30 font-semibold'
+              : 'text-text-muted hover:text-text-primary hover:bg-surface-secondary/60'
           }`}
         >
           <BookOpen className="w-3.5 h-3.5" />
@@ -332,8 +332,8 @@ export const ResearchSessionDetailPage: React.FC = () => {
           onClick={() => setActiveView('provenance')}
           className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
             activeView === 'provenance'
-              ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 font-semibold'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-accent-soft text-accent-primary border border-accent-primary/30 font-semibold'
+              : 'text-text-muted hover:text-text-primary hover:bg-surface-secondary/60'
           }`}
         >
           <GitCommit className="w-3.5 h-3.5" />
@@ -359,11 +359,11 @@ export const ResearchSessionDetailPage: React.FC = () => {
           <div ref={messagesEndRef} />
 
           {submitError && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg flex items-center justify-between">
+            <div className="p-3 bg-status-danger-soft border border-status-danger/30 text-status-danger text-xs rounded-lg flex items-center justify-between">
               <span>{submitError}</span>
               <button
                 onClick={() => setSubmitError(null)}
-                className="text-rose-400 hover:text-rose-300 font-semibold ml-3"
+                className="text-status-danger hover:underline font-semibold ml-3"
               >
                 Dismiss
               </button>
@@ -390,7 +390,7 @@ export const ResearchSessionDetailPage: React.FC = () => {
             <Card
               title={
                 <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-cyan-400" />
+                  <BookOpen className="w-4 h-4 text-accent-primary" />
                   <span>Specialist Agent Evidence ({session.evidence_items.length})</span>
                 </div>
               }
@@ -400,20 +400,20 @@ export const ResearchSessionDetailPage: React.FC = () => {
                 {session.evidence_items.map((item) => (
                   <div
                     key={item.id}
-                    className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-3"
+                    className="p-4 rounded-xl bg-surface-secondary/50 border border-border-subtle text-xs space-y-3"
                   >
-                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-800/80">
+                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border-subtle">
                       <div className="flex items-center gap-2">
                         <Badge variant="info" size="sm" className="font-mono uppercase">
                           {item.agent_name}
                         </Badge>
                         {item.tools_used && item.tools_used.length > 0 && (
                           <div className="flex items-center gap-1 flex-wrap">
-                            <span className="text-slate-500 text-[11px]">Tools:</span>
+                            <span className="text-text-muted text-[11px]">Tools:</span>
                             {item.tools_used.map((t) => (
                               <span
                                 key={t}
-                                className="font-mono text-[10px] bg-slate-900 border border-slate-800 text-cyan-400 px-1.5 py-0.5 rounded"
+                                className="font-mono text-[10px] bg-surface border border-border-subtle text-accent-primary px-1.5 py-0.5 rounded"
                               >
                                 {t}
                               </span>
@@ -421,13 +421,13 @@ export const ResearchSessionDetailPage: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <span className="text-[10px] font-mono text-slate-500">
+                      <span className="text-[10px] font-mono text-text-muted">
                         {formatDate(item.created_at, { includeTime: true })}
                       </span>
                     </div>
 
                     {item.response && (
-                      <div className="text-slate-300 leading-relaxed whitespace-pre-line font-sans text-xs">
+                      <div className="text-text-secondary leading-relaxed whitespace-pre-line font-sans text-xs">
                         {item.response}
                       </div>
                     )}
@@ -436,7 +436,7 @@ export const ResearchSessionDetailPage: React.FC = () => {
                       <div className="pt-2">
                         <button
                           onClick={() => toggleExpandAgent(item.id)}
-                          className="flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 text-[11px] font-mono text-accent-primary hover:text-accent-hover transition-colors cursor-pointer"
                         >
                           <Wrench className="w-3 h-3" />
                           <span>
@@ -450,7 +450,7 @@ export const ResearchSessionDetailPage: React.FC = () => {
                         </button>
 
                         {expandedAgentData[item.id] && (
-                          <pre className="mt-2 p-3 rounded-lg bg-slate-900 border border-slate-800 font-mono text-[11px] text-slate-300 overflow-x-auto max-h-72">
+                          <pre className="mt-2 p-3 rounded-lg bg-surface-secondary border border-border-subtle font-mono text-[11px] text-text-secondary overflow-x-auto max-h-72">
                             {JSON.stringify(item.structured_data, null, 2)}
                           </pre>
                         )}
@@ -476,24 +476,24 @@ export const ResearchSessionDetailPage: React.FC = () => {
           <Card
             title={
               <div className="flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-indigo-400" />
+                <Cpu className="w-4 h-4 text-status-info" />
                 <span>Session Thread Metadata</span>
               </div>
             }
             subtitle="Underlying database persistence identifiers"
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block text-[10px] uppercase">Session ID</span>
-                <span className="text-slate-200 break-all">{session.id}</span>
+              <div className="p-3 rounded-lg bg-surface-secondary/60 border border-border-subtle">
+                <span className="text-text-muted block text-[10px] uppercase">Session ID</span>
+                <span className="text-text-primary break-all">{session.id}</span>
               </div>
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block text-[10px] uppercase">Thread ID</span>
-                <span className="text-cyan-400 break-all">{session.thread_id || '—'}</span>
+              <div className="p-3 rounded-lg bg-surface-secondary/60 border border-border-subtle">
+                <span className="text-text-muted block text-[10px] uppercase">Thread ID</span>
+                <span className="text-accent-primary break-all">{session.thread_id || '—'}</span>
               </div>
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block text-[10px] uppercase">Route</span>
-                <span className="text-indigo-400">{session.route || 'general'}</span>
+              <div className="p-3 rounded-lg bg-surface-secondary/60 border border-border-subtle">
+                <span className="text-text-muted block text-[10px] uppercase">Route</span>
+                <span className="text-status-info">{session.route || 'general'}</span>
               </div>
             </div>
           </Card>

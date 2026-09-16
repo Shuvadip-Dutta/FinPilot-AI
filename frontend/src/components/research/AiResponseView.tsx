@@ -56,25 +56,25 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
     <div
       className={`rounded-2xl transition-all ${
         isUser
-          ? 'bg-slate-900/90 border border-slate-800 p-4 sm:p-5 ml-auto max-w-3xl'
-          : 'bg-slate-900/60 border border-cyan-500/20 p-5 sm:p-6 shadow-xl'
+          ? 'bg-surface-secondary/70 border border-border-theme p-4 sm:p-5 ml-auto max-w-3xl'
+          : 'bg-surface border border-border-theme p-5 sm:p-6 shadow-card'
       }`}
     >
       {/* Header Bar: Role, Ticker, Timestamp, Actions */}
-      <div className="flex items-center justify-between gap-3 mb-3 pb-2.5 border-b border-slate-800/60 flex-wrap">
+      <div className="flex items-center justify-between gap-3 mb-3 pb-2.5 border-b border-border-subtle flex-wrap">
         <div className="flex items-center gap-2.5">
           <div
             className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
               isUser
-                ? 'bg-slate-800 text-slate-300'
-                : 'bg-gradient-to-br from-cyan-500 to-indigo-600 text-slate-950 font-bold'
+                ? 'bg-surface-secondary text-text-muted'
+                : 'bg-accent-primary text-white font-bold'
             }`}
           >
             {isUser ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4 stroke-[2.5]" />}
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-100">
+            <span className="text-xs font-semibold text-text-primary">
               {isUser ? 'Analyst' : 'FinPilot AI'}
             </span>
             {!isUser && (
@@ -98,7 +98,7 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
             </Badge>
           )}
 
-          <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1">
+          <span className="text-[11px] text-text-muted font-mono flex items-center gap-1">
             <Clock className="w-3 h-3" />
             {formatDate(message.timestamp, { includeTime: true })}
           </span>
@@ -106,11 +106,11 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
           {!isUser && (
             <button
               onClick={handleCopy}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
               title="Copy markdown text"
               aria-label="Copy markdown text"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-status-success" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           )}
         </div>
@@ -118,7 +118,7 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
 
       {/* Main Content Body */}
       {isUser ? (
-        <p className="text-sm text-slate-200 leading-relaxed font-sans whitespace-pre-wrap">
+        <p className="text-sm text-text-primary leading-relaxed font-sans whitespace-pre-wrap">
           {message.content}
         </p>
       ) : (
@@ -127,7 +127,7 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
 
       {/* Auxiliary Panels Toggle Bar (Evidence & Provenance) */}
       {!isUser && (hasEvidence || hasProvenance) && (
-        <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-4 pt-3 border-t border-border-subtle flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             {hasEvidence && (
               <button
@@ -135,8 +135,8 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
                 onClick={() => setShowEvidence(!showEvidence)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
                   showEvidence
-                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-accent-soft text-accent-primary border border-accent-primary/30 font-semibold'
+                    : 'bg-surface-secondary text-text-muted hover:text-text-primary border border-border-subtle'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -150,8 +150,8 @@ export const AiResponseView: React.FC<AiResponseViewProps> = ({ message }) => {
                 onClick={() => setShowProvenance(!showProvenance)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
                   showProvenance
-                    ? 'bg-indigo-950 text-indigo-300 border border-indigo-700'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-status-info-soft text-status-info border border-status-info/30 font-semibold'
+                    : 'bg-surface-secondary text-text-muted hover:text-text-primary border border-border-subtle'
                 }`}
               >
                 <GitCommit className="w-3.5 h-3.5" />

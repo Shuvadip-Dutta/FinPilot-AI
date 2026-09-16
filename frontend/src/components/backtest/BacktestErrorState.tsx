@@ -56,8 +56,8 @@ export const BacktestErrorState: React.FC<BacktestErrorStateProps> = ({
   }
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-8 text-center max-w-xl mx-auto shadow-xl">
-      <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto mb-4 text-rose-400">
+    <div className="bg-status-negative-soft/40 border border-status-negative/30 rounded-2xl p-8 text-center max-w-xl mx-auto shadow-card">
+      <div className="w-12 h-12 rounded-xl bg-status-negative-soft border border-status-negative/40 flex items-center justify-center mx-auto mb-4 text-status-negative">
         {isInsufficientData ? (
           <Calendar className="w-6 h-6" />
         ) : isNoPortfolio ? (
@@ -69,8 +69,8 @@ export const BacktestErrorState: React.FC<BacktestErrorStateProps> = ({
         )}
       </div>
 
-      <h3 className="text-base font-bold text-white mb-2">{title}</h3>
-      <p className="text-xs text-slate-400 max-w-md mx-auto mb-6 leading-relaxed">
+      <h3 className="text-base font-bold text-text-primary mb-2">{title}</h3>
+      <p className="text-xs text-text-secondary max-w-md mx-auto mb-6 leading-relaxed">
         {description}
       </p>
 

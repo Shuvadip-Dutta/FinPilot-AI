@@ -88,101 +88,101 @@ export const OptimizationMetricsCard: React.FC<OptimizationMetricsCardProps> = (
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary">
           Optimization Outcome Metrics
         </h4>
-        <span className="text-[11px] font-mono text-slate-400">
+        <span className="text-[11px] font-mono text-text-muted">
           Current vs Mathematically Optimized
         </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Expected Return */}
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/90 flex flex-col justify-between">
+        <div className="p-4 rounded-xl bg-surface border border-border-theme flex flex-col justify-between shadow-card">
           <div>
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+            <div className="flex items-center justify-between text-text-muted text-xs mb-2">
               <span className="font-medium">Expected Annual Return</span>
-              <TrendingUp className="w-4 h-4 text-cyan-400" />
+              <TrendingUp className="w-4 h-4 text-accent-primary" />
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-2">
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Current</span>
-                <span className="text-lg font-bold font-mono text-slate-300">
+                <span className="text-[10px] text-text-muted block uppercase">Current</span>
+                <span className="text-lg font-bold font-mono text-text-primary">
                   {currentReturn !== null ? formatPercent(currentReturn, false) : '—'}
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-emerald-400 block uppercase">Optimized</span>
-                <span className="text-lg font-bold font-mono text-emerald-400">
+                <span className="text-[10px] text-status-positive block uppercase">Optimized</span>
+                <span className="text-lg font-bold font-mono text-status-positive">
                   {optReturn !== null ? formatPercent(optReturn, false) : '—'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Expected Shift:</span>
+          <div className="pt-2 border-t border-border-theme flex items-center justify-between text-xs">
+            <span className="text-text-muted">Expected Shift:</span>
             {renderDelta(returnDelta, 'percent', 'positive')}
           </div>
         </div>
 
         {/* Volatility (Total Risk) */}
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/90 flex flex-col justify-between">
+        <div className="p-4 rounded-xl bg-surface border border-border-theme flex flex-col justify-between shadow-card">
           <div>
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+            <div className="flex items-center justify-between text-text-muted text-xs mb-2">
               <span className="font-medium">Annualized Volatility (σ)</span>
-              <Activity className="w-4 h-4 text-indigo-400" />
+              <Activity className="w-4 h-4 text-status-info" />
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-2">
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Current</span>
-                <span className="text-lg font-bold font-mono text-slate-300">
+                <span className="text-[10px] text-text-muted block uppercase">Current</span>
+                <span className="text-lg font-bold font-mono text-text-primary">
                   {currentVol !== null ? formatPercent(currentVol, false) : '—'}
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-emerald-400 block uppercase">Optimized</span>
-                <span className="text-lg font-bold font-mono text-emerald-400">
+                <span className="text-[10px] text-status-positive block uppercase">Optimized</span>
+                <span className="text-lg font-bold font-mono text-status-positive">
                   {optVol !== null ? formatPercent(optVol, false) : '—'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Variance Shift:</span>
+          <div className="pt-2 border-t border-border-theme flex items-center justify-between text-xs">
+            <span className="text-text-muted">Variance Shift:</span>
             {renderDelta(volDelta, 'percent', 'negative')}
           </div>
         </div>
 
         {/* Sharpe Ratio */}
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/90 flex flex-col justify-between">
+        <div className="p-4 rounded-xl bg-surface border border-border-theme flex flex-col justify-between shadow-card">
           <div>
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+            <div className="flex items-center justify-between text-text-muted text-xs mb-2">
               <span className="font-medium">Sharpe Ratio</span>
-              <Shield className="w-4 h-4 text-amber-400" />
+              <Shield className="w-4 h-4 text-status-warning" />
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-2">
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Current</span>
-                <span className="text-lg font-bold font-mono text-slate-300">
+                <span className="text-[10px] text-text-muted block uppercase">Current</span>
+                <span className="text-lg font-bold font-mono text-text-primary">
                   {currentSharpe !== null ? formatRatio(currentSharpe, 2) : '—'}
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-emerald-400 block uppercase">Optimized</span>
-                <span className="text-lg font-bold font-mono text-emerald-400">
+                <span className="text-[10px] text-status-positive block uppercase">Optimized</span>
+                <span className="text-lg font-bold font-mono text-status-positive">
                   {optSharpe !== null ? formatRatio(optSharpe, 2) : '—'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Risk-Adjusted Gain:</span>
+          <div className="pt-2 border-t border-border-theme flex items-center justify-between text-xs">
+            <span className="text-text-muted">Risk-Adjusted Gain:</span>
             {renderDelta(sharpeDelta, 'ratio', 'positive')}
           </div>
         </div>

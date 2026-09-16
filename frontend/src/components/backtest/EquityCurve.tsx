@@ -14,8 +14,9 @@ import {
   getBacktestEquityCurve,
 } from '../../types/portfolio';
 import { Badge } from '../common/Badge';
-import { TrendingUp, Eye, EyeOff } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { useChartTheme } from '../../hooks/useChartTheme';
 
 export interface EquityCurveProps {
   response: BacktestResponse | null;
@@ -30,6 +31,7 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
   initialCapital = 100000,
   className = '',
 }) => {
+  const chartTheme = useChartTheme();
   const [showStrategy, setShowStrategy] = useState(true);
   const [showBuyAndHold, setShowBuyAndHold] = useState(true);
   const [showBenchmark, setShowBenchmark] = useState(true);
@@ -71,25 +73,25 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
 
   if (!response || chartData.length === 0) {
     return (
-      <div className={`bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center ${className}`}>
-        <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center mx-auto mb-3 text-slate-500">
+      <div className={`bg-surface border border-border-theme rounded-2xl p-8 text-center ${className}`}>
+        <div className="w-12 h-12 rounded-xl bg-surface-secondary flex items-center justify-center mx-auto mb-3 text-text-muted">
           <TrendingUp className="w-6 h-6" />
         </div>
-        <h4 className="text-sm font-semibold text-slate-200 mb-1">No Equity Curve Data Available</h4>
-        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+        <h4 className="text-sm font-semibold text-text-primary mb-1">No Equity Curve Data Available</h4>
+        <p className="text-xs text-text-muted max-w-sm mx-auto">
           The backend did not return discrete periodic equity curve points for this backtest run.
         </p>
       </div>
     );
   }
 
-  // Custom Dark Theme Tooltip
+  // Custom Dual Theme Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
 
     return (
-      <div className="bg-slate-950/95 border border-slate-700/80 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-xs font-mono space-y-2 min-w-[200px]">
-        <div className="text-[11px] text-slate-400 font-sans font-semibold pb-1.5 border-b border-slate-800">
+      <div className="bg-surface-elevated border border-border-theme rounded-xl p-3.5 shadow-card-hover text-xs font-mono space-y-2 min-w-[200px]">
+        <div className="text-[11px] text-text-muted font-sans font-semibold pb-1.5 border-b border-border-subtle">
           {label}
         </div>
         {payload.map((entry: any) => {
@@ -111,7 +113,7 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
 
           return (
             <div key={entry.dataKey} className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-slate-300">
+              <span className="flex items-center gap-1.5 text-text-secondary">
                 <span
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: entry.color }}
@@ -129,29 +131,29 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
   };
 
   return (
-    <div className={`bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4 ${className}`}>
+    <div className={`bg-surface border border-border-theme rounded-2xl p-6 shadow-card space-y-4 ${className}`}>
       {/* Chart Controls Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4 pb-3 border-b border-slate-800">
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-3 border-b border-border-subtle">
         <div>
-          <h4 className="text-sm font-bold text-white flex items-center gap-2">
+          <h4 className="text-sm font-bold text-text-primary flex items-center gap-2">
             <span>Cumulative Out-of-Sample Equity Growth Trajectory</span>
             <Badge variant="info" size="sm">Multi-Asset</Badge>
           </h4>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-text-muted mt-0.5">
             Realized trajectory evaluated strictly across forward out-of-sample segments with friction
           </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
           {/* Scale Mode Switch */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          <div className="flex items-center bg-surface-secondary/70 p-1 rounded-lg border border-border-theme text-xs">
             <button
               type="button"
               onClick={() => setScaleMode('currency')}
-              className={`px-2.5 py-1 rounded transition-colors ${
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 scaleMode === 'currency'
-                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface'
               }`}
             >
               Absolute ({currency})
@@ -159,10 +161,10 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
             <button
               type="button"
               onClick={() => setScaleMode('percent')}
-              className={`px-2.5 py-1 rounded transition-colors ${
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 scaleMode === 'percent'
-                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-surface'
               }`}
             >
               Normalized (%)
@@ -170,41 +172,41 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
           </div>
 
           {/* Series Toggles */}
-          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          <div className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-lg border border-border-theme text-xs">
             <button
               type="button"
               onClick={() => setShowStrategy(!showStrategy)}
-              className={`px-2 py-1 rounded flex items-center gap-1.5 text-[11px] font-mono transition-colors ${
+              className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 text-[11px] font-mono transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 showStrategy
-                  ? 'bg-cyan-950 text-cyan-400 border border-cyan-800/60'
-                  : 'text-slate-500 line-through'
+                  ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-muted hover:text-text-secondary opacity-60 line-through'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: chartTheme.accent }} />
               Strategy
             </button>
             <button
               type="button"
               onClick={() => setShowBuyAndHold(!showBuyAndHold)}
-              className={`px-2 py-1 rounded flex items-center gap-1.5 text-[11px] font-mono transition-colors ${
+              className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 text-[11px] font-mono transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-warning ${
                 showBuyAndHold
-                  ? 'bg-amber-950 text-amber-400 border border-amber-800/60'
-                  : 'text-slate-500 line-through'
+                  ? 'bg-status-warning-soft text-status-warning border border-status-warning font-semibold shadow-xs'
+                  : 'border border-transparent text-text-muted hover:text-text-secondary opacity-60 line-through'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: chartTheme.warning }} />
               Buy & Hold
             </button>
             <button
               type="button"
               onClick={() => setShowBenchmark(!showBenchmark)}
-              className={`px-2 py-1 rounded flex items-center gap-1.5 text-[11px] font-mono transition-colors ${
+              className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 text-[11px] font-mono transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-info ${
                 showBenchmark
-                  ? 'bg-purple-950 text-purple-400 border border-purple-800/60'
-                  : 'text-slate-500 line-through'
+                  ? 'bg-status-info-soft text-status-info border border-status-info font-semibold shadow-xs'
+                  : 'border border-transparent text-text-muted hover:text-text-secondary opacity-60 line-through'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-purple-400" />
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: chartTheme.info }} />
               Benchmark
             </button>
           </div>
@@ -218,20 +220,20 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
             data={chartData}
             margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} />
             <XAxis
               dataKey="formattedDate"
-              stroke="#64748b"
+              stroke={chartTheme.axis}
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: chartTheme.border }}
               minTickGap={30}
             />
             <YAxis
-              stroke="#64748b"
+              stroke={chartTheme.axis}
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: chartTheme.border }}
               tickFormatter={(val) =>
                 scaleMode === 'percent'
                   ? `${val >= 0 ? '+' : ''}${val.toFixed(0)}%`
@@ -248,7 +250,7 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
               verticalAlign="bottom"
               height={36}
               iconType="circle"
-              wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }}
+              wrapperStyle={{ fontSize: '11px', color: chartTheme.muted }}
               formatter={(value) => {
                 if (value === 'strategy') return 'Strategy (Rolling WF)';
                 if (value === 'buy_and_hold') return 'Buy & Hold Baseline';
@@ -263,11 +265,11 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
                 type="monotone"
                 dataKey="benchmark"
                 name="benchmark"
-                stroke="#a855f7"
+                stroke={chartTheme.info}
                 strokeWidth={1.75}
                 strokeDasharray="4 4"
                 dot={false}
-                activeDot={{ r: 4, fill: '#a855f7' }}
+                activeDot={{ r: 4, fill: chartTheme.info }}
               />
             )}
 
@@ -277,10 +279,10 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
                 type="monotone"
                 dataKey="buy_and_hold"
                 name="buy_and_hold"
-                stroke="#f59e0b"
+                stroke={chartTheme.warning}
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#f59e0b' }}
+                activeDot={{ r: 4, fill: chartTheme.warning }}
               />
             )}
 
@@ -290,19 +292,19 @@ export const EquityCurve: React.FC<EquityCurveProps> = ({
                 type="monotone"
                 dataKey="strategy"
                 name="strategy"
-                stroke="#06b6d4"
+                stroke={chartTheme.accent}
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 5, fill: '#06b6d4', stroke: '#fff', strokeWidth: 1.5 }}
+                activeDot={{ r: 5, fill: chartTheme.accent, stroke: chartTheme.tooltipBg, strokeWidth: 1.5 }}
               />
             )}
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/80">
+      <div className="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-border-subtle">
         <span>
-          Data Points: <strong className="text-slate-300 font-mono">{chartData.length}</strong> intervals
+          Data Points: <strong className="text-text-primary font-mono">{chartData.length}</strong> intervals
         </span>
         <span>All returns account for calibrated transaction friction and rebalance drift.</span>
       </div>

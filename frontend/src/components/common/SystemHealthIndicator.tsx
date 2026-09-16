@@ -69,22 +69,22 @@ export const SystemHealthIndicator: React.FC<{ compact?: boolean }> = ({ compact
 
   const config = {
     checking: {
-      dot: 'bg-amber-400 animate-pulse',
+      dot: 'bg-status-warning animate-pulse',
       text: 'Checking...',
       label: 'Connecting to Django API',
     },
     operational: {
-      dot: 'bg-emerald-400',
+      dot: 'bg-status-positive',
       text: 'API Online',
       label: 'Django Backend Operational',
     },
     degraded: {
-      dot: 'bg-amber-400',
+      dot: 'bg-status-warning',
       text: 'Degraded',
       label: 'Services Operating with Partial Degradation',
     },
     unavailable: {
-      dot: 'bg-rose-400',
+      dot: 'bg-status-negative',
       text: 'Offline',
       label: 'Django API Offline',
     },
@@ -93,7 +93,7 @@ export const SystemHealthIndicator: React.FC<{ compact?: boolean }> = ({ compact
   if (compact) {
     return (
       <div
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs text-slate-300"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-secondary/70 border border-border-theme text-xs text-text-secondary"
         title={config.label}
       >
         <span className={`w-2 h-2 rounded-full ${config.dot}`} />
@@ -104,13 +104,13 @@ export const SystemHealthIndicator: React.FC<{ compact?: boolean }> = ({ compact
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/80 text-xs"
+      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-secondary/70 border border-border-theme text-xs"
       title={`${config.label}${health?.version ? ` (v${health.version})` : ''}`}
     >
-      <Activity className="w-3.5 h-3.5 text-slate-400" />
+      <Activity className="w-3.5 h-3.5 text-text-muted" />
       <span className={`w-2 h-2 rounded-full ${config.dot}`} />
-      <span className="text-slate-300 font-medium">Django API:</span>
-      <span className="font-mono text-slate-400">{config.text}</span>
+      <span className="text-text-secondary font-medium">Django API:</span>
+      <span className="font-mono text-text-muted">{config.text}</span>
     </div>
   );
 };

@@ -290,7 +290,7 @@ export const NewsView: React.FC<NewsViewProps> = ({
         title={
           <div className="flex items-center justify-between gap-3 w-full">
             <div className="flex items-center gap-2">
-              <Newspaper className="w-4 h-4 text-cyan-400" />
+              <Newspaper className="w-4 h-4 text-accent-primary" />
               <span>Verified Market News & Catalysts</span>
               <Badge variant="neutral" size="sm" className="font-mono">
                 {articles.length} {articles.length === 1 ? 'article' : 'articles'}
@@ -299,7 +299,7 @@ export const NewsView: React.FC<NewsViewProps> = ({
 
             <button
               onClick={fetchNews}
-              className="p-1 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1 rounded text-text-muted hover:text-text-primary transition-colors cursor-pointer"
               title="Refresh news feed"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -311,29 +311,29 @@ export const NewsView: React.FC<NewsViewProps> = ({
         {/* Search filter if multiple articles */}
         {articles.length > 2 && (
           <div className="mb-4 relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search news by headline or keyword..."
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950/70 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-surface-secondary border border-border-theme text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
             />
           </div>
         )}
 
         {articles.length === 0 ? (
-          <div className="py-8 text-center text-slate-400 text-xs flex flex-col items-center">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-2">
+          <div className="py-8 text-center text-text-muted text-xs flex flex-col items-center">
+            <div className="w-10 h-10 rounded-xl bg-surface-secondary border border-border-subtle flex items-center justify-center text-text-muted mb-2">
               <Newspaper className="w-5 h-5" />
             </div>
-            <p className="font-medium text-slate-300">No news articles found</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="font-medium text-text-primary">No news articles found</p>
+            <p className="text-[11px] text-text-muted mt-0.5">
               News feeds and regulatory wires will appear here once ingested for {ticker}.
             </p>
           </div>
         ) : filteredArticles.length === 0 ? (
-          <div className="py-6 text-center text-slate-400 text-xs">
+          <div className="py-6 text-center text-text-muted text-xs">
             No news matches &ldquo;{filterText}&rdquo;
           </div>
         ) : (
@@ -350,25 +350,25 @@ export const NewsView: React.FC<NewsViewProps> = ({
               return (
                 <div
                   key={article.id ?? `news-${idx}`}
-                  className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition-all space-y-2 text-xs"
+                  className="p-4 rounded-xl bg-surface-secondary/60 border border-border-subtle hover:border-border-theme transition-all space-y-2 text-xs"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {article.relevance_type && (
-                          <Badge variant="neutral" size="sm" className="font-mono text-[9px] uppercase tracking-wider text-slate-400 border-slate-800">
-                            <Tag className="w-2.5 h-2.5 mr-1 text-cyan-400" />
+                          <Badge variant="neutral" size="sm" className="font-mono text-[9px] uppercase tracking-wider text-text-muted border-border-subtle">
+                            <Tag className="w-2.5 h-2.5 mr-1 text-accent-primary" />
                             {article.relevance_type}
                           </Badge>
                         )}
                         {article.target_match_score !== null && article.target_match_score !== undefined && (
-                          <span className="text-[10px] text-slate-500 font-mono">
+                          <span className="text-[10px] text-text-muted font-mono">
                             Match: {article.target_match_score.toFixed(0)}%
                           </span>
                         )}
                       </div>
 
-                      <h4 className="font-semibold text-slate-100 text-sm leading-snug hover:text-cyan-300 transition-colors">
+                      <h4 className="font-semibold text-text-primary text-sm leading-snug hover:text-accent-primary transition-colors">
                         {article.url ? (
                           <a
                             href={article.url}
@@ -377,7 +377,7 @@ export const NewsView: React.FC<NewsViewProps> = ({
                             className="inline-flex items-center gap-1.5"
                           >
                             <span>{article.title}</span>
-                            <ExternalLink className="w-3 h-3 text-cyan-400 shrink-0 inline" />
+                            <ExternalLink className="w-3 h-3 text-accent-primary shrink-0 inline" />
                           </a>
                         ) : (
                           article.title
@@ -400,14 +400,14 @@ export const NewsView: React.FC<NewsViewProps> = ({
                   </div>
 
                   {(article.summary || article.description || article.content) && (
-                    <p className="text-slate-400 text-xs leading-relaxed line-clamp-3">
+                    <p className="text-text-muted text-xs leading-relaxed line-clamp-3">
                       {article.summary || article.description || article.content}
                     </p>
                   )}
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-2 border-t border-slate-900">
-                    <span className="flex items-center gap-1.5 text-slate-400">
-                      <Layers className="w-3 h-3 text-cyan-400/80" />
+                  <div className="flex items-center justify-between text-[11px] text-text-muted font-mono pt-2 border-t border-border-subtle">
+                    <span className="flex items-center gap-1.5 text-text-secondary">
+                      <Layers className="w-3 h-3 text-accent-primary" />
                       {article.source || 'Financial Wire'}
                     </span>
 

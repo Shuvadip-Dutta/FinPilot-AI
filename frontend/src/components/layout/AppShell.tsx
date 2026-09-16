@@ -9,7 +9,7 @@ export const AppShell: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#0b0f17] text-slate-100 flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="min-h-screen bg-app text-text-primary flex flex-col selection:bg-accent-soft selection:text-accent-primary">
       {/* Sidebar Navigation */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
@@ -35,9 +35,9 @@ export const AppShell: React.FC = () => {
         </div>
 
         {/* Subtle Regulatory Compliance Disclaimer Footer */}
-        <footer className="border-t border-slate-900 bg-slate-950/60 py-3 px-6 text-center">
-          <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 max-w-3xl mx-auto">
-            <ShieldCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        <footer className="border-t border-border-theme bg-surface/60 py-3 px-6 text-center">
+          <div className="flex items-center justify-center gap-2 text-[11px] text-text-muted max-w-3xl mx-auto">
+            <ShieldCheck className="w-3.5 h-3.5 text-text-muted shrink-0" />
             <span>
               FinPilot AI provides research and decision-support information. It does not execute trades or guarantee investment outcomes.
             </span>

@@ -25,7 +25,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none';
+      'inline-flex items-center justify-center font-medium rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none cursor-pointer select-none';
 
     const sizeStyles = {
       sm: 'text-xs px-3 py-1.5 gap-1.5',
@@ -35,15 +35,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantStyles = {
       primary:
-        'bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold shadow-sm shadow-cyan-500/20 active:bg-cyan-600',
+        'bg-accent-primary hover:bg-accent-hover text-accent-text font-semibold shadow-xs active:opacity-90',
       secondary:
-        'bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700/80 active:bg-slate-800',
+        'bg-surface-secondary hover:bg-surface text-text-primary border border-border-theme hover:border-accent-primary/40 active:opacity-90',
       outline:
-        'border border-slate-700 bg-transparent hover:bg-slate-800/60 text-slate-200 active:bg-slate-800',
+        'border border-border-theme bg-transparent hover:bg-surface-secondary hover:border-accent-primary/50 text-text-primary active:bg-surface-secondary/80',
       ghost:
-        'bg-transparent hover:bg-slate-800/60 text-slate-300 hover:text-slate-100 active:bg-slate-800',
+        'bg-transparent hover:bg-surface-secondary text-text-secondary hover:text-text-primary active:bg-surface-secondary/80',
       danger:
-        'bg-rose-600 hover:bg-rose-500 text-white shadow-sm shadow-rose-600/20 active:bg-rose-700',
+        'bg-status-negative hover:opacity-90 text-white shadow-xs active:opacity-80',
     };
 
     return (

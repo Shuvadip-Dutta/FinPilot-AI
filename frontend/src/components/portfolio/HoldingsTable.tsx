@@ -68,17 +68,17 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   }, [holdings, searchQuery, selectedMarket]);
 
   return (
-    <div className="bg-slate-900/70 border border-slate-800/90 rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-surface border border-border-theme rounded-xl overflow-hidden shadow-card">
       {/* Header controls */}
-      <div className="p-4 sm:p-5 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 border-b border-border-theme flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-slate-100">Holdings & Positions</h3>
+            <h3 className="text-base font-semibold text-text-primary">Holdings & Positions</h3>
             <Badge variant="neutral" size="sm">
               {holdings.length} {holdings.length === 1 ? 'asset' : 'assets'}
             </Badge>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-text-muted mt-0.5">
             Persisted ledger securities and cost basis
           </p>
         </div>
@@ -86,13 +86,13 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Search box */}
           <div className="relative min-w-[180px] sm:min-w-[220px]">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search ticker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950/60 text-slate-200 placeholder:text-slate-500 text-xs rounded-lg border border-slate-700/80 pl-8 pr-3 py-1.5 focus:outline-none focus:border-cyan-500 transition-colors"
+              className="w-full bg-surface-secondary/60 text-text-primary placeholder:text-text-muted text-xs rounded-lg border border-border-theme pl-8 pr-3 py-1.5 focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 transition-colors"
             />
           </div>
 
@@ -100,7 +100,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           <select
             value={selectedMarket}
             onChange={(e) => setSelectedMarket(e.target.value)}
-            className="bg-slate-950/60 text-slate-200 text-xs rounded-lg border border-slate-700/80 px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 transition-colors"
+            className="bg-surface-secondary/60 text-text-primary text-xs rounded-lg border border-border-theme px-2.5 py-1.5 focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 transition-colors"
           >
             <option value="ALL">All Markets</option>
             <option value="IN">IN (India)</option>
@@ -130,14 +130,14 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           className="border-0 bg-transparent my-6"
         />
       ) : filteredHoldings.length === 0 ? (
-        <div className="py-12 text-center text-slate-400 text-sm">
+        <div className="py-12 text-center text-text-muted text-sm">
           No holdings match your search query "{searchQuery}".
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-800/80 bg-slate-950/40 text-[11px] font-semibold uppercase tracking-wider text-slate-400 select-none">
+              <tr className="border-b border-border-theme bg-surface-secondary/50 text-[11px] font-semibold uppercase tracking-wider text-text-muted select-none">
                 <th className="py-3 px-4">Asset / Ticker</th>
                 <th className="py-3 px-4 text-right">Quantity</th>
                 <th className="py-3 px-4 text-right">Avg Buy Price</th>
@@ -146,7 +146,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-xs">
+            <tbody className="divide-y divide-border-theme text-xs">
               {filteredHoldings.map((h) => {
                 const ticker = h.ticker || 'UNKNOWN';
                 const market = h.market || 'IN';
@@ -162,12 +162,12 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 return (
                   <tr
                     key={h.id}
-                    className="hover:bg-slate-800/30 transition-colors group"
+                    className="hover:bg-surface-secondary/40 transition-colors group"
                   >
                     {/* Ticker & Market */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-100 text-sm">
+                        <span className="font-mono font-bold text-text-primary text-sm">
                           {ticker}
                         </span>
                         <Badge variant="neutral" size="sm">
@@ -177,22 +177,22 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                     </td>
 
                     {/* Quantity */}
-                    <td className="py-3.5 px-4 text-right font-mono text-slate-200">
+                    <td className="py-3.5 px-4 text-right font-mono text-text-secondary">
                       {formatNumber(quantity, 4)}
                     </td>
 
                     {/* Avg Buy Price */}
-                    <td className="py-3.5 px-4 text-right font-mono text-slate-300">
+                    <td className="py-3.5 px-4 text-right font-mono text-text-secondary">
                       {formatCurrency(buyPrice, holdingCurrency)}
                     </td>
 
                     {/* Invested Value */}
-                    <td className="py-3.5 px-4 text-right font-mono text-slate-100 font-semibold">
+                    <td className="py-3.5 px-4 text-right font-mono text-text-primary font-semibold">
                       {investedVal !== null ? formatCurrency(investedVal, holdingCurrency) : '—'}
                     </td>
 
                     {/* Capital Weight */}
-                    <td className="py-3.5 px-4 text-right font-mono text-cyan-400 font-medium">
+                    <td className="py-3.5 px-4 text-right font-mono text-accent-primary font-medium">
                       {holdingWeight !== null ? formatPercent(holdingWeight, false) : '—'}
                     </td>
 
@@ -203,7 +203,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         <button
                           type="button"
                           onClick={() => navigate(`/app/research?ticker=${ticker}&market=${market}`)}
-                          className="p-1 text-slate-400 hover:text-cyan-400 rounded-md hover:bg-slate-800/80 transition-colors"
+                          className="p-1 text-text-muted hover:text-accent-primary rounded-md hover:bg-surface-secondary transition-colors cursor-pointer"
                           title={`Research ${ticker} with FinPilot AI`}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -213,7 +213,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onEditHolding(h)}
-                          className="p-1 text-slate-400 hover:text-slate-200 rounded-md hover:bg-slate-800/80 transition-colors"
+                          className="p-1 text-text-muted hover:text-text-primary rounded-md hover:bg-surface-secondary transition-colors cursor-pointer"
                           title="Edit holding"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -223,7 +223,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onDeleteHolding(h)}
-                          className="p-1 text-slate-400 hover:text-rose-400 rounded-md hover:bg-rose-500/10 transition-colors"
+                          className="p-1 text-text-muted hover:text-status-negative rounded-md hover:bg-status-negative-soft transition-colors cursor-pointer"
                           title="Delete holding"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

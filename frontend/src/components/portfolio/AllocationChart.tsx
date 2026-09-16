@@ -3,12 +3,11 @@ import {
   Portfolio,
   Holding,
   AllocationItem,
-  getHoldingAllocation,
-  getHoldingCurrentValue,
 } from '../../types/portfolio';
 import { formatPercent, formatCurrency } from '../../utils/formatters';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { PieChart as PieChartIcon } from 'lucide-react';
+import { useChartTheme } from '../../hooks/useChartTheme';
 
 export interface AllocationChartProps {
   portfolio: Portfolio | null;
@@ -16,23 +15,11 @@ export interface AllocationChartProps {
   className?: string;
 }
 
-const PALETTE = [
-  '#06b6d4', // cyan-500
-  '#6366f1', // indigo-500
-  '#8b5cf6', // violet-500
-  '#10b981', // emerald-500
-  '#f59e0b', // amber-500
-  '#0ea5e9', // sky-500
-  '#ec4899', // pink-500
-  '#14b8a6', // teal-500
-  '#64748b', // slate-500
-];
-
 export const AllocationChart: React.FC<AllocationChartProps> = ({
-  portfolio,
   holdings,
   className = '',
 }) => {
+  const chartTheme = useChartTheme();
   const currency = 'INR';
 
   // Compute allocation breakdown strictly from holding invested value: quantity * average_price
@@ -57,18 +44,18 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
       ticker: item.ticker,
       percentage: (item.invested / totalInvested) * 100,
       value: item.invested,
-      color: PALETTE[idx % PALETTE.length],
+      color: chartTheme.allocationPalette[idx % chartTheme.allocationPalette.length],
     }));
-  }, [holdings]);
+  }, [holdings, chartTheme.allocationPalette]);
 
   if (allocationItems.length === 0) {
     return (
-      <div className={`bg-slate-900/60 border border-slate-800/90 rounded-xl p-6 ${className}`}>
+      <div className={`bg-surface border border-border-theme rounded-xl p-6 ${className}`}>
         <div className="flex items-center gap-2 mb-3">
-          <PieChartIcon className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-sm font-semibold text-slate-200">Current Asset Allocation</h3>
+          <PieChartIcon className="w-4 h-4 text-accent-primary" />
+          <h3 className="text-sm font-semibold text-text-primary">Current Asset Allocation</h3>
         </div>
-        <div className="py-8 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg p-4">
+        <div className="py-8 text-center text-xs text-text-muted border border-dashed border-border-theme rounded-lg p-4">
           Allocation weights will be displayed when backend portfolio metrics are returned.
         </div>
       </div>
@@ -76,13 +63,13 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
   }
 
   return (
-    <div className={`bg-slate-900/60 border border-slate-800/90 rounded-xl p-6 ${className}`}>
+    <div className={`bg-surface border border-border-theme rounded-xl p-6 shadow-card ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <PieChartIcon className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-sm font-semibold text-slate-200">Current Asset Allocation</h3>
+          <PieChartIcon className="w-4 h-4 text-accent-primary" />
+          <h3 className="text-sm font-semibold text-text-primary">Current Asset Allocation</h3>
         </div>
-        <span className="text-xs text-slate-400 font-mono">
+        <span className="text-xs text-text-muted font-mono">
           {allocationItems.length} {allocationItems.length === 1 ? 'asset' : 'assets'}
         </span>
       </div>
@@ -101,20 +88,25 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
                 innerRadius={50}
                 outerRadius={80}
                 paddingAngle={3}
-                stroke="#0f172a"
+                stroke={chartTheme.tooltipBg}
                 strokeWidth={2}
               >
                 {allocationItems.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color || PALETTE[index % PALETTE.length]} />
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.color || chartTheme.allocationPalette[index % chartTheme.allocationPalette.length]}
+                  />
                 ))}
               </Pie>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#0f172a',
-                  borderColor: '#334155',
-                  borderRadius: '0.5rem',
+                  backgroundColor: chartTheme.tooltipBg,
+                  borderColor: chartTheme.tooltipBorder,
+                  borderRadius: '0.75rem',
                   fontSize: '12px',
                   fontFamily: 'monospace',
+                  color: chartTheme.text,
+                  boxShadow: chartTheme.tooltipShadow,
                 }}
                 formatter={(value: any, name: any) => [
                   `${formatPercent(Number(value), false)}`,
@@ -130,21 +122,21 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
           {allocationItems.map((item, idx) => (
             <div
               key={idx}
-              className="flex items-center justify-between p-2 rounded-lg bg-slate-950/40 border border-slate-800/60 text-xs"
+              className="flex items-center justify-between p-2 rounded-lg bg-surface-secondary/70 border border-border-theme text-xs"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: item.color || PALETTE[idx % PALETTE.length] }}
+                  style={{ backgroundColor: item.color || chartTheme.allocationPalette[idx % chartTheme.allocationPalette.length] }}
                 />
-                <span className="font-semibold text-slate-200 font-mono truncate">{item.name}</span>
+                <span className="font-semibold text-text-primary font-mono truncate">{item.name}</span>
                 {item.value !== null && item.value !== undefined && (
-                  <span className="text-slate-500 font-mono hidden sm:inline">
+                  <span className="text-text-muted font-mono hidden sm:inline">
                     · {formatCurrency(item.value, currency)}
                   </span>
                 )}
               </div>
-              <div className="font-mono font-semibold text-cyan-400 shrink-0 ml-3">
+              <div className="font-mono font-semibold text-accent-primary shrink-0 ml-3">
                 {formatPercent(item.percentage, false)}
               </div>
             </div>

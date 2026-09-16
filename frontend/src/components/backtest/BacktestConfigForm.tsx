@@ -66,8 +66,11 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
     }
   }, [portfolioHoldingsCount]);
 
+  const [activePreset, setActivePreset] = useState<number | null>(2);
+
   // Quick preset helper
   const applyPreset = (years: number) => {
+    setActivePreset(years);
     setFromDate(getDateYearsAgo(years));
     setToDate(getTodayISO());
     setValidationError(null);
@@ -161,6 +164,7 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
   };
 
   const handleReset = () => {
+    setActivePreset(2);
     setFromDate(getDateYearsAgo(2));
     setToDate(getTodayISO());
     setBenchmark('^NSEI');
@@ -179,62 +183,48 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
   return (
     <form
       onSubmit={handleSubmit}
-      className={`bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6 ${className}`}
+      className={`bg-surface border border-border-theme rounded-2xl p-6 shadow-card space-y-6 ${className}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-800">
+      <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-border-theme">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+          <div className="p-2.5 rounded-xl bg-accent-soft border border-accent-primary/30 text-accent-primary">
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
               <span>Walk-Forward Backtest Engine Configuration</span>
               <Badge variant="info" size="sm">Authoritative</Badge>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-text-secondary">
               Configure parameters for rolling out-of-sample portfolio re-optimization and benchmark comparison
             </p>
           </div>
         </div>
 
         {/* Quick Date Presets */}
-        <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800">
-          <span className="text-[11px] font-mono text-slate-500 px-2">Preset:</span>
-          <button
-            type="button"
-            onClick={() => applyPreset(1)}
-            className="px-2 py-1 text-xs rounded hover:bg-slate-800 text-slate-300 transition-colors"
-          >
-            1Y
-          </button>
-          <button
-            type="button"
-            onClick={() => applyPreset(2)}
-            className="px-2 py-1 text-xs rounded hover:bg-slate-800 text-slate-300 transition-colors"
-          >
-            2Y
-          </button>
-          <button
-            type="button"
-            onClick={() => applyPreset(3)}
-            className="px-2 py-1 text-xs rounded hover:bg-slate-800 text-slate-300 transition-colors"
-          >
-            3Y
-          </button>
-          <button
-            type="button"
-            onClick={() => applyPreset(5)}
-            className="px-2 py-1 text-xs rounded hover:bg-slate-800 text-slate-300 transition-colors"
-          >
-            5Y
-          </button>
+        <div className="flex items-center gap-1.5 bg-surface-secondary p-1 rounded-lg border border-border-theme">
+          <span className="text-[11px] font-mono text-text-muted px-2">Preset:</span>
+          {[1, 2, 3, 5].map((yr) => (
+            <button
+              key={yr}
+              type="button"
+              onClick={() => applyPreset(yr)}
+              className={`px-2.5 py-1 text-xs rounded-md transition-all font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
+                activePreset === yr
+                  ? 'bg-accent-soft border border-accent-primary text-accent-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-text-secondary hover:bg-surface hover:text-text-primary'
+              }`}
+            >
+              {yr}Y
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Validation Banner */}
       {validationError && (
-        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-400 text-xs">
+        <div className="p-3.5 rounded-xl bg-status-negative-soft border border-status-negative/30 flex items-start gap-3 text-status-negative text-xs">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <span className="font-semibold block">Configuration Constraint Violated</span>
@@ -247,51 +237,53 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
         {/* From Date */}
         <div className="space-y-1.5">
-          <label className="font-semibold text-slate-300 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+          <label className="font-semibold text-text-secondary flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-accent-primary" />
             From Date (Inception)
           </label>
           <input
             type="date"
             value={fromDate}
             onChange={(e) => {
+              setActivePreset(null);
               setFromDate(e.target.value);
               setValidationError(null);
             }}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
             required
           />
-          <span className="text-[10px] text-slate-500 block">Start of historical evaluation</span>
+          <span className="text-[10px] text-text-muted block">Start of historical evaluation</span>
         </div>
 
         {/* To Date */}
         <div className="space-y-1.5">
-          <label className="font-semibold text-slate-300 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+          <label className="font-semibold text-text-secondary flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-accent-primary" />
             To Date (Termination)
           </label>
           <input
             type="date"
             value={toDate}
             onChange={(e) => {
+              setActivePreset(null);
               setToDate(e.target.value);
               setValidationError(null);
             }}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
             required
           />
-          <span className="text-[10px] text-slate-500 block">End of historical evaluation</span>
+          <span className="text-[10px] text-text-muted block">End of historical evaluation</span>
         </div>
 
         {/* Benchmark */}
         <div className="space-y-1.5">
-          <label className="font-semibold text-slate-300 block">
+          <label className="font-semibold text-text-secondary block">
             Market Benchmark
           </label>
           <select
             value={benchmark}
             onChange={(e) => setBenchmark(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 selection:bg-accent-soft selection:text-text-primary"
           >
             <option value="^NSEI">NIFTY 50 (^NSEI)</option>
             <option value="^BSESN">S&P BSE SENSEX (^BSESN)</option>
@@ -299,13 +291,13 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             <option value="SPY">S&P 500 ETF (SPY)</option>
             <option value="QQQ">Invesco QQQ (Nasdaq 100)</option>
           </select>
-          <span className="text-[10px] text-slate-500 block">External comparative hurdle</span>
+          <span className="text-[10px] text-text-muted block">External comparative hurdle</span>
         </div>
 
         {/* Initial Capital */}
         <div className="space-y-1.5">
-          <label className="font-semibold text-slate-300 flex items-center gap-1.5">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+          <label className="font-semibold text-text-secondary flex items-center gap-1.5">
+            <DollarSign className="w-3.5 h-3.5 text-status-positive" />
             Initial Capital ({portfolioCurrency})
           </label>
           <input
@@ -314,21 +306,21 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             step="5000"
             value={initialCapital}
             onChange={(e) => setInitialCapital(Number(e.target.value))}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
             required
           />
-          <span className="text-[10px] text-slate-500 block">Starting base equity</span>
+          <span className="text-[10px] text-text-muted block">Starting base equity</span>
         </div>
 
         {/* Rebalance Frequency */}
         <div className="space-y-1.5">
-          <label className="font-semibold text-slate-300 block">
+          <label className="font-semibold text-text-secondary block">
             Rebalance Cadence
           </label>
           <select
             value={rebalanceFrequency}
             onChange={(e) => setRebalanceFrequency(e.target.value as RebalanceFrequency)}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 selection:bg-accent-soft selection:text-text-primary"
           >
             <option value="monthly">Monthly (M)</option>
             <option value="quarterly">Quarterly (Q) — Recommended</option>
@@ -336,16 +328,16 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             <option value="annually">Annually (1Y)</option>
             <option value="weekly">Weekly (W)</option>
           </select>
-          <span className="text-[10px] text-slate-500 block">Out-of-sample re-optimization cycle</span>
+          <span className="text-[10px] text-text-muted block">Out-of-sample re-optimization cycle</span>
         </div>
 
         {/* In-Sample Window */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-300 block">
+            <label className="font-semibold text-text-secondary block">
               In-Sample Window
             </label>
-            <span className="font-mono text-cyan-400">{inSampleWindow} days</span>
+            <span className="font-mono text-accent-primary">{inSampleWindow} days</span>
           </div>
           <input
             type="number"
@@ -354,9 +346,9 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             step="21"
             value={inSampleWindow}
             onChange={(e) => setInSampleWindow(Number(e.target.value))}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
           />
-          <span className="text-[10px] text-slate-500 block">
+          <span className="text-[10px] text-text-muted block">
             Historical calibration lookback (~{Math.round(inSampleWindow / 21)} months)
           </span>
         </div>
@@ -364,10 +356,10 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
         {/* Out-of-Sample Step */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-300 block">
+            <label className="font-semibold text-text-secondary block">
               Out-of-Sample Step
             </label>
-            <span className="font-mono text-emerald-400">{outOfSampleStep} days</span>
+            <span className="font-mono text-status-positive">{outOfSampleStep} days</span>
           </div>
           <input
             type="number"
@@ -376,18 +368,18 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             step="5"
             value={outOfSampleStep}
             onChange={(e) => setOutOfSampleStep(Number(e.target.value))}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
           />
-          <span className="text-[10px] text-slate-500 block">Forward evaluation window before rebalance</span>
+          <span className="text-[10px] text-text-muted block">Forward evaluation window before rebalance</span>
         </div>
 
         {/* Transaction Cost (bps) */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-300 block">
+            <label className="font-semibold text-text-secondary block">
               Transaction Cost
             </label>
-            <span className="font-mono text-amber-400">{transactionCostBps} bps ({(transactionCostBps / 100).toFixed(2)}%)</span>
+            <span className="font-mono text-status-warning">{transactionCostBps} bps ({(transactionCostBps / 100).toFixed(2)}%)</span>
           </div>
           <input
             type="number"
@@ -396,18 +388,18 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             step="1"
             value={transactionCostBps}
             onChange={(e) => setTransactionCostBps(Number(e.target.value))}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
           />
-          <span className="text-[10px] text-slate-500 block">Brokerage & slippage friction per turnover</span>
+          <span className="text-[10px] text-text-muted block">Brokerage & slippage friction per turnover</span>
         </div>
 
         {/* Risk-Free Rate */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-300 block">
+            <label className="font-semibold text-text-secondary block">
               Risk-Free Rate ($R_f$)
             </label>
-            <span className="font-mono text-slate-300">{riskFreeRatePct}%</span>
+            <span className="font-mono text-text-primary">{riskFreeRatePct}%</span>
           </div>
           <input
             type="number"
@@ -416,18 +408,18 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             step="0.25"
             value={riskFreeRatePct}
             onChange={(e) => setRiskFreeRatePct(Number(e.target.value))}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
           />
-          <span className="text-[10px] text-slate-500 block">Benchmark sovereign yield</span>
+          <span className="text-[10px] text-text-muted block">Benchmark sovereign yield</span>
         </div>
 
         {/* Min Weight */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-300 block">
+            <label className="font-semibold text-text-secondary block">
               Min Weight Floor
             </label>
-            <span className="font-mono text-slate-300">{minWeightPct}%</span>
+            <span className="font-mono text-text-primary">{minWeightPct}%</span>
           </div>
           <input
             type="number"
@@ -436,18 +428,18 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             step="1"
             value={minWeightPct}
             onChange={(e) => setMinWeightPct(Number(e.target.value))}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
           />
-          <span className="text-[10px] text-slate-500 block">Long-only lower bound</span>
+          <span className="text-[10px] text-text-muted block">Long-only lower bound</span>
         </div>
 
         {/* Max Weight */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-300 block">
+            <label className="font-semibold text-text-secondary block">
               Max Weight Cap
             </label>
-            <span className="font-mono text-slate-300">{maxWeightPct}%</span>
+            <span className="font-mono text-text-primary">{maxWeightPct}%</span>
           </div>
           <input
             type="number"
@@ -459,21 +451,21 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
               setMaxWeightPct(Number(e.target.value));
               setValidationError(null);
             }}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 font-mono selection:bg-accent-soft selection:text-text-primary"
           />
-          <span className="text-[10px] text-slate-500 block">
+          <span className="text-[10px] text-text-muted block">
             Concentration limit per asset (min {minAllowedCap}% for {portfolioHoldingsCount} holdings)
           </span>
         </div>
       </div>
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between flex-wrap gap-4 pt-4 border-t border-slate-800">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <Layers className="w-4 h-4 text-cyan-400" />
-          <span>Active Holdings: <strong className="text-white">{portfolioHoldingsCount}</strong></span>
+      <div className="flex items-center justify-between flex-wrap gap-4 pt-4 border-t border-border-theme">
+        <div className="flex items-center gap-2 text-xs text-text-secondary">
+          <Layers className="w-4 h-4 text-accent-primary" />
+          <span>Active Holdings: <strong className="text-text-primary">{portfolioHoldingsCount}</strong></span>
           {portfolioHoldingsCount < 2 && (
-            <span className="text-rose-400 text-[11px] font-medium">
+            <span className="text-status-negative text-[11px] font-medium">
               (Requires &ge; 2 assets for covariance matrix)
             </span>
           )}
@@ -498,7 +490,7 @@ export const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
             isLoading={isLoading}
             disabled={isLoading || portfolioHoldingsCount < 2}
             leftIcon={<Play className="w-4 h-4 fill-current" />}
-            className="shadow-lg shadow-cyan-500/20"
+            className="shadow-lg shadow-accent-primary/20"
           >
             {isLoading ? 'Running Historical Backtest...' : 'Execute Walk-Forward Backtest'}
           </Button>

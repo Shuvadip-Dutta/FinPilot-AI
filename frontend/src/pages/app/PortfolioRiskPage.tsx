@@ -279,7 +279,7 @@ export const PortfolioRiskPage: React.FC = () => {
               variant="secondary"
               size="sm"
               onClick={() => setIsAiAuditOpen(true)}
-              leftIcon={<Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
+              leftIcon={<Sparkles className="w-3.5 h-3.5 text-accent-primary" />}
             >
               AI Risk Audit
             </Button>
@@ -298,32 +298,32 @@ export const PortfolioRiskPage: React.FC = () => {
       />
 
       {/* Portfolio Selector & Valuation Bar */}
-      <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 rounded-xl bg-surface border border-border-theme flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shrink-0">
+          <div className="p-2.5 rounded-lg bg-accent-soft border border-accent-primary/20 text-accent-primary shrink-0">
             <Briefcase className="w-5 h-5" />
           </div>
 
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                 Active Portfolio
               </span>
               {portfolios.length > 1 && (
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-text-muted">
                   ({portfolios.length} available)
                 </span>
               )}
             </div>
 
             {isLoadingPortfolios ? (
-              <div className="h-6 w-48 bg-slate-800 animate-pulse rounded" />
+              <div className="h-6 w-48 bg-surface-secondary animate-pulse rounded" />
             ) : portfolios.length > 0 ? (
               <div className="relative">
                 <select
                   value={selectedPortfolioId ? String(selectedPortfolioId) : ''}
                   onChange={handlePortfolioSelect}
-                  className="bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-100 pr-8 focus:outline-none focus:border-cyan-500 cursor-pointer appearance-none min-w-[220px]"
+                  className="bg-surface-secondary border border-border-theme rounded-lg px-3 py-1.5 text-sm font-semibold text-text-primary pr-8 focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 cursor-pointer appearance-none min-w-[220px]"
                 >
                   {portfolios.map((p) => (
                     <option key={p.id} value={String(p.id)}>
@@ -331,33 +331,33 @@ export const PortfolioRiskPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-4 h-4 text-text-muted absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             ) : (
-              <span className="text-sm font-medium text-slate-400">No Portfolios Found</span>
+              <span className="text-sm font-medium text-text-muted">No Portfolios Found</span>
             )}
           </div>
         </div>
 
         {/* Valuation & Holdings Count Pill */}
         {currentPortfolio && (
-          <div className="flex items-center gap-4 text-xs border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-4">
+          <div className="flex items-center gap-4 text-xs border-t md:border-t-0 md:border-l border-border-subtle pt-3 md:pt-0 md:pl-4">
             <div>
-              <span className="text-[11px] text-slate-400 block">Current Ledger Valuation</span>
-              <span className="text-base font-bold font-mono text-slate-200">
+              <span className="text-[11px] text-text-muted block">Current Ledger Valuation</span>
+              <span className="text-base font-bold font-mono text-text-primary">
                 {totalValue !== null ? formatCurrency(totalValue, currency) : '—'}
               </span>
             </div>
 
             <div>
-              <span className="text-[11px] text-slate-400 block">Total P&L</span>
+              <span className="text-[11px] text-text-muted block">Total P&L</span>
               <span
                 className={`text-base font-bold font-mono ${
                   pnlPercent !== null && pnlPercent >= 0
-                    ? 'text-emerald-400'
+                    ? 'text-status-success'
                     : pnlPercent !== null
-                    ? 'text-rose-400'
-                    : 'text-slate-400'
+                    ? 'text-status-danger'
+                    : 'text-text-muted'
                 }`}
               >
                 {pnlPercent !== null ? formatPercent(pnlPercent, true) : '—'}
@@ -365,8 +365,8 @@ export const PortfolioRiskPage: React.FC = () => {
             </div>
 
             <div>
-              <span className="text-[11px] text-slate-400 block">Assets</span>
-              <span className="text-base font-bold font-mono text-cyan-400">
+              <span className="text-[11px] text-text-muted block">Assets</span>
+              <span className="text-base font-bold font-mono text-accent-primary">
                 {holdings.length}
               </span>
             </div>
@@ -376,30 +376,30 @@ export const PortfolioRiskPage: React.FC = () => {
 
       {/* Global Error Banner */}
       {error && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-status-danger-soft border border-status-danger/30 text-status-danger flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <span className="font-semibold text-sm">Action Notice</span>
-            <p className="text-xs text-rose-300/90">{error}</p>
+            <p className="text-xs opacity-90">{error}</p>
           </div>
         </div>
       )}
 
       {/* Primary Workspace Tab Switcher */}
-      <div className="border-b border-slate-800">
-        <div className="flex space-x-8">
+      <div className="border-b border-border-theme">
+        <div className="flex space-x-3">
           <button
             type="button"
             onClick={() => handleTabChange('risk')}
-            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            className={`px-4 py-2.5 -mb-px rounded-t-lg text-sm font-medium flex items-center gap-2 border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeWorkspaceTab === 'risk'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-accent-soft border-accent-primary text-accent-primary font-semibold shadow-xs'
+                : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/50'
             }`}
           >
-            <ShieldAlert className="w-4 h-4" />
+            <ShieldAlert className="w-4 h-4 text-accent-primary" />
             <span>Quantitative Risk Workspace</span>
-            <Badge variant="neutral" size="sm" className="font-mono text-[10px]">
+            <Badge variant={activeWorkspaceTab === 'risk' ? 'default' : 'neutral'} size="sm" className="font-mono text-[10px]">
               Authoritative
             </Badge>
           </button>
@@ -407,15 +407,15 @@ export const PortfolioRiskPage: React.FC = () => {
           <button
             type="button"
             onClick={() => handleTabChange('optimization')}
-            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            className={`px-4 py-2.5 -mb-px rounded-t-lg text-sm font-medium flex items-center gap-2 border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeWorkspaceTab === 'optimization'
-                ? 'border-emerald-400 text-emerald-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-accent-soft border-accent-primary text-accent-primary font-semibold shadow-xs'
+                : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-secondary/50'
             }`}
           >
-            <Sliders className="w-4 h-4" />
+            <Sliders className="w-4 h-4 text-accent-primary" />
             <span>Portfolio Optimization</span>
-            <Badge variant="neutral" size="sm" className="font-mono text-[10px]">
+            <Badge variant={activeWorkspaceTab === 'optimization' ? 'default' : 'neutral'} size="sm" className="font-mono text-[10px]">
               Markowitz Solver
             </Badge>
           </button>

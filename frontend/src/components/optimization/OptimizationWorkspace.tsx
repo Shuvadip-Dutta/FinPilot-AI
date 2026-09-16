@@ -132,45 +132,45 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
   return (
     <div id="optimization-workspace" className={`space-y-6 ${className}`}>
       {/* Triad Distinction Banner */}
-      <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 rounded-xl bg-surface border border-border-theme flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-card">
         <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shrink-0 mt-0.5">
+          <div className="p-2 rounded-lg bg-accent-soft border border-accent-primary/30 text-accent-primary shrink-0 mt-0.5">
             <Cpu className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold tracking-wider uppercase text-emerald-300">
+              <span className="text-xs font-bold tracking-wider uppercase text-accent-primary">
                 Mathematical Allocation Optimizer
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-accent-soft text-accent-primary border border-accent-primary/30">
                 Backend Markowitz Pipeline
               </span>
             </div>
-            <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-slate-300">
-              <span className="font-semibold text-slate-200">
+            <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-text-secondary">
+              <span className="font-semibold text-text-primary">
                 OPTIMIZATION:
               </span>
-              <span className="text-slate-400">
+              <span className="text-text-secondary">
                 "What allocation the mathematical optimizer prefers under its assumptions and constraints."
               </span>
             </div>
           </div>
         </div>
 
-        <div className="text-[11px] text-slate-400 border-l border-slate-800 md:pl-4 max-w-sm leading-relaxed">
+        <div className="text-[11px] text-text-muted border-l border-border-theme md:pl-4 max-w-sm leading-relaxed">
           Optimized weights are theoretical targets derived mathematically from covariance matrices. They do not guarantee superior future returns or eliminate downside market risk.
         </div>
       </div>
 
       {/* Optimizer Controls Panel */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="bg-surface border border-border-theme rounded-2xl p-5 space-y-5 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border-theme">
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-accent-primary" />
               <span>Optimizer Parameters & Constraints</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-text-muted mt-0.5">
               Configure boundary constraints and mathematical target functions
             </p>
           </div>
@@ -178,11 +178,10 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
           <div className="flex items-center gap-2">
             {onOpenAiAudit && (
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 onClick={onOpenAiAudit}
-                leftIcon={<Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
-                className="border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
+                leftIcon={<Sparkles className="w-3.5 h-3.5 text-accent-primary" />}
               >
                 AI Rebalance Audit
               </Button>
@@ -202,11 +201,11 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
 
         {/* Feasibility Alert Notice */}
         {validationError && (
-          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-2.5 text-xs">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="p-3.5 rounded-xl bg-status-negative-soft border border-status-negative/30 text-status-negative flex items-start gap-2.5 text-xs">
+            <AlertCircle className="w-4 h-4 text-status-negative shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <span className="font-semibold text-rose-200">Constraint Feasibility Notice</span>
-              <p className="text-rose-300/90">{validationError}</p>
+              <span className="font-semibold text-status-negative">Constraint Feasibility Notice</span>
+              <p className="text-status-negative/90">{validationError}</p>
             </div>
           </div>
         )}
@@ -216,22 +215,22 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
           {/* Objective Selector */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="font-semibold text-slate-300 block">
+              <label className="font-semibold text-text-secondary block">
                 Optimization Objective
               </label>
-              <span className="text-[10px] font-mono text-emerald-400 font-medium">Backend Active</span>
+              <span className="text-[10px] font-mono text-status-positive font-medium">Backend Active</span>
             </div>
             <select
               value="max_sharpe"
               disabled
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-200 focus:outline-none cursor-not-allowed opacity-90"
+              className="w-full bg-surface-secondary border border-border-theme rounded-lg px-3 py-2 text-text-secondary focus:outline-none cursor-not-allowed opacity-90"
             >
               <option value="max_sharpe">Maximize Sharpe Ratio (Tangency)</option>
               <option value="min_volatility" disabled>Minimize Volatility (Backend Unsupported)</option>
               <option value="risk_parity" disabled>Equal Risk Parity (Backend Unsupported)</option>
               <option value="target_return" disabled>Constrained Min Variance (Backend Unsupported)</option>
             </select>
-            <span className="text-[10px] text-slate-400 block leading-tight">
+            <span className="text-[10px] text-text-muted block leading-tight">
               Authoritative backend engine exclusively optimizes Sharpe ratio under bounded simplex constraints.
             </span>
           </div>
@@ -239,10 +238,10 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
           {/* Max Single Asset Weight */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="font-semibold text-slate-300">
+              <label className="font-semibold text-text-secondary">
                 Max Asset Weight Cap
               </label>
-              <span className="font-mono text-cyan-400 font-bold">{maxWeight}%</span>
+              <span className="font-mono text-accent-primary font-bold">{maxWeight}%</span>
             </div>
             <input
               type="range"
@@ -254,10 +253,10 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
                 setMaxWeight(Number(e.target.value));
                 setValidationError(null);
               }}
-              className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+              className="w-full accent-accent-primary h-1.5 bg-surface-secondary rounded-lg appearance-none cursor-pointer"
             >
             </input>
-            <span className="text-[10px] text-slate-500 block">
+            <span className="text-[10px] text-text-muted block">
               Upper bound constraint (min {minAllowedCap}% for {holdings.length} assets to sum to 100%)
             </span>
           </div>
@@ -265,10 +264,10 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
           {/* Min Single Asset Weight */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="font-semibold text-slate-300">
+              <label className="font-semibold text-text-secondary">
                 Min Asset Weight Floor
               </label>
-              <span className="font-mono text-cyan-400 font-bold">{minWeight}%</span>
+              <span className="font-mono text-accent-primary font-bold">{minWeight}%</span>
             </div>
             <input
               type="range"
@@ -277,10 +276,10 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
               step="1"
               value={minWeight}
               onChange={(e) => setMinWeight(Number(e.target.value))}
-              className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+              className="w-full accent-accent-primary h-1.5 bg-surface-secondary rounded-lg appearance-none cursor-pointer"
             >
             </input>
-            <span className="text-[10px] text-slate-500 block">
+            <span className="text-[10px] text-text-muted block">
               Lower bound weight constraint (long-only)
             </span>
           </div>
@@ -288,10 +287,10 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
           {/* Risk-Free Rate */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="font-semibold text-slate-300">
+              <label className="font-semibold text-text-secondary">
                 Risk-Free Rate (Rf)
               </label>
-              <span className="font-mono text-slate-300 font-bold">{riskFreeRate}%</span>
+              <span className="font-mono text-text-primary font-bold">{riskFreeRate}%</span>
             </div>
             <input
               type="number"
@@ -300,32 +299,32 @@ export const OptimizationWorkspace: React.FC<OptimizationWorkspaceProps> = ({
               max="20"
               value={riskFreeRate}
               onChange={(e) => setRiskFreeRate(Number(e.target.value))}
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-1.5 text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+              className="w-full bg-surface border border-border-theme rounded-lg px-3 py-1.5 text-text-primary font-mono focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
             />
-            <span className="text-[10px] text-slate-500 block">
+            <span className="text-[10px] text-text-muted block">
               Benchmark risk-free hurdle (e.g. 91-day T-bill)
             </span>
           </div>
         </div>
 
         {/* Short Selling Warning / Long-Only Guard */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+        <div className="flex items-center justify-between pt-2 border-t border-border-theme text-xs">
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center gap-2 opacity-60 cursor-not-allowed">
               <input
                 type="checkbox"
                 checked={false}
                 disabled
-                className="rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-0 w-3.5 h-3.5 cursor-not-allowed"
+                className="rounded bg-surface-secondary border-border-theme text-accent-primary focus:ring-0 w-3.5 h-3.5 cursor-not-allowed"
               />
-              <span className="text-slate-400">Allow Short Selling (Unconstrained Weights)</span>
+              <span className="text-text-muted">Allow Short Selling (Unconstrained Weights)</span>
             </label>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-950/60 text-amber-400 border border-amber-800/40">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-status-warning-soft text-status-warning border border-status-warning/40">
               Unsupported (Long-Only Only)
             </span>
           </div>
 
-          <span className="text-[11px] text-slate-400 italic">
+          <span className="text-[11px] text-text-muted italic">
             Deterministic Long-Only Portfolio (0% ≤ w_i ≤ Cap, Σ w_i = 100%)
           </span>
         </div>

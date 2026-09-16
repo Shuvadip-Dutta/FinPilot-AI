@@ -146,7 +146,7 @@ export const PortfolioAnalysisPage: React.FC = () => {
       <PageHeader
         title={
           <div className="flex items-center gap-2.5">
-            <Bot className="w-6 h-6 text-cyan-400" />
+            <Bot className="w-6 h-6 text-accent-primary" />
             <span>AI Portfolio Audit: {portfolio.name}</span>
           </div>
         }
@@ -194,16 +194,16 @@ export const PortfolioAnalysisPage: React.FC = () => {
       />
 
       {/* Configuration Strip */}
-      <div className="p-4 bg-slate-900/70 border border-slate-800 rounded-xl space-y-3">
+      <div className="p-4 bg-surface border border-border-theme rounded-xl space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-300">Analysis Mode:</span>
+          <span className="text-xs font-semibold text-text-muted">Analysis Mode:</span>
           <button
             type="button"
             onClick={() => setAnalysisType('comprehensive')}
             className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
               analysisType === 'comprehensive'
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                ? 'bg-accent-soft text-accent-primary border-accent-primary/30 font-semibold'
+                : 'bg-surface-secondary text-text-muted border-border-subtle hover:text-text-primary'
             }`}
           >
             Comprehensive Audit
@@ -213,8 +213,8 @@ export const PortfolioAnalysisPage: React.FC = () => {
             onClick={() => setAnalysisType('risk')}
             className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
               analysisType === 'risk'
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                ? 'bg-accent-soft text-accent-primary border-accent-primary/30 font-semibold'
+                : 'bg-surface-secondary text-text-muted border-border-subtle hover:text-text-primary'
             }`}
           >
             Stress Test & Concentration
@@ -224,8 +224,8 @@ export const PortfolioAnalysisPage: React.FC = () => {
             onClick={() => setAnalysisType('rebalance')}
             className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
               analysisType === 'rebalance'
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                ? 'bg-accent-soft text-accent-primary border-accent-primary/30 font-semibold'
+                : 'bg-surface-secondary text-text-muted border-border-subtle hover:text-text-primary'
             }`}
           >
             Tactical Rebalancing
@@ -238,28 +238,28 @@ export const PortfolioAnalysisPage: React.FC = () => {
             placeholder="Specify custom question or focus constraint (e.g. assess earnings beta)..."
             value={customQuery}
             onChange={(e) => setCustomQuery(e.target.value)}
-            className="flex-1 bg-slate-950/80 text-xs text-slate-200 placeholder:text-slate-500 border border-slate-700/80 rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500"
+            className="flex-1 bg-surface-secondary text-xs text-text-primary placeholder:text-text-muted border border-border-theme rounded-lg px-3 py-2 focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
           />
         </div>
       </div>
 
       {analysisError && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl">
+        <div className="p-4 bg-status-danger-soft border border-status-danger/30 text-status-danger text-xs rounded-xl">
           {analysisError}
         </div>
       )}
 
       {/* Generating State */}
       {isGenerating && (
-        <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
-          <div className="w-12 h-12 mx-auto rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+        <div className="p-12 text-center bg-surface border border-border-theme rounded-xl space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-xl bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary">
             <RefreshCw className="w-6 h-6 animate-spin" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-slate-200">
+            <h4 className="text-sm font-semibold text-text-primary">
               Synthesizing Portfolio Diagnostic
             </h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+            <p className="text-xs text-text-muted max-w-md mx-auto mt-1">
               Multi-agent engine is auditing position weights, industry correlations, and valuation multiples...
             </p>
           </div>
@@ -270,28 +270,28 @@ export const PortfolioAnalysisPage: React.FC = () => {
       {!isGenerating && report && (
         <div className="space-y-4">
           {structuredValuation && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-surface border border-border-theme rounded-xl">
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Invested Capital</span>
-                <div className="text-sm font-bold font-mono text-slate-100 mt-0.5">
+                <span className="text-[10px] font-semibold text-text-muted uppercase">Invested Capital</span>
+                <div className="text-sm font-bold font-mono text-text-primary mt-0.5">
                   ₹{Number(structuredValuation.invested_value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Live Market Value</span>
-                <div className="text-sm font-bold font-mono text-cyan-400 mt-0.5">
+                <span className="text-[10px] font-semibold text-text-muted uppercase">Live Market Value</span>
+                <div className="text-sm font-bold font-mono text-accent-primary mt-0.5">
                   ₹{Number(structuredValuation.current_value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Live P/L</span>
-                <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className="text-[10px] font-semibold text-text-muted uppercase">Live P/L</span>
+                <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-status-success' : 'text-status-danger'}`}>
                   ₹{Number(structuredValuation.profit_loss).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Return (%)</span>
-                <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className="text-[10px] font-semibold text-text-muted uppercase">Return (%)</span>
+                <div className={`text-sm font-bold font-mono mt-0.5 ${structuredValuation.profit_loss >= 0 ? 'text-status-success' : 'text-status-danger'}`}>
                   {structuredValuation.profit_loss_percentage >= 0 ? '+' : ''}
                   {Number(structuredValuation.profit_loss_percentage).toFixed(2)}%
                 </div>
@@ -299,25 +299,25 @@ export const PortfolioAnalysisPage: React.FC = () => {
             </div>
           )}
 
-          <div className="p-6 bg-slate-900/80 border border-slate-800/90 rounded-xl">
+          <div className="p-6 bg-surface border border-border-theme rounded-xl">
             <MarkdownContent content={report} />
           </div>
 
-          <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-lg text-[11px] text-slate-400 flex items-center justify-between">
+          <div className="p-3 bg-surface-secondary border border-border-subtle rounded-lg text-[11px] text-text-muted flex items-center justify-between">
             <span>FinPilot AI quantitative portfolio diagnostic. For informational purposes only.</span>
-            <span className="text-slate-500 font-mono">Route: portfolio</span>
+            <span className="text-text-muted font-mono">Route: portfolio</span>
           </div>
         </div>
       )}
 
       {/* Uninitiated state */}
       {!isGenerating && !report && !analysisError && (
-        <div className="p-12 text-center bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">
-          <Bot className="w-10 h-10 mx-auto text-cyan-400/60 mb-3" />
-          <h4 className="text-base font-semibold text-slate-200">
+        <div className="p-12 text-center bg-surface-secondary/40 border border-dashed border-border-theme rounded-xl">
+          <Bot className="w-10 h-10 mx-auto text-accent-primary/70 mb-3" />
+          <h4 className="text-base font-semibold text-text-primary">
             Audit Ready for {portfolio.name}
           </h4>
-          <p className="text-xs text-slate-400 max-w-md mx-auto mt-1.5 mb-5 leading-relaxed">
+          <p className="text-xs text-text-muted max-w-md mx-auto mt-1.5 mb-5 leading-relaxed">
             FinPilot AI will analyze {holdings.length} active positions against real-time fundamental profiles, sector classifications, and market valuation multiples.
           </p>
           <Button

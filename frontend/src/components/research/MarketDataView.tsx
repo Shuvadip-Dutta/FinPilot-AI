@@ -34,6 +34,7 @@ import {
   Bar,
 } from 'recharts';
 import { formatCurrency, formatPercent, formatRatio, formatDate, formatNumber } from '../../utils/formatters';
+import { useChartTheme } from '../../hooks/useChartTheme';
 
 interface MarketDataViewProps {
   ticker: string;
@@ -48,6 +49,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
   market = 'IN',
   className = '',
 }) => {
+  const chartTheme = useChartTheme();
   const [candles, setCandles] = useState<HistoricalCandle[]>([]);
   const [metrics, setMetrics] = useState<KeyMetricsResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -277,8 +279,8 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
             <p className="text-xs text-amber-300/80 mt-1 max-w-md leading-relaxed">
               Historical OHLCV candle charts are currently integrated exclusively for the Indian market (<span className="font-mono text-amber-200">IN</span> / NSE / BSE). Upstream providers for US market history are not yet supported by the Django backend.
             </p>
-            <p className="text-[11px] text-slate-400 mt-2">
-              To inspect historical charts, select Indian assets such as <span className="font-mono text-cyan-300">RELIANCE</span>, <span className="font-mono text-cyan-300">TCS</span>, or <span className="font-mono text-cyan-300">HDFCBANK</span> on the <span className="font-mono text-cyan-300">IN</span> market.
+            <p className="text-[11px] text-text-muted mt-2">
+              To inspect historical charts, select Indian assets such as <span className="font-mono text-accent-primary font-medium">RELIANCE</span>, <span className="font-mono text-accent-primary font-medium">TCS</span>, or <span className="font-mono text-accent-primary font-medium">HDFCBANK</span> on the <span className="font-mono text-accent-primary font-medium">IN</span> market.
             </p>
           </div>
         </div>
@@ -307,12 +309,12 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
       title={
         <div className="flex items-center justify-between gap-3 w-full flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-cyan-400">
+            <div className="w-7 h-7 rounded-lg bg-accent-soft border border-accent-primary/30 flex items-center justify-center text-accent-primary">
               <Activity className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-white text-base">Market Valuation & Historical Trend</span>
+                <span className="font-bold text-text-primary text-base">Market Valuation & Historical Trend</span>
                 <Badge variant="info" size="sm" className="font-mono">
                   {ticker.toUpperCase()}
                 </Badge>
@@ -325,7 +327,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
 
           <button
             onClick={() => fetchData(timeframe)}
-            className="p-1.5 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded text-text-muted hover:text-text-primary transition-colors cursor-pointer"
             title="Refresh market data"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -338,21 +340,21 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
       <div className="space-y-5">
         {/* Latest Price & Summary Banner */}
         {currentPrice !== null && (
-          <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="p-4 rounded-xl bg-surface-secondary/70 border border-border-theme flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-[11px] text-text-muted font-mono">
                 {ticker.toUpperCase()} Latest Close
               </span>
               <div className="flex items-baseline gap-3 mt-0.5 flex-wrap">
-                <span className="text-2xl font-black text-white font-mono tracking-tight">
+                <span className="text-2xl font-black text-text-primary font-mono tracking-tight">
                   {formatCurrency(currentPrice, currency)}
                 </span>
                 {priceChangePercent !== null && (
                   <div
                     className={`flex items-center gap-1 font-mono text-xs font-semibold px-2 py-0.5 rounded ${
                       priceChangePercent >= 0
-                        ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
-                        : 'bg-rose-950/80 text-rose-400 border border-rose-800/60'
+                        ? 'bg-status-positive-soft text-status-positive border border-status-positive/40'
+                        : 'bg-status-negative-soft text-status-negative border border-status-negative/40'
                     }`}
                   >
                     {priceChangePercent >= 0 ? (
@@ -362,7 +364,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
                     )}
                     <span>{formatPercent(priceChangePercent, true)}</span>
                     {priceChange !== null && (
-                      <span className="text-[10px] text-slate-400 ml-0.5">
+                      <span className="text-[10px] text-text-muted ml-0.5">
                         ({priceChange >= 0 ? `+${priceChange.toFixed(2)}` : priceChange.toFixed(2)})
                       </span>
                     )}
@@ -373,22 +375,22 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
 
             {/* OHLC Mini Summary for Latest Session */}
             {latestCandle && (
-              <div className="flex items-center gap-4 text-xs font-mono text-slate-400 flex-wrap">
+              <div className="flex items-center gap-4 text-xs font-mono text-text-muted flex-wrap">
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Open:</span>
-                  <span className="text-slate-200 font-semibold">{formatCurrency(latestCandle.open, currency)}</span>
+                  <span className="text-[10px] text-text-muted block">Open:</span>
+                  <span className="text-text-primary font-semibold">{formatCurrency(latestCandle.open, currency)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">High:</span>
-                  <span className="text-emerald-400 font-semibold">{formatCurrency(latestCandle.high, currency)}</span>
+                  <span className="text-[10px] text-text-muted block">High:</span>
+                  <span className="text-status-positive font-semibold">{formatCurrency(latestCandle.high, currency)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Low:</span>
-                  <span className="text-rose-400 font-semibold">{formatCurrency(latestCandle.low, currency)}</span>
+                  <span className="text-[10px] text-text-muted block">Low:</span>
+                  <span className="text-status-negative font-semibold">{formatCurrency(latestCandle.low, currency)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Volume:</span>
-                  <span className="text-slate-200 font-semibold">{formatNumber(latestCandle.volume, 0)}</span>
+                  <span className="text-[10px] text-text-muted block">Volume:</span>
+                  <span className="text-text-primary font-semibold">{formatNumber(latestCandle.volume, 0)}</span>
                 </div>
               </div>
             )}
@@ -396,26 +398,26 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
         )}
 
         {/* Historical Price Chart Card */}
-        <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-4">
+        <div className="p-4 rounded-xl bg-surface border border-border-theme space-y-4 shadow-card">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <BarChart2 className="w-4 h-4 text-cyan-400" />
-              <span className="text-xs font-semibold text-slate-200 font-mono">
+              <BarChart2 className="w-4 h-4 text-accent-primary" />
+              <span className="text-xs font-semibold text-text-primary font-mono">
                 Historical Price Trend ({candles.length} trading sessions)
               </span>
             </div>
 
             {/* Timeframe Selection Pills */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <div className="flex rounded-lg bg-slate-900 p-0.5 border border-slate-800 text-[11px] font-mono">
+              <div className="flex rounded-lg bg-surface-secondary p-0.5 border border-border-theme text-[11px] font-mono">
                 {(['1M', '3M', '6M', '1Y', 'CUSTOM'] as const).map((tf) => (
                   <button
                     key={tf}
                     onClick={() => handleTimeframeChange(tf)}
                     className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
                       timeframe === tf
-                        ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary/40 shadow-xs'
+                        : 'text-text-muted hover:text-text-primary'
                     }`}
                   >
                     {tf === 'CUSTOM' ? 'Custom Range' : tf}
@@ -429,39 +431,39 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
           {timeframe === 'CUSTOM' && (
             <form
               onSubmit={handleCustomRangeSubmit}
-              className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex flex-wrap items-center gap-3 text-xs font-mono"
+              className="p-3 rounded-lg bg-surface-secondary border border-border-theme flex flex-wrap items-center gap-3 text-xs font-mono"
             >
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-400">From:</span>
+                <span className="text-text-muted">From:</span>
                 <input
                   type="date"
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
-                  className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:border-cyan-500"
+                  className="px-2 py-1 rounded bg-surface border border-border-theme text-text-primary text-xs focus:outline-none focus:border-accent-primary"
                 />
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-400">To:</span>
+                <span className="text-text-muted">To:</span>
                 <input
                   type="date"
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
-                  className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:border-cyan-500"
+                  className="px-2 py-1 rounded bg-surface border border-border-theme text-text-primary text-xs focus:outline-none focus:border-accent-primary"
                 />
               </div>
 
               <button
                 type="submit"
-                className="px-3 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-colors cursor-pointer text-xs"
+                className="px-3 py-1 rounded bg-accent-primary hover:bg-accent-hover text-accent-text font-semibold transition-colors cursor-pointer text-xs shadow-xs"
               >
                 Apply Range
               </button>
 
               {dateValidationError && (
-                <span className="text-rose-400 text-xs flex items-center gap-1">
+                <span className="text-status-negative text-xs flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" />
                   {dateValidationError}
                 </span>
@@ -471,7 +473,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
 
           {/* Chart View */}
           {candles.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400 font-mono">
+            <div className="p-8 text-center text-xs text-text-muted font-mono">
               No price candles available for the requested range.
             </div>
           ) : (
@@ -480,41 +482,47 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
                 <AreaChart data={candles} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
                   <defs>
                     <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                      <stop offset="5%" stopColor={chartTheme.accent} stopOpacity={0.4} />
+                      <stop offset="95%" stopColor={chartTheme.accent} stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} vertical={false} />
                   <XAxis
                     dataKey="timestamp"
-                    stroke="#64748b"
+                    stroke={chartTheme.axis}
                     fontSize={10}
                     tickFormatter={(val) => formatDate(val, { format: 'short' })}
+                    axisLine={{ stroke: chartTheme.border }}
+                    tickLine={false}
                   />
                   <YAxis
-                    stroke="#64748b"
+                    stroke={chartTheme.axis}
                     fontSize={10}
                     domain={['auto', 'auto']}
                     tickFormatter={(val) => `${val}`}
+                    axisLine={{ stroke: chartTheme.border }}
+                    tickLine={false}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#334155',
+                      backgroundColor: chartTheme.tooltipBg,
+                      borderColor: chartTheme.tooltipBorder,
                       borderRadius: '8px',
                       fontSize: '11px',
                       fontFamily: 'monospace',
+                      color: chartTheme.text,
+                      boxShadow: chartTheme.tooltipShadow,
                     }}
                     labelFormatter={(label: any) => formatDate(String(label || ''), { includeTime: false })}
                     formatter={(val: any, name: any, item: any) => {
                       const c = item.payload as HistoricalCandle;
                       return [
                         <div key="details" className="space-y-1">
-                          <p className="text-cyan-300 font-bold">Close: {formatCurrency(c.close, currency)}</p>
-                          <p className="text-slate-300">Open: {formatCurrency(c.open, currency)}</p>
-                          <p className="text-emerald-400">High: {formatCurrency(c.high, currency)}</p>
-                          <p className="text-rose-400">Low: {formatCurrency(c.low, currency)}</p>
-                          <p className="text-slate-400">Vol: {formatNumber(c.volume, 0)}</p>
+                          <p style={{ color: chartTheme.accent }} className="font-bold">Close: {formatCurrency(c.close, currency)}</p>
+                          <p className="text-text-secondary">Open: {formatCurrency(c.open, currency)}</p>
+                          <p className="text-status-positive">High: {formatCurrency(c.high, currency)}</p>
+                          <p className="text-status-negative">Low: {formatCurrency(c.low, currency)}</p>
+                          <p className="text-text-muted">Vol: {formatNumber(c.volume, 0)}</p>
                         </div>,
                         '',
                       ];
@@ -523,7 +531,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
                   <Area
                     type="monotone"
                     dataKey="close"
-                    stroke="#06b6d4"
+                    stroke={chartTheme.accent}
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#priceGradient)"
@@ -534,7 +542,7 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
           )}
 
           {/* Non-trading days note */}
-          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+          <div className="flex items-center justify-between text-[10px] text-text-muted font-mono pt-1">
             <span>* Missing weekend & holiday trading sessions are omitted naturally without interpolation.</span>
             <span>Provider: Upstox / Django Research API</span>
           </div>
@@ -543,23 +551,23 @@ export const MarketDataView: React.FC<MarketDataViewProps> = ({
         {/* Valuation Multiples Strip from Key Metrics if available */}
         {metricsList.length > 0 && (
           <div className="space-y-2">
-            <span className="text-xs font-semibold text-slate-300 font-mono flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-xs font-semibold text-text-primary font-mono flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-accent-primary" />
               Authoritative Valuation & Financial Multiples
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
               {metricsList.map((m, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 space-y-1"
+                  className="p-3 rounded-lg bg-surface-secondary/70 border border-border-theme space-y-1"
                 >
-                  <span className="text-[10px] text-slate-400 font-mono block truncate" title={m.name}>
+                  <span className="text-[10px] text-text-muted font-mono block truncate" title={m.name}>
                     {m.name}
                   </span>
-                  <p className="font-mono font-bold text-slate-100 text-xs sm:text-sm">
+                  <p className="font-mono font-bold text-text-primary text-xs sm:text-sm">
                     {m.raw_value || (m.value !== null ? formatNumber(m.value) : '—')}
                   </p>
-                  <span className="text-[9px] text-slate-400 font-mono block uppercase">
+                  <span className="text-[9px] text-text-muted font-mono block uppercase">
                     {m.category}
                   </span>
                 </div>

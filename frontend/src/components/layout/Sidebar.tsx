@@ -54,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Backdrop */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-xs lg:hidden transition-opacity"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs lg:hidden transition-opacity"
           onClick={onCloseMobile}
           aria-hidden="true"
         />
@@ -62,24 +62,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-slate-950 border-r border-slate-800/80 transition-all duration-300 ease-in-out ${
+        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-surface border-r border-border-theme transition-all duration-300 ease-in-out ${
           isCollapsed ? 'w-18' : 'w-64'
         } ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Sidebar Header / Brand Logo */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/80 shrink-0">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-border-theme shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-cyan-500/20">
-              <Sparkles className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+            <div className="w-9 h-9 rounded-xl bg-accent-primary flex items-center justify-center shrink-0 shadow-sm">
+              <Sparkles className="w-5 h-5 text-accent-text stroke-[2.5]" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col truncate">
-                <span className="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
-                  FINPILOT <span className="text-cyan-400 font-mono text-xs font-semibold px-1.5 py-0.5 rounded-sm bg-cyan-950/80 border border-cyan-800/50">AI</span>
+                <span className="text-base font-extrabold tracking-tight text-text-primary flex items-center gap-1.5">
+                  FINPILOT <span className="text-accent-primary font-mono text-xs font-semibold px-1.5 py-0.5 rounded-sm bg-accent-soft border border-accent-primary/30">AI</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 truncate">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-text-muted truncate">
                   Research & Quant Engine
                 </span>
               </div>
@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Desktop Collapse Toggle */}
           <button
             onClick={onToggleCollapse}
-            className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+            className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           <div className="px-3 pb-2">
             {!isCollapsed ? (
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-mono">
                 Platform Navigation
               </p>
             ) : (
@@ -123,10 +123,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }
                   }}
                   className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all select-none ${
+                    `group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                       isActive
-                        ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-xs'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80 border border-transparent'
+                        ? 'bg-accent-soft text-accent-primary border border-accent-primary shadow-xs font-semibold ring-1 ring-accent-primary/20'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-secondary border border-transparent'
                     }`
                   }
                   title={isCollapsed ? item.name : undefined}
@@ -136,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="flex-1 truncate">{item.name}</span>
                   )}
                   {!isCollapsed && item.badge && (
-                    <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60">
+                    <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-full bg-accent-soft text-accent-primary border border-accent-primary/40">
                       {item.badge}
                     </span>
                   )}
@@ -147,20 +147,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Sidebar Footer — Architecture Pill & Version */}
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 shrink-0">
+        <div className="p-3 border-t border-border-theme bg-surface-secondary/40 shrink-0">
           {!isCollapsed ? (
-            <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800/90 text-xs">
-              <div className="flex items-center justify-between text-slate-300 font-mono text-[11px] mb-1">
+            <div className="p-3 rounded-lg bg-surface border border-border-theme text-xs shadow-xs">
+              <div className="flex items-center justify-between text-text-primary font-mono text-[11px] mb-1">
                 <span>DJANGO REST</span>
-                <span className="text-emerald-400">v1 API</span>
+                <span className="text-status-positive">v1 API</span>
               </div>
-              <p className="text-[11px] text-slate-400 leading-tight">
+              <p className="text-[11px] text-text-muted leading-tight">
                 Deterministic Quant & LangGraph Agent Engine
               </p>
             </div>
           ) : (
             <div className="flex justify-center" title="Django REST Framework API">
-              <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 text-xs font-mono">
+              <div className="w-8 h-8 rounded-lg bg-surface border border-border-theme flex items-center justify-center text-text-muted text-xs font-mono">
                 v1
               </div>
             </div>

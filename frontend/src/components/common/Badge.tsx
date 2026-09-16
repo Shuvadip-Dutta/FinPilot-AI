@@ -17,28 +17,28 @@ export const Badge: React.FC<BadgeProps> = ({
 }) => {
   const variantStyles: Record<StatusVariant, { badge: string; dot: string }> = {
     default: {
-      badge: 'bg-slate-800 text-slate-300 border-slate-700',
-      dot: 'bg-slate-400',
+      badge: 'bg-surface-secondary text-text-secondary border-border-theme',
+      dot: 'bg-text-muted',
     },
     neutral: {
-      badge: 'bg-slate-800/80 text-slate-300 border-slate-700/60',
-      dot: 'bg-slate-400',
+      badge: 'bg-surface-secondary/80 text-text-secondary border-border-theme/60',
+      dot: 'bg-text-muted',
     },
     success: {
-      badge: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/50',
-      dot: 'bg-emerald-400',
+      badge: 'bg-status-positive-soft text-status-positive border-status-positive/30',
+      dot: 'bg-status-positive',
     },
     warning: {
-      badge: 'bg-amber-950/60 text-amber-400 border-amber-800/50',
-      dot: 'bg-amber-400',
+      badge: 'bg-status-warning-soft text-status-warning border-status-warning/30',
+      dot: 'bg-status-warning',
     },
     danger: {
-      badge: 'bg-rose-950/60 text-rose-400 border-rose-800/50',
-      dot: 'bg-rose-400',
+      badge: 'bg-status-negative-soft text-status-negative border-status-negative/30',
+      dot: 'bg-status-negative',
     },
     info: {
-      badge: 'bg-cyan-950/60 text-cyan-400 border-cyan-800/50',
-      dot: 'bg-cyan-400',
+      badge: 'bg-status-info-soft text-status-info border-status-info/30',
+      dot: 'bg-status-info',
     },
   };
 
