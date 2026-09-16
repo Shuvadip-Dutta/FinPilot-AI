@@ -13,6 +13,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
+COPY .env.example /app/.env.example
 
 RUN pip install --no-cache-dir -v -r /app/requirements.txt
 
@@ -20,12 +21,23 @@ COPY backend /app/backend
 
 WORKDIR /app/backend
 
+ENV HOME=/home/finpilot \
+    HF_HOME=/app/backend/.cache/huggingface \
+    TORCH_HOME=/app/backend/.cache/torch
+
 RUN groupadd --gid 1001 finpilot \
-    && useradd --uid 1001 --gid 1001 --no-create-home finpilot \
+    && useradd --uid 1001 --gid 1001 -m -d /home/finpilot -s /bin/bash finpilot \
+    && mkdir -p /home/finpilot/.cache \
+    && mkdir -p /app/backend/.cache/huggingface \
+    && mkdir -p /app/backend/.cache/torch \
     && mkdir -p /app/backend/staticfiles \
-    && chown -R finpilot:finpilot /app
+    && rm -rf /app/backend/media \
+    && mkdir -p /app/backend/media \
+    && chmod 755 /home/finpilot \
+    && chown -R finpilot:finpilot /home/finpilot /app
 
 USER finpilot
+
 
 EXPOSE 8000
 

@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import patch
 
+from django.conf import settings
 from django.test import SimpleTestCase
 
 from apps.ai.rag.schemas import DocumentChunk
@@ -16,7 +17,7 @@ class QdrantVectorStoreTestCase(SimpleTestCase):
         )
 
         cls.store = QdrantVectorStore(
-            url="http://localhost:6333",
+            url=settings.QDRANT_URL,
             collection_name=cls.collection_name,
             vector_size=3,
         )
@@ -252,7 +253,7 @@ class QdrantVectorStoreTestCase(SimpleTestCase):
         )
 
         store = QdrantVectorStore(
-            url="http://localhost:6333",
+            url=settings.QDRANT_URL,
             collection_name=collection_name,
             vector_size=3,
         )

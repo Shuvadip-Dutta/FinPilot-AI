@@ -330,3 +330,174 @@ class EnvExampleSecretTest(TestCase):
     def test_backend_env_example_secret_key_is_empty(self):
         """backend/.env.example must have DJANGO_SECRET_KEY= (no value)."""
         self._check_env_file(_BACKEND_DIR / ".env.example")
+
+
+class CsrfTrustedOriginsTest(TestCase):
+    """CSRF_TRUSTED_ORIGINS parsing and environment defaults."""
+
+    def test_csrf_trusted_origins_parses_comma_separated_env(self):
+        """DJANGO_CSRF_TRUSTED_ORIGINS parsed into list of origins."""
+        code = (
+            "import sys; sys.path.insert(0, r'" + str(_BACKEND_DIR) + "'); "
+            "import config.settings as s; "
+            "assert s.CSRF_TRUSTED_ORIGINS == ['https://app.finpilot.ai', 'https://api.finpilot.ai'], "
+            "f'Got {s.CSRF_TRUSTED_ORIGINS}'"
+        )
+        result = _run_settings_subprocess(
+            {
+                "DJANGO_SECRET_KEY": "test-secret-key-csrf-parse",
+                "DJANGO_DEBUG": "False",
+                "DJANGO_CSRF_TRUSTED_ORIGINS": "https://app.finpilot.ai,https://api.finpilot.ai",
+                "POSTGRES_DB": "test",
+                "POSTGRES_USER": "test",
+                "POSTGRES_PASSWORD": "test",
+                "POSTGRES_HOST": "localhost",
+            }
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_csrf_trusted_origins_empty_in_production_when_unset(self):
+        """In production mode with no env set, CSRF_TRUSTED_ORIGINS must be []."""
+        code = (
+            "import sys; sys.path.insert(0, r'" + str(_BACKEND_DIR) + "'); "
+            "import config.settings as s; "
+            "assert s.CSRF_TRUSTED_ORIGINS == [], f'Got {s.CSRF_TRUSTED_ORIGINS}'"
+        )
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+            "SYSTEMDRIVE": os.environ.get("SYSTEMDRIVE", ""),
+            "DJANGO_SETTINGS_MODULE": "config.settings",
+            "DJANGO_SECRET_KEY": "test-secret-key-csrf-prod",
+            "DJANGO_DEBUG": "False",
+            "DJANGO_CSRF_TRUSTED_ORIGINS": "",
+            "POSTGRES_DB": "test",
+            "POSTGRES_USER": "test",
+            "POSTGRES_PASSWORD": "test",
+            "POSTGRES_HOST": "localhost",
+        }
+        env = {k: v for k, v in env.items() if v is not None}
+        result = subprocess.run(
+            [_PYTHON, "-c", code],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_csrf_trusted_origins_excludes_wildcard(self):
+        """Unsafe wildcard '*' must not be accepted into CSRF_TRUSTED_ORIGINS."""
+        code = (
+            "import sys; sys.path.insert(0, r'" + str(_BACKEND_DIR) + "'); "
+            "import config.settings as s; "
+            "assert '*' not in s.CSRF_TRUSTED_ORIGINS, f'Found wildcard in {s.CSRF_TRUSTED_ORIGINS}'; "
+            "assert 'https://app.finpilot.ai' in s.CSRF_TRUSTED_ORIGINS"
+        )
+        result = _run_settings_subprocess(
+            {
+                "DJANGO_SECRET_KEY": "test-secret-key-csrf-wildcard",
+                "DJANGO_DEBUG": "False",
+                "DJANGO_CSRF_TRUSTED_ORIGINS": "*,https://app.finpilot.ai",
+                "POSTGRES_DB": "test",
+                "POSTGRES_USER": "test",
+                "POSTGRES_PASSWORD": "test",
+                "POSTGRES_HOST": "localhost",
+            }
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+
+class SecureProxyAndCookieSettingsTest(TestCase):
+    """SECURE_PROXY_SSL_HEADER and secure cookie settings."""
+
+    def test_secure_proxy_ssl_header_configured(self):
+        """SECURE_PROXY_SSL_HEADER must be ('HTTP_X_FORWARDED_PROTO', 'https')."""
+        self.assertEqual(
+            getattr(settings, "SECURE_PROXY_SSL_HEADER", None),
+            ("HTTP_X_FORWARDED_PROTO", "https"),
+        )
+
+    def test_cookie_secure_defaults_true_in_production(self):
+        """When DEBUG=False, SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE must default to True."""
+        code = (
+            "import sys; sys.path.insert(0, r'" + str(_BACKEND_DIR) + "'); "
+            "import config.settings as s; "
+            "assert s.SESSION_COOKIE_SECURE is True, f'SESSION_COOKIE_SECURE was {s.SESSION_COOKIE_SECURE}'; "
+            "assert s.CSRF_COOKIE_SECURE is True, f'CSRF_COOKIE_SECURE was {s.CSRF_COOKIE_SECURE}'"
+        )
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+            "SYSTEMDRIVE": os.environ.get("SYSTEMDRIVE", ""),
+            "DJANGO_SETTINGS_MODULE": "config.settings",
+            "DJANGO_SECRET_KEY": "test-secret-key-cookies-prod",
+            "DJANGO_DEBUG": "False",
+            "SESSION_COOKIE_SECURE": "",
+            "CSRF_COOKIE_SECURE": "",
+            "POSTGRES_DB": "test",
+            "POSTGRES_USER": "test",
+            "POSTGRES_PASSWORD": "test",
+            "POSTGRES_HOST": "localhost",
+        }
+        env = {k: v for k, v in env.items() if v is not None}
+        result = subprocess.run(
+            [_PYTHON, "-c", code],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_cookie_secure_defaults_false_in_debug(self):
+        """When DEBUG=True, SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE must default to False."""
+        code = (
+            "import sys; sys.path.insert(0, r'" + str(_BACKEND_DIR) + "'); "
+            "import config.settings as s; "
+            "assert s.SESSION_COOKIE_SECURE is False, f'SESSION_COOKIE_SECURE was {s.SESSION_COOKIE_SECURE}'; "
+            "assert s.CSRF_COOKIE_SECURE is False, f'CSRF_COOKIE_SECURE was {s.CSRF_COOKIE_SECURE}'"
+        )
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+            "SYSTEMDRIVE": os.environ.get("SYSTEMDRIVE", ""),
+            "DJANGO_SETTINGS_MODULE": "config.settings",
+            "DJANGO_SECRET_KEY": "test-secret-key-cookies-debug",
+            "DJANGO_DEBUG": "True",
+            "SESSION_COOKIE_SECURE": "",
+            "CSRF_COOKIE_SECURE": "",
+            "POSTGRES_DB": "test",
+            "POSTGRES_USER": "test",
+            "POSTGRES_PASSWORD": "test",
+            "POSTGRES_HOST": "localhost",
+        }
+        env = {k: v for k, v in env.items() if v is not None}
+        result = subprocess.run(
+            [_PYTHON, "-c", code],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+
+class WhiteNoiseConfigurationTest(TestCase):
+    """WhiteNoise middleware and storage configuration."""
+
+    def test_whitenoise_middleware_position(self):
+        """WhiteNoiseMiddleware must immediately follow SecurityMiddleware."""
+        middleware = settings.MIDDLEWARE
+        self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", middleware)
+        sec_index = middleware.index("django.middleware.security.SecurityMiddleware")
+        wn_index = middleware.index("whitenoise.middleware.WhiteNoiseMiddleware")
+        self.assertEqual(
+            wn_index,
+            sec_index + 1,
+            msg="WhiteNoiseMiddleware must be positioned immediately after SecurityMiddleware.",
+        )
+
+    def test_staticfiles_storage_uses_whitenoise(self):
+        """Staticfiles storage backend must use WhiteNoise CompressedManifestStaticFilesStorage."""
+        storages = getattr(settings, "STORAGES", {})
+        staticfiles_storage = storages.get("staticfiles", {})
+        backend_class = staticfiles_storage.get("BACKEND", "")
+        self.assertIn("whitenoise.storage", backend_class)

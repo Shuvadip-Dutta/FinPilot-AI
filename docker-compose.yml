@@ -67,6 +67,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - media_data:/app/backend/media
 
   worker:
     build:
@@ -94,6 +96,8 @@ services:
         "--loglevel=info",
         "--concurrency=2"
       ]
+    volumes:
+      - media_data:/app/backend/media
     healthcheck:
       disable: true
     depends_on:
@@ -157,3 +161,4 @@ volumes:
   postgres_data:
   qdrant_storage:
   redis_data:
+  media_data:

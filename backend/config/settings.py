@@ -49,6 +49,43 @@ else:
     # until the operator explicitly configures DJANGO_ALLOWED_HOSTS.
     ALLOWED_HOSTS = []
 
+# CSRF trusted origins for cross-origin mutation requests.
+# Production: set DJANGO_CSRF_TRUSTED_ORIGINS (e.g. https://app.yourdomain.com).
+# Development (DEBUG=True): defaults to frontend dev server URLs.
+_raw_csrf_trusted_origins = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+if _raw_csrf_trusted_origins.strip():
+    CSRF_TRUSTED_ORIGINS = [
+        origin.strip()
+        for origin in _raw_csrf_trusted_origins.split(",")
+        if origin.strip() and origin.strip() != "*"
+    ]
+elif DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
+# Support HTTPS termination behind reverse proxy (e.g. Cloudflare Tunnel / Nginx).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Secure cookies: default to True in production (DEBUG=False), False in local development.
+_raw_session_cookie_secure = os.getenv("SESSION_COOKIE_SECURE")
+if _raw_session_cookie_secure is not None and _raw_session_cookie_secure.strip():
+    SESSION_COOKIE_SECURE = _raw_session_cookie_secure.lower() in ("true", "1")
+else:
+    SESSION_COOKIE_SECURE = not DEBUG
+
+_raw_csrf_cookie_secure = os.getenv("CSRF_COOKIE_SECURE")
+if _raw_csrf_cookie_secure is not None and _raw_csrf_cookie_secure.strip():
+    CSRF_COOKIE_SECURE = _raw_csrf_cookie_secure.lower() in ("true", "1")
+else:
+    CSRF_COOKIE_SECURE = not DEBUG
+
+
 MARKETAUX_API_TOKEN = os.getenv("MARKETAUX_API_TOKEN")
 UPSTOX_ANALYTICS_ACCESS_TOKEN = os.getenv(
     "UPSTOX_ANALYTICS_ACCESS_TOKEN"
@@ -158,6 +195,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -284,6 +322,15 @@ STATIC_URL = "static/"
 # Aggregated static files directory for collectstatic.
 # Run: python manage.py collectstatic --noinput
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 
 # Email
