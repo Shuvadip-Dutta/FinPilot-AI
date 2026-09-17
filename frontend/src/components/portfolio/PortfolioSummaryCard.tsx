@@ -69,7 +69,7 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
           <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${liveValuation !== null ? 'bg-accent-primary' : 'bg-text-muted'}`}></span>
-            {liveValuation !== null ? 'Live quote valuation' : 'Run AI Analysis for live quotes'}
+            {liveValuation !== null ? 'Live quote valuation' : 'Run AI Audit to fetch live quotes'}
           </p>
         </div>
       </div>
@@ -125,7 +125,7 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
                   : 'bg-status-negative'
               }`}
             ></span>
-            {livePnl !== null ? 'Live quote return' : 'Requires AI Analysis'}
+            {livePnl !== null ? 'Live quote return' : 'Requires AI Audit for quotes'}
           </p>
         </div>
       </div>

@@ -12,7 +12,8 @@
     "test:timeout": "tsx src/api/research.test.ts",
     "test:asset-selector": "tsx src/tests/research_asset_selector.test.ts",
     "test:topbar": "tsx src/tests/topbar_search.test.ts",
-    "test:cache": "tsx src/tests/research_cache.test.ts"
+    "test:cache": "tsx src/tests/research_cache.test.ts",
+    "test:portfolio-val": "tsx src/tests/portfolio_valuation.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

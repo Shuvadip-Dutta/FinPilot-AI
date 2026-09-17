@@ -192,7 +192,7 @@ export const portfolioApi = {
         message: message || 'Perform a comprehensive institutional portfolio diagnostic and risk audit.',
         portfolio_id: String(portfolioId),
       },
-      { timeoutMs: 60000 }
+      { timeoutMs: 360000 }
     );
   },
 
