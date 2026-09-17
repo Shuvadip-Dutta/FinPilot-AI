@@ -34,6 +34,141 @@ export function formatCurrency(
   return `${num < 0 ? '-' : ''}${symbol}${formatted}`;
 }
 
+/**
+ * Context-aware financial statement metric formatter.
+ * Ensures:
+ * - Monetary figures (revenue, net profit, cash flow, debt, assets) use consistent compact currency
+ * - Valuation and liquidity ratios (P/E, P/B, EV/EBITDA, Quick Ratio, Debt/Equity, Beta) are formatted as pure numbers/ratios, NOT currency
+ * - Profitability and growth metrics (Margins, ROE, ROCE, ROA, Yield, Tax Rate) are formatted as percentages
+ * - Per-share metrics (EPS, Diluted EPS) are formatted as per-share currency (e.g. ₹45.20)
+ * - Negative values preserve negative sign and formatting
+ */
+export function formatFinancialStatementValue(
+  name: string,
+  key: string,
+  value: number | string | null | undefined,
+  currency: string = 'INR'
+): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const num =
+    typeof value === 'string'
+      ? parseFloat(value.replace(/,/g, '').trim())
+      : typeof value === 'number'
+      ? value
+      : Number(value);
+  if (isNaN(num)) return '—';
+
+  const lowerName = (name || '').toLowerCase();
+  const lowerKey = (key || '').toLowerCase();
+
+  // 1. Check if percentage / margin / return / growth metric (e.g. EPS Growth, Revenue Growth, OPM, ROE)
+  // Growth metrics take precedence over per-share labels to avoid classifying "EPS Growth" as currency EPS.
+  if (
+    lowerKey.includes('margin') ||
+    lowerKey.includes('yield') ||
+    lowerKey.includes('tax_rate') ||
+    lowerKey.includes('growth') ||
+    lowerKey.includes('cagr') ||
+    lowerKey.includes('percentage') ||
+    lowerKey.includes('pct') ||
+    lowerKey.includes('roe') ||
+    lowerKey.includes('roa') ||
+    lowerKey.includes('roce') ||
+    lowerName.includes('margin') ||
+    lowerName.includes('yield') ||
+    lowerName.includes('tax rate') ||
+    lowerName.includes('growth') ||
+    lowerName.includes('cagr') ||
+    lowerName.includes('roe') ||
+    lowerName.includes('roa') ||
+    lowerName.includes('roce') ||
+    lowerName.includes('return on') ||
+    lowerName.includes('%')
+  ) {
+    return formatPercent(num, false, 2);
+  }
+
+  // 2. Check if per-share metric (Basic EPS, Diluted EPS, DPS, Cash EPS) - NOT growth
+  if (
+    lowerKey === 'eps' ||
+    lowerKey === 'diluted_eps' ||
+    lowerKey.includes('per_share') ||
+    lowerName.includes('eps') ||
+    lowerName.includes('per share')
+  ) {
+    return formatCurrency(num, currency);
+  }
+
+  // 3. Check if valuation / financial ratio (NOT currency!)
+  // e.g. P/E, P/B, EV/EBITDA, EV / EBITDA, Quick Ratio, Debt to Equity, Current Ratio, Beta
+  if (
+    lowerKey.includes('ratio') ||
+    lowerKey.includes('multiple') ||
+    lowerKey.includes('pe_') ||
+    lowerKey.includes('pb_') ||
+    lowerKey.includes('ev_') ||
+    lowerKey.includes('debt_to_equity') ||
+    lowerKey === 'p_e' ||
+    lowerKey === 'p_b' ||
+    lowerKey === 'ev_ebitda' ||
+    lowerKey === 'pe' ||
+    lowerKey === 'pb' ||
+    lowerKey === 'beta' ||
+    lowerName.includes('ratio') ||
+    lowerName.includes('multiple') ||
+    lowerName.includes('p/e') ||
+    lowerName.includes('p/b') ||
+    lowerName.includes('ev/ebitda') ||
+    lowerName.includes('ev / ebitda') ||
+    lowerName.includes('beta') ||
+    lowerName.includes('debt to equity')
+  ) {
+    return formatRatio(num, 2);
+  }
+
+  // 4. Check if share count / volume
+  if (lowerKey.includes('shares') || lowerKey.includes('volume') || lowerName.includes('shares')) {
+    return formatNumber(num, 0);
+  }
+
+  // 5. Default: Monetary line items (Revenue, Expenses, Profit, Cash Flow, Assets, Liabilities, Capex, Debt)
+  if (currency === 'INR') {
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+    const symbol = '₹';
+    if (abs >= 10000000) {
+      return `${sign}${symbol}${(abs / 10000000).toFixed(2)} Cr`;
+    }
+    // Financial statement compact Lakhs notation (e.g. 1086181 -> ₹10.86 L, 123162 -> ₹1.23 L, 95610 -> ₹0.96 L, 94046 -> ₹0.94 L)
+    // Values >= 10,000 are displayed consistently in Lakhs to prevent row-to-row formatting jumps
+    if (abs >= 10000) {
+      return `${sign}${symbol}${(abs / 100000).toFixed(2)} L`;
+    }
+    if (abs >= 1000) {
+      return `${sign}${symbol}${(abs / 1000).toFixed(2)} K`;
+    }
+    return formatCurrency(num, currency);
+  }
+
+  if (currency === 'USD') {
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+    const symbol = '$';
+    if (abs >= 1000000000) {
+      return `${sign}${symbol}${(abs / 1000000000).toFixed(2)} B`;
+    }
+    if (abs >= 1000000) {
+      return `${sign}${symbol}${(abs / 1000000).toFixed(2)} M`;
+    }
+    if (abs >= 1000) {
+      return `${sign}${symbol}${(abs / 1000).toFixed(2)} K`;
+    }
+    return formatCurrency(num, currency);
+  }
+
+  return formatCurrency(num, currency, { compact: true });
+}
+
 export function formatPercent(
   value: number | string | null | undefined,
   includeSign: boolean = true,

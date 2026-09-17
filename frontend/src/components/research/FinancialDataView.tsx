@@ -20,7 +20,7 @@ import {
   DollarSign,
   TrendingUp,
 } from 'lucide-react';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency, formatNumber, formatFinancialStatementValue } from '../../utils/formatters';
 
 interface FinancialDataViewProps {
   ticker: string;
@@ -145,7 +145,7 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
         title={
           <div className="flex items-center justify-between gap-3 w-full">
             <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4 text-amber-400" />
+              <FileSpreadsheet className="w-4 h-4 text-status-warning" />
               <span>Financial Data: {ticker.toUpperCase()}</span>
               <Badge variant="warning" size="sm" className="font-mono">
                 {market.toUpperCase()}
@@ -153,7 +153,7 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
             </div>
             <button
               onClick={fetchData}
-              className="p-1.5 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded text-text-muted hover:text-text-primary transition-colors cursor-pointer"
               title="Retry"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -162,16 +162,16 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
         }
         className={className}
       >
-        <div className="p-6 rounded-xl bg-amber-950/20 border border-amber-800/40 text-center flex flex-col items-center space-y-3">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+        <div className="p-6 rounded-xl bg-status-warning-soft border border-status-warning/30 text-center flex flex-col items-center space-y-3">
+          <div className="w-12 h-12 rounded-xl bg-status-warning/10 border border-status-warning/30 flex items-center justify-center text-status-warning">
             <AlertCircle className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-amber-200">
+            <h3 className="text-sm font-bold text-text-primary">
               Market Constraint: Indian Equities Only
             </h3>
-            <p className="text-xs text-amber-300/80 mt-1 max-w-md leading-relaxed">
-              Financial statements and valuation metrics are currently integrated exclusively for the Indian market (<span className="font-mono text-amber-200">IN</span> / NSE / BSE).
+            <p className="text-xs text-text-secondary mt-1 max-w-md leading-relaxed">
+              Financial statements and valuation metrics are currently integrated exclusively for the Indian market (<span className="font-mono text-status-warning font-semibold">IN</span> / NSE / BSE).
             </p>
             <p className="text-[11px] text-text-muted mt-2">
               To inspect financial statements, search for Indian equities such as <span className="font-mono text-accent-primary font-medium">RELIANCE</span> or <span className="font-mono text-accent-primary font-medium">TCS</span> on the <span className="font-mono text-accent-primary font-medium">IN</span> market.
@@ -256,12 +256,12 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
       title={
         <div className="flex items-center justify-between gap-3 w-full flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400">
+            <div className="w-7 h-7 rounded-lg bg-accent-soft border border-accent-primary/20 flex items-center justify-center text-accent-primary">
               <FileSpreadsheet className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-white text-base">Financial Research</span>
+                <span className="font-bold text-text-primary text-base">Financial Research</span>
                 <Badge variant="info" size="sm" className="font-mono">
                   {ticker.toUpperCase()}
                 </Badge>
@@ -274,13 +274,13 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
 
           <div className="flex items-center gap-2">
             {/* View Switcher: Statements vs Metrics */}
-            <div className="flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-xs font-mono">
+            <div className="flex rounded-lg bg-surface-secondary p-0.5 border border-border-theme text-xs font-mono">
               <button
                 onClick={() => setActiveTab('statements')}
                 className={`px-3 py-1 rounded transition-colors cursor-pointer ${
                   activeTab === 'statements'
-                    ? 'bg-slate-800 text-white font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-surface text-text-primary font-semibold shadow-xs'
+                    : 'text-text-muted hover:text-text-primary'
                 }`}
               >
                 Statements {statementList.length > 0 ? `(${statementList.length})` : ''}
@@ -289,8 +289,8 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                 onClick={() => setActiveTab('metrics')}
                 className={`px-3 py-1 rounded transition-colors cursor-pointer ${
                   activeTab === 'metrics'
-                    ? 'bg-slate-800 text-white font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-surface text-text-primary font-semibold shadow-xs'
+                    : 'text-text-muted hover:text-text-primary'
                 }`}
               >
                 Key Metrics {metricsList.length > 0 ? `(${metricsList.length})` : ''}
@@ -299,7 +299,7 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
 
             <button
               onClick={fetchData}
-              className="p-1.5 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded text-text-muted hover:text-text-primary transition-colors cursor-pointer"
               title="Refresh financial data"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -317,15 +317,15 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
             {metricsList.map((m, idx) => (
               <div
                 key={idx}
-                className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/80 space-y-1"
+                className="p-2.5 rounded-lg bg-surface border border-border-theme space-y-1"
               >
-                <span className="text-[10px] text-slate-400 font-mono block truncate" title={m.name}>
+                <span className="text-[10px] text-text-muted font-mono block truncate" title={m.name}>
                   {m.name}
                 </span>
-                <p className="text-xs font-bold text-slate-100 font-mono">
+                <p className="text-xs font-bold text-text-primary font-mono">
                   {m.raw_value || (m.value !== null ? formatNumber(m.value) : '—')}
                 </p>
-                <span className="text-[9px] text-slate-400 font-mono block uppercase">
+                <span className="text-[9px] text-text-muted font-mono block uppercase">
                   {m.category}
                 </span>
               </div>
@@ -343,9 +343,9 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                 onRetry={fetchData}
               />
             ) : statementList.length === 0 ? (
-              <div className="p-8 rounded-xl bg-slate-950/40 border border-slate-800/80 text-center text-xs text-slate-400">
-                <p className="font-semibold text-slate-300">No financial statement records returned</p>
-                <p className="mt-1 text-[11px] text-slate-400">
+              <div className="p-8 rounded-xl bg-surface-secondary/40 border border-border-theme text-center text-xs text-text-muted">
+                <p className="font-semibold text-text-primary">No financial statement records returned</p>
+                <p className="mt-1 text-[11px] text-text-muted">
                   The upstream provider did not return audited statements for {ticker} on {market}.
                 </p>
               </div>
@@ -354,13 +354,13 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                 {/* Statement Type Filter Pills */}
                 {availableStatementTypes.length > 1 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] text-slate-400 font-mono mr-1">Statement:</span>
+                    <span className="text-[11px] text-text-muted font-mono mr-1">Statement:</span>
                     <button
                       onClick={() => setSelectedStatementType('ALL')}
                       className={`px-2.5 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
                         selectedStatementType === 'ALL'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
-                          : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
+                          ? 'bg-accent-soft text-accent-primary border border-accent-primary/30 font-semibold'
+                          : 'bg-surface text-text-muted hover:text-text-primary border border-border-theme hover:bg-surface-secondary'
                       }`}
                     >
                       All ({statementList.length})
@@ -371,8 +371,8 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                         onClick={() => setSelectedStatementType(type)}
                         className={`px-2.5 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
                           selectedStatementType === type
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
-                            : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
+                            ? 'bg-accent-soft text-accent-primary border border-accent-primary/30 font-semibold'
+                            : 'bg-surface text-text-muted hover:text-text-primary border border-border-theme hover:bg-surface-secondary'
                         }`}
                       >
                         {getStatementTypeLabel(type)} ({statementList.filter((s) => s.statement_type === type).length})
@@ -411,12 +411,12 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                   return (
                     <div
                       key={stType}
-                      className="rounded-xl border border-slate-800 bg-slate-950/70 overflow-hidden space-y-0"
+                      className="rounded-xl border border-border-theme bg-surface overflow-hidden space-y-0 shadow-card"
                     >
                       {/* Statement Header */}
-                      <div className="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
-                        <span className="font-semibold text-xs text-slate-200 flex items-center gap-1.5">
-                          <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                      <div className="px-4 py-2.5 bg-surface-secondary/70 border-b border-border-theme flex items-center justify-between">
+                        <span className="font-semibold text-xs text-text-primary flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-accent-primary" />
                           {getStatementTypeLabel(stType)}
                         </span>
                         <Badge variant="neutral" size="sm" className="font-mono">
@@ -427,22 +427,22 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                       {/* Period Columns Table */}
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs text-left border-collapse">
-                          <thead className="bg-slate-950/80 text-slate-400 font-mono uppercase text-[10.5px] border-b border-slate-800/80">
+                          <thead className="bg-surface-secondary/40 text-text-muted font-mono uppercase text-[10.5px] border-b border-border-theme">
                             <tr>
-                              <th className="px-4 py-2.5 font-semibold text-slate-300">Metric</th>
+                              <th className="px-4 py-2.5 font-semibold text-text-secondary">Metric</th>
                               {typePeriods.map((period) => (
-                                <th key={period} className="px-4 py-2.5 font-semibold text-right text-slate-300 whitespace-nowrap">
+                                <th key={period} className="px-4 py-2.5 font-semibold text-right text-text-secondary whitespace-nowrap">
                                   {period.startsWith('20') ? `FY ${period}` : period}
                                 </th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-800/60 font-mono text-xs">
+                          <tbody className="divide-y divide-border-theme font-mono text-xs">
                             {uniqueMetricKeys.map((key) => {
                               const metricName = metricKeysMap.get(key) || key;
                               return (
-                                <tr key={key} className="hover:bg-slate-900/40 transition-colors">
-                                  <td className="px-4 py-2 font-medium text-slate-200 font-sans">
+                                <tr key={key} className="hover:bg-surface-secondary/40 transition-colors">
+                                  <td className="px-4 py-2 font-medium text-text-primary font-sans">
                                     {metricName}
                                   </td>
                                   {typePeriods.map((period) => {
@@ -457,12 +457,12 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                                         key={period}
                                         className={`px-4 py-2 text-right font-mono ${
                                           val !== null && val !== undefined && val < 0
-                                            ? 'text-rose-400'
-                                            : 'text-slate-300'
+                                            ? 'text-status-negative'
+                                            : 'text-text-primary'
                                         }`}
                                       >
                                         {val !== null && val !== undefined
-                                          ? formatCurrency(val, currency, { compact: true })
+                                          ? formatFinancialStatementValue(metricName, key, val, currency)
                                           : '—'}
                                       </td>
                                     );
@@ -491,9 +491,9 @@ export const FinancialDataView: React.FC<FinancialDataViewProps> = ({
                 onRetry={fetchData}
               />
             ) : metricsList.length === 0 ? (
-              <div className="p-8 rounded-xl bg-slate-950/40 border border-slate-800/80 text-center text-xs text-slate-400">
-                <p className="font-semibold text-slate-300">No key metrics returned</p>
-                <p className="mt-1 text-[11px] text-slate-400">
+              <div className="p-8 rounded-xl bg-surface-secondary/40 border border-border-theme text-center text-xs text-text-muted">
+                <p className="font-semibold text-text-primary">No key metrics returned</p>
+                <p className="mt-1 text-[11px] text-text-muted">
                   The upstream provider did not return valuation or ratio metrics for {ticker} on {market}.
                 </p>
               </div>
