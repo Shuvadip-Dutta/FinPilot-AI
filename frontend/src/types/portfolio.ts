@@ -63,15 +63,27 @@ export interface UpdateHoldingPayload {
   average_price?: number | string;
 }
 
-export interface PortfolioStructuredValuation {
+export interface CurrencyTotalItem {
   invested_value: number;
   current_value: number;
   profit_loss: number;
   profit_loss_percentage: number;
+  currency: string;
+  currency_symbol: string;
+  holdings_count: number;
+}
+
+export interface PortfolioStructuredValuation {
+  invested_value?: number | null;
+  current_value?: number | null;
+  profit_loss?: number | null;
+  profit_loss_percentage?: number | null;
   holdings_count: number;
   currency?: string | null;
   currency_context?: string | null;
   market_currency_context?: Record<string, { market: string; currency: string; currency_symbol: string }> | null;
+  currency_totals?: Record<string, CurrencyTotalItem> | null;
+  is_mixed_currency?: boolean;
 }
 
 export interface PortfolioAiAnalysisResponse {
@@ -294,6 +306,11 @@ export interface HoldingsListResponse {
  */
 export function getPortfolioInvestedValue(p: Portfolio | null | undefined): number | null {
   if (!p || !p.holdings || p.holdings.length === 0) return null;
+  // If multiple markets exist (e.g. IN + US), do not sum nominally without FX conversion
+  const markets = new Set(p.holdings.map((h) => h.market).filter(Boolean));
+  if (markets.size > 1) {
+    return null;
+  }
   let total = 0;
   for (const h of p.holdings) {
     const inv = getHoldingInvestedValue(h);
@@ -303,6 +320,7 @@ export function getPortfolioInvestedValue(p: Portfolio | null | undefined): numb
   }
   return total;
 }
+
 
 export function getPortfolioCurrentValue(p: Portfolio | null | undefined): number | null {
   // Current value is authoritatively returned by AI analysis or per-holding quote; return null if not computed

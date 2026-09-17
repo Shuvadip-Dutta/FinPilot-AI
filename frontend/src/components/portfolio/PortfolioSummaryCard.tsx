@@ -24,6 +24,20 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
   const investedValue = getPortfolioInvestedValue(portfolio);
   const count = holdingsCount ?? portfolio?.holdings?.length ?? 0;
 
+  // Single portfolio currency
+  const isAllUs = portfolio?.holdings && portfolio.holdings.length > 0 && portfolio.holdings.every((h) => h.market === 'US');
+  const defaultCurrency = isAllUs ? 'USD' : 'INR';
+
+  // Mixed currency detection
+  const isMixed = Boolean(
+    aiValuation?.is_mixed_currency ||
+      aiValuation?.currency === 'MIXED' ||
+      (portfolio?.holdings && new Set(portfolio.holdings.map((h) => h.market).filter(Boolean)).size > 1)
+  );
+  const currencyTotals = aiValuation?.currency_totals;
+  const inrTotal = currencyTotals?.INR;
+  const usdTotal = currencyTotals?.USD;
+
   // Live valuation available only if AI analysis has been run
   const liveValuation = aiValuation?.current_value ?? null;
   const livePnl = aiValuation?.profit_loss ?? null;
@@ -43,13 +57,29 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
         </div>
         <div className="mt-3">
-          <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
-            {investedValue !== null ? formatCurrency(investedValue, 'INR') : '—'}
-          </div>
-          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary"></span>
-            Authoritative cost basis from holdings
-          </p>
+          {isMixed && inrTotal && usdTotal ? (
+            <div>
+              <div className="text-xl font-bold font-mono text-text-primary tracking-tight">
+                {formatCurrency(inrTotal.invested_value, 'INR', { compact: true })}
+                <span className="text-text-muted text-sm mx-1.5">+</span>
+                {formatCurrency(usdTotal.invested_value, 'USD', { compact: true })}
+              </div>
+              <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary"></span>
+                Separate basis (IN + US)
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
+                {investedValue !== null ? formatCurrency(investedValue, defaultCurrency) : '—'}
+              </div>
+              <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary"></span>
+                Authoritative cost basis from holdings
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -64,13 +94,29 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
         </div>
         <div className="mt-3">
-          <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
-            {liveValuation !== null ? formatCurrency(liveValuation, 'INR') : '—'}
-          </div>
-          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${liveValuation !== null ? 'bg-accent-primary' : 'bg-text-muted'}`}></span>
-            {liveValuation !== null ? 'Live quote valuation' : 'Run AI Audit to fetch live quotes'}
-          </p>
+          {isMixed && inrTotal && usdTotal ? (
+            <div>
+              <div className="text-xl font-bold font-mono text-text-primary tracking-tight">
+                {formatCurrency(inrTotal.current_value, 'INR', { compact: true })}
+                <span className="text-text-muted text-sm mx-1.5">+</span>
+                {formatCurrency(usdTotal.current_value, 'USD', { compact: true })}
+              </div>
+              <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary"></span>
+                Multi-currency live valuation
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="text-2xl font-bold font-mono text-text-primary tracking-tight">
+                {liveValuation !== null ? formatCurrency(liveValuation, defaultCurrency) : '—'}
+              </div>
+              <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${liveValuation !== null ? 'bg-accent-primary' : 'bg-text-muted'}`}></span>
+                {liveValuation !== null ? 'Live quote valuation' : 'Run AI Audit to fetch live quotes'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -99,34 +145,54 @@ export const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
         </div>
         <div className="mt-3">
-          <div
-            className={`text-2xl font-bold font-mono tracking-tight flex items-baseline gap-2 ${
-              isProfitable === null
-                ? 'text-text-muted'
-                : isProfitable
-                ? 'text-status-positive'
-                : 'text-status-negative'
-            }`}
-          >
-            <span>{livePnl !== null ? formatCurrency(livePnl, 'INR') : '—'}</span>
-            {livePnlPercent !== null && (
-              <span className="text-sm font-semibold">
-                ({formatPercent(livePnlPercent, true)})
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
-            <span
-              className={`inline-block w-1.5 h-1.5 rounded-full ${
-                isProfitable === null
-                  ? 'bg-text-muted'
-                  : isProfitable
-                  ? 'bg-status-positive'
-                  : 'bg-status-negative'
-              }`}
-            ></span>
-            {livePnl !== null ? 'Live quote return' : 'Requires AI Audit for quotes'}
-          </p>
+          {isMixed && inrTotal && usdTotal ? (
+            <div>
+              <div className="text-lg font-bold font-mono tracking-tight flex items-baseline gap-2">
+                <span className={inrTotal.profit_loss >= 0 ? 'text-status-positive' : 'text-status-negative'}>
+                  {formatCurrency(inrTotal.profit_loss, 'INR', { compact: true })}
+                </span>
+                <span className="text-text-muted text-sm">|</span>
+                <span className={usdTotal.profit_loss >= 0 ? 'text-status-positive' : 'text-status-negative'}>
+                  {formatCurrency(usdTotal.profit_loss, 'USD', { compact: true })}
+                </span>
+              </div>
+              <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary"></span>
+                Separate P/L by currency
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div
+                className={`text-2xl font-bold font-mono tracking-tight flex items-baseline gap-2 ${
+                  isProfitable === null
+                    ? 'text-text-muted'
+                    : isProfitable
+                    ? 'text-status-positive'
+                    : 'text-status-negative'
+                }`}
+              >
+                <span>{livePnl !== null ? formatCurrency(livePnl, defaultCurrency) : '—'}</span>
+                {livePnlPercent !== null && (
+                  <span className="text-sm font-semibold">
+                    ({formatPercent(livePnlPercent, true)})
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5">
+                <span
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    isProfitable === null
+                      ? 'bg-text-muted'
+                      : isProfitable
+                      ? 'bg-status-positive'
+                      : 'bg-status-negative'
+                  }`}
+                ></span>
+                {livePnl !== null ? 'Live quote return' : 'Requires AI Audit for quotes'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

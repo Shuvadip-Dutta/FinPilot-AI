@@ -30,17 +30,31 @@ class Portfolio(BaseModel):
     holdings: list[Holding]
 
 
-class PortfolioIntelligence(BaseModel):
-    """Aggregate valuation and performance for a portfolio."""
+class CurrencySubtotal(BaseModel):
+    """Subtotal metrics for a single currency in a portfolio."""
 
     invested_value: float
     current_value: float
     profit_loss: float
     profit_loss_percentage: float
+    currency: str
+    currency_symbol: str
+    holdings_count: int
+
+
+class PortfolioIntelligence(BaseModel):
+    """Aggregate valuation and performance for a portfolio."""
+
+    invested_value: float | None = None
+    current_value: float | None = None
+    profit_loss: float | None = None
+    profit_loss_percentage: float | None = None
     holdings_count: int
     currency: str | None = None
     currency_context: str | None = None
     market_currency_context: dict[str, dict[str, str]] | None = None
+    currency_totals: dict[str, CurrencySubtotal] | None = None
+    is_mixed_currency: bool = False
 
 
 class PortfolioRiskMetrics(BaseModel):

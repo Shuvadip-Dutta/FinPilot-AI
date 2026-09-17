@@ -31,9 +31,13 @@ def calculate_current_weights(
 
     for holding in portfolio.holdings:
         ticker = holding.ticker.strip().upper()
-        if ticker not in last_prices:
+        market_key = f"{holding.market}:{ticker}"
+        if market_key in last_prices:
+            price = last_prices[market_key]
+        elif ticker in last_prices:
+            price = last_prices[ticker]
+        else:
             raise PortfolioMarketDataError(f"Missing current market price for holding {ticker}.")
-        price = last_prices[ticker]
         if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
             raise PortfolioMarketDataError(f"Invalid market price for holding {ticker}: {price}.")
 

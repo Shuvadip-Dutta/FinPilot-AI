@@ -265,17 +265,74 @@ class PortfolioRiskView(APIView):
             market_data_tool=create_portfolio_market_data_adapter()
         )
         try:
-            last_prices = intel_service.get_last_prices(canonical_portfolio)
+            live_prices = intel_service.get_last_prices(canonical_portfolio)
         except Exception:
-            last_prices = {}
+            live_prices = {}
+
+        # Determine ticker market distribution to avoid bare-ticker cross-market collisions
+        ticker_markets: dict[str, set[str]] = {}
+        for holding in canonical_portfolio.holdings:
+            t = holding.ticker.strip().upper()
+            ticker_markets.setdefault(t, set()).add(holding.market)
+
+        last_prices = {}
+        price_sources = {}
+        per_holding_sources = []
+        missing_price_tickers = []
 
         for holding in canonical_portfolio.holdings:
             t = holding.ticker.strip().upper()
-            if t not in last_prices or last_prices[t] <= 0:
-                if t in historical_prices and historical_prices[t]:
-                    last_prices[t] = float(historical_prices[t][-1])
-                else:
-                    last_prices[t] = float(holding.average_price)
+            market_key = f"{holding.market}:{t}"
+            has_collision = len(ticker_markets.get(t, set())) > 1
+
+            live_price = live_prices.get(market_key)
+            if live_price is None:
+                live_price = live_prices.get(t)
+
+            if live_price is not None and live_price > 0:
+                resolved_price = float(live_price)
+                source = "live"
+            elif t in historical_prices and historical_prices[t] and float(historical_prices[t][-1]) > 0:
+                resolved_price = float(historical_prices[t][-1])
+                source = "historical_fallback"
+            elif holding.average_price and float(holding.average_price) > 0:
+                resolved_price = float(holding.average_price)
+                source = "average_price_fallback"
+            else:
+                resolved_price = None
+                source = "unavailable"
+                missing_price_tickers.append(market_key if has_collision else t)
+
+            per_holding_sources.append(source)
+            price_sources[market_key] = source
+            if not has_collision:
+                price_sources[t] = source
+
+            if resolved_price is not None:
+                last_prices[market_key] = resolved_price
+                if not has_collision:
+                    last_prices[t] = resolved_price
+
+        if missing_price_tickers:
+            return Response(
+                {
+                    "error": f"Failed to establish reliable prices for holdings: {', '.join(missing_price_tickers)}. Cannot compute holding weights.",
+                    "price_sources": price_sources,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        unique_sources = set(per_holding_sources)
+        if unique_sources == {"live"}:
+            overall_price_source = "live"
+        elif "live" in unique_sources:
+            overall_price_source = "mixed_live_fallback"
+        elif unique_sources == {"historical_fallback"}:
+            overall_price_source = "historical_fallback"
+        elif unique_sources == {"average_price_fallback"}:
+            overall_price_source = "average_price_fallback"
+        else:
+            overall_price_source = "mixed_fallback"
 
         try:
             weights = calculate_current_weights(canonical_portfolio, last_prices)
@@ -305,6 +362,8 @@ class PortfolioRiskView(APIView):
         response_data = {
             "portfolio_id": str(portfolio.id),
             "portfolio_name": portfolio.name,
+            "price_source": overall_price_source,
+            "price_sources": price_sources,
             "risk_metrics": metrics_dict,
             "drawdown_series": drawdown_series,
             "historical_series": drawdown_series,
@@ -354,6 +413,73 @@ class PortfolioOptimizationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Calculate current portfolio weights using live/latest market prices
+        canonical_portfolio = portfolio.to_pydantic()
+        intel_service = PortfolioIntelligenceService(
+            market_data_tool=create_portfolio_market_data_adapter()
+        )
+        try:
+            live_prices = intel_service.get_last_prices(canonical_portfolio)
+        except Exception:
+            live_prices = {}
+
+        # Determine ticker market distribution to avoid bare-ticker cross-market collisions
+        ticker_markets: dict[str, set[str]] = {}
+        for holding in canonical_portfolio.holdings:
+            t = holding.ticker.strip().upper()
+            ticker_markets.setdefault(t, set()).add(holding.market)
+
+        last_prices = {}
+        price_sources = {}
+        per_holding_sources = []
+        missing_price_tickers = []
+
+        for holding in canonical_portfolio.holdings:
+            t = holding.ticker.strip().upper()
+            market_key = f"{holding.market}:{t}"
+            has_collision = len(ticker_markets.get(t, set())) > 1
+
+            live_price = live_prices.get(market_key)
+            if live_price is None:
+                live_price = live_prices.get(t)
+
+            if live_price is not None and live_price > 0:
+                resolved_price = float(live_price)
+                source = "live"
+            elif (
+                t in optimization_input.historical_prices
+                and optimization_input.historical_prices[t]
+                and float(optimization_input.historical_prices[t][-1]) > 0
+            ):
+                resolved_price = float(optimization_input.historical_prices[t][-1])
+                source = "historical_fallback"
+            elif holding.average_price and float(holding.average_price) > 0:
+                resolved_price = float(holding.average_price)
+                source = "average_price_fallback"
+            else:
+                resolved_price = None
+                source = "unavailable"
+                missing_price_tickers.append(market_key if has_collision else t)
+
+            per_holding_sources.append(source)
+            price_sources[market_key] = source
+            if not has_collision:
+                price_sources[t] = source
+
+            if resolved_price is not None:
+                last_prices[market_key] = resolved_price
+                if not has_collision:
+                    last_prices[t] = resolved_price
+
+        if missing_price_tickers:
+            return Response(
+                {
+                    "error": f"Failed to establish reliable prices for holdings: {', '.join(missing_price_tickers)}. Cannot compute holding weights.",
+                    "price_sources": price_sources,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Execute deterministic optimization
         engine = PortfolioOptimizationEngine()
         opt_result = engine.optimize(optimization_input)
@@ -364,55 +490,55 @@ class PortfolioOptimizationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Calculate current portfolio weights using live/latest market prices
-        canonical_portfolio = portfolio.to_pydantic()
-        intel_service = PortfolioIntelligenceService(
-            market_data_tool=create_portfolio_market_data_adapter()
-        )
-        try:
-            last_prices = intel_service.get_last_prices(canonical_portfolio)
-        except Exception:
-            last_prices = {}
-
-        for holding in canonical_portfolio.holdings:
-            t = holding.ticker.strip().upper()
-            if t not in last_prices or last_prices[t] <= 0:
-                if t in optimization_input.historical_prices and optimization_input.historical_prices[t]:
-                    last_prices[t] = float(optimization_input.historical_prices[t][-1])
-                else:
-                    last_prices[t] = float(holding.average_price)
+        current_weights_map = None
+        overall_price_source = None
 
         try:
             current_weights_map = calculate_current_weights(canonical_portfolio, last_prices)
+            unique_sources = set(per_holding_sources)
+            if unique_sources == {"live"}:
+                overall_price_source = "live"
+            elif "live" in unique_sources:
+                overall_price_source = "mixed_live_fallback"
+            elif unique_sources == {"historical_fallback"}:
+                overall_price_source = "historical_fallback"
+            elif unique_sources == {"average_price_fallback"}:
+                overall_price_source = "average_price_fallback"
+            else:
+                overall_price_source = "mixed_fallback"
         except Exception:
-            asset_count = len(optimization_input.tickers)
-            current_weights_map = {t: 1.0 / asset_count for t in optimization_input.tickers}
+            # Issue 3: NEVER substitute invented equal weights (1/N)!
+            current_weights_map = None
+            overall_price_source = "calculation_failed"
 
         # Compute current portfolio metrics using existing deterministic formulas
         returns = engine.calculate_returns(optimization_input)
         expected_returns = engine.calculate_annualized_expected_returns(returns)
         covariance = engine.calculate_annualized_covariance(returns)
 
-        current_weights_list = [current_weights_map.get(t, 0.0) for t in optimization_input.tickers]
-        total_curr = sum(current_weights_list)
-        if total_curr > 0:
-            current_weights_list = [w / total_curr for w in current_weights_list]
+        if current_weights_map is not None:
+            current_weights_list = [current_weights_map.get(t, 0.0) for t in optimization_input.tickers]
+            total_curr = sum(current_weights_list)
+            if total_curr > 0:
+                current_weights_list = [w / total_curr for w in current_weights_list]
 
-        try:
-            cur_ret, cur_vol, cur_sharpe = engine.calculate_portfolio_metrics(
-                weights=current_weights_list,
-                expected_returns=expected_returns,
-                covariance=covariance,
-                risk_free_rate=optimization_input.risk_free_rate,
-            )
-        except Exception:
-            cur_ret, cur_vol, cur_sharpe = 0.0, 0.0, 0.0
+            try:
+                cur_ret, cur_vol, cur_sharpe = engine.calculate_portfolio_metrics(
+                    weights=current_weights_list,
+                    expected_returns=expected_returns,
+                    covariance=covariance,
+                    risk_free_rate=optimization_input.risk_free_rate,
+                )
+            except Exception:
+                cur_ret, cur_vol, cur_sharpe = None, None, None
+        else:
+            cur_ret, cur_vol, cur_sharpe = None, None, None
 
         current_metrics = {
             "expected_return": cur_ret,
             "volatility": cur_vol,
             "sharpe_ratio": cur_sharpe,
-        }
+        } if current_weights_map is not None else None
 
         optimized_metrics = {
             "expected_return": opt_result.expected_return,
@@ -423,32 +549,44 @@ class PortfolioOptimizationView(APIView):
         # Build weight comparisons
         weight_comparisons = []
         for ticker in optimization_input.tickers:
-            cur_w = current_weights_map.get(ticker, 0.0) * 100.0
             tgt_w = opt_result.optimized_weights.get(ticker, 0.0) * 100.0
-            diff = tgt_w - cur_w
-            direction = "hold"
-            if diff > 0.25:
-                direction = "increase"
-            elif diff < -0.25:
-                direction = "decrease"
-
             h_obj = portfolio.holdings.filter(ticker__iexact=ticker).first()
             h_name = getattr(h_obj, "name", None) or ticker
 
-            weight_comparisons.append({
-                "ticker": ticker,
-                "name": h_name,
-                "current_weight": round(cur_w, 2),
-                "target_weight": round(tgt_w, 2),
-                "weight_difference": round(diff, 2),
-                "direction": direction,
-            })
+            if current_weights_map is not None:
+                cur_w = current_weights_map.get(ticker, 0.0) * 100.0
+                diff = tgt_w - cur_w
+                direction = "hold"
+                if diff > 0.25:
+                    direction = "increase"
+                elif diff < -0.25:
+                    direction = "decrease"
+
+                weight_comparisons.append({
+                    "ticker": ticker,
+                    "name": h_name,
+                    "current_weight": round(cur_w, 2),
+                    "target_weight": round(tgt_w, 2),
+                    "weight_difference": round(diff, 2),
+                    "direction": direction,
+                })
+            else:
+                weight_comparisons.append({
+                    "ticker": ticker,
+                    "name": h_name,
+                    "current_weight": None,
+                    "target_weight": round(tgt_w, 2),
+                    "weight_difference": None,
+                    "direction": "target_only",
+                })
 
         response_data = {
             "portfolio_id": str(portfolio.id),
             "portfolio_name": portfolio.name,
             "status": "success",
             "objective": validated_data.get("objective", "max_sharpe"),
+            "price_source": overall_price_source,
+            "price_sources": price_sources,
             "current_weights": current_weights_map,
             "optimized_weights": opt_result.optimized_weights,
             "current_metrics": current_metrics,

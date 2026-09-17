@@ -1752,6 +1752,53 @@ class PortfolioRiskViewTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("error", response.json())
 
+    @patch("apps.ai.services.research_tools.get_market_data")
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_risk_price_source_metadata_live_and_fallback(self, mock_hist, mock_mkt):
+        """Risk calculation explicitly reports price_source metadata without pretending fallbacks are live."""
+        mock_hist.side_effect = self._mock_get_historical_data
+        # Return live price for ASSET_A but fail for ASSET_B
+        def mock_market(ticker, market="IN"):
+            if ticker == "ASSET_A":
+                return {"last_price": 115.0}
+            raise ValueError("No live quote for ASSET_B")
+
+        mock_mkt.side_effect = mock_market
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIn("price_source", data)
+        self.assertIn("price_sources", data)
+        self.assertEqual(data["price_sources"]["ASSET_A"], "live")
+        self.assertEqual(data["price_sources"]["ASSET_B"], "historical_fallback")
+        self.assertEqual(data["price_source"], "mixed_live_fallback")
+
+    @patch("apps.ai.services.research_tools.get_market_data")
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_risk_fails_safely_when_no_price_available(self, mock_hist, mock_mkt):
+        """Risk calculation fails safely with 400 when prices cannot be established."""
+        mock_hist.side_effect = self._mock_get_historical_data
+        mock_mkt.side_effect = ValueError("No quote")
+
+        fake_portfolio = self.portfolio.to_pydantic()
+        fake_portfolio.holdings[0].average_price = 0.0
+
+        with patch.object(Portfolio, "to_pydantic", return_value=fake_portfolio):
+            with patch("apps.portfolio.builder.PortfolioWorkflowInputBuilder.fetch_portfolio_historical_candles", side_effect=ValueError("No candles")):
+                with patch("apps.portfolio.builder.PortfolioWorkflowInputBuilder.fetch_portfolio_historical_prices", return_value={"ASSET_A": [], "ASSET_B": [50.0]}):
+                    self.client.force_authenticate(user=self.user)
+                    url = reverse("portfolio-risk", kwargs={"portfolio_id": self.portfolio.id})
+                    response = self.client.get(url)
+
+                    self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                    self.assertIn("error", response.json())
+                    self.assertIn("Failed to establish reliable prices", response.json()["error"])
+
+
 
 class PortfolioOptimizationViewTestCase(TestCase):
     """Test suite for POST /api/v1/portfolio/<portfolio_id>/optimize/ endpoint."""
@@ -1982,6 +2029,90 @@ class PortfolioOptimizationViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("error", response.json())
+
+    @patch("apps.ai.services.research_tools.get_market_data")
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_optimization_price_source_metadata(self, mock_hist, mock_mkt):
+        """Optimization explicitly reports price_source metadata."""
+        mock_hist.side_effect = self._mock_get_historical_data
+        mock_mkt.side_effect = lambda ticker, market="IN": {"last_price": 120.0}
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {"objective": "max_sharpe"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["price_source"], "live")
+        self.assertEqual(data["price_sources"]["ASSET_A"], "live")
+        self.assertEqual(data["price_sources"]["ASSET_B"], "live")
+
+    @patch("apps.ai.portfolio.risk.calculate_current_weights")
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    def test_optimization_does_not_default_to_equal_weights_when_current_weights_fail(self, mock_hist, mock_calc):
+        """Issue 3: Optimization returns current_weights=null rather than inventing equal weights (1/N)."""
+        mock_hist.side_effect = self._mock_get_historical_data
+        # Simulate calculate_current_weights failure
+        mock_calc.side_effect = ValueError("Current holding weights cannot be established")
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+        response = self.client.post(url, {"objective": "max_sharpe"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        # Crucial requirement: NEVER substitute invented equal weights!
+        self.assertIsNone(data["current_weights"])
+        self.assertIsNone(data["current_metrics"])
+        self.assertEqual(data["price_source"], "calculation_failed")
+
+        # Target/optimized weights are still calculated mathematically
+        self.assertIsNotNone(data["optimized_weights"])
+        self.assertIn("ASSET_A", data["optimized_weights"])
+        self.assertIn("ASSET_B", data["optimized_weights"])
+
+        # Comparisons have null current_weight, not 50%
+        comparisons = data["weight_comparisons"]
+        self.assertEqual(len(comparisons), 2)
+        for comp in comparisons:
+            self.assertIsNone(comp["current_weight"])
+            self.assertIsNotNone(comp["target_weight"])
+            self.assertIsNone(comp["weight_difference"])
+            self.assertEqual(comp["direction"], "target_only")
+
+    @patch("apps.ai.services.research_tools.get_historical_data")
+    @patch("apps.ai.services.research_tools.get_market_data")
+    def test_optimization_fails_safely_when_holding_price_unavailable(self, mock_mkt, mock_hist):
+        """Optimization returns HTTP 400 with price_sources when a holding has no resolvable price."""
+        mock_hist.side_effect = self._mock_get_historical_data
+        mock_mkt.side_effect = ValueError("No quote")
+
+        fake_portfolio = self.portfolio.to_pydantic()
+        fake_portfolio.holdings[0].average_price = 0.0
+
+        with patch.object(Portfolio, "to_pydantic", return_value=fake_portfolio):
+            from apps.portfolio.builder import PortfolioWorkflowInputBuilder
+            orig_build = PortfolioWorkflowInputBuilder.build_optimization_input
+
+            def fake_build(builder_self, *args, **kwargs):
+                inp = orig_build(builder_self, *args, **kwargs)
+                inp.historical_prices["ASSET_A"] = []
+                return inp
+
+            with patch.object(PortfolioWorkflowInputBuilder, "build_optimization_input", fake_build):
+                self.client.force_authenticate(user=self.user)
+                url = reverse("portfolio-optimize", kwargs={"portfolio_id": self.portfolio.id})
+                response = self.client.post(url, {"objective": "max_sharpe"}, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                data = response.json()
+                self.assertIn("error", data)
+                self.assertIn("Failed to establish reliable prices", data["error"])
+                self.assertIn("ASSET_A", data["error"])
+                self.assertIn("price_sources", data)
+                self.assertEqual(data["price_sources"]["ASSET_A"], "unavailable")
+
 
 
 class PortfolioBacktestAPITestCase(TestCase):

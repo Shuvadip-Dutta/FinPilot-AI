@@ -458,35 +458,51 @@ class FinalSynthesisAgent(BaseAgent):
                 dumped = value.model_dump() if hasattr(value, "model_dump") else value.dict()
                 if result_key == "portfolio":
                     currency = dumped.get("currency")
-                    invested = dumped.get("invested_value", 0.0)
-                    current = dumped.get("current_value", 0.0)
-                    pnl = dumped.get("profit_loss", 0.0)
-                    pnl_pct = dumped.get("profit_loss_percentage", 0.0)
+                    invested = dumped.get("invested_value")
+                    current = dumped.get("current_value")
+                    pnl = dumped.get("profit_loss")
+                    pnl_pct = dumped.get("profit_loss_percentage")
                     count = dumped.get("holdings_count", 0)
 
                     if currency == "INR":
                         curr_desc = (
                             f"All portfolio figures are strictly denominated in Indian Rupees (INR / ₹). "
-                            f"Invested capital: ₹{invested:,.2f}, Current market value: ₹{current:,.2f}, "
-                            f"Unrealized P/L: ₹{pnl:,.2f} ({pnl_pct:.2f}%), Holdings count: {count}. "
+                            f"Invested capital: ₹{invested or 0.0:,.2f}, Current market value: ₹{current or 0.0:,.2f}, "
+                            f"Unrealized P/L: ₹{pnl or 0.0:,.2f} ({pnl_pct or 0.0:.2f}%), Holdings count: {count}. "
                             f"You must use the '₹' symbol or 'INR' for all monetary amounts; NEVER use '$' or 'USD'."
                         )
                     elif currency == "USD":
                         curr_desc = (
                             f"All portfolio figures are strictly denominated in US Dollars (USD / $). "
-                            f"Invested capital: ${invested:,.2f}, Current market value: ${current:,.2f}, "
-                            f"Unrealized P/L: ${pnl:,.2f} ({pnl_pct:.2f}%), Holdings count: {count}. "
+                            f"Invested capital: ${invested or 0.0:,.2f}, Current market value: ${current or 0.0:,.2f}, "
+                            f"Unrealized P/L: ${pnl or 0.0:,.2f} ({pnl_pct or 0.0:.2f}%), Holdings count: {count}. "
                             f"Use the '$' symbol or 'USD' for all monetary amounts."
                         )
                     elif currency == "MIXED":
+                        curr_totals = dumped.get("currency_totals") or {}
+                        inr_info = curr_totals.get("INR")
+                        usd_info = curr_totals.get("USD")
+                        parts = []
+                        if inr_info:
+                            parts.append(
+                                f"INR holdings: Invested=₹{inr_info['invested_value']:,.2f}, "
+                                f"Current=₹{inr_info['current_value']:,.2f}, "
+                                f"P/L=₹{inr_info['profit_loss']:,.2f} ({inr_info['profit_loss_percentage']:.2f}%)"
+                            )
+                        if usd_info:
+                            parts.append(
+                                f"USD holdings: Invested=${usd_info['invested_value']:,.2f}, "
+                                f"Current=${usd_info['current_value']:,.2f}, "
+                                f"P/L=${usd_info['profit_loss']:,.2f} ({usd_info['profit_loss_percentage']:.2f}%)"
+                            )
+                        totals_summary = "; ".join(parts) if parts else "No per-currency totals"
                         curr_desc = (
                             f"This is a multi-market portfolio with mixed currencies (Indian holdings in INR ₹, US holdings in USD $) "
-                            f"without automated currency conversion. "
-                            f"Nominal unweighted sum: invested_value={invested:,.2f}, current_value={current:,.2f}, "
-                            f"P/L={pnl:,.2f} ({pnl_pct:.2f}%), Holdings count: {count}. "
+                            f"without automated currency conversion. Per-currency totals: {totals_summary}. "
+                            f"No cross-currency aggregate sum is computed without FX conversion. Holdings count: {count}. "
                             f"Holdings currency detail: {dumped.get('market_currency_context')}. "
                             f"CRITICAL: Always use '₹' / INR for Indian holdings and '$' / USD for US holdings. "
-                            f"Do NOT assume the portfolio is denominated in USD, and do not invent exchange rates."
+                            f"Do NOT invent exchange rates or present a nominal mixed-currency sum."
                         )
                     else:
                         curr_desc = (

@@ -31,7 +31,15 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
     );
   }
 
-  const renderDirectionBadge = (item: OptimizedAssetWeight, delta: number) => {
+  const renderDirectionBadge = (item: OptimizedAssetWeight, delta: number | null) => {
+    if (delta === null || isNaN(delta) || item.current_weight === null || item.current_weight === undefined) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-secondary text-text-secondary border border-border-theme">
+          Target Only
+        </span>
+      );
+    }
+
     const isZero = Math.abs(delta) < 0.25; // negligible threshold
     if (isZero) {
       return (
@@ -98,19 +106,23 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
           <tbody className="divide-y divide-border-theme text-text-secondary">
             {comparisons.map((item, idx) => {
               const curWeight =
-                typeof item.current_weight === 'string'
-                  ? parseFloat(item.current_weight)
-                  : item.current_weight;
+                item.current_weight !== null && item.current_weight !== undefined
+                  ? typeof item.current_weight === 'string'
+                    ? parseFloat(item.current_weight)
+                    : item.current_weight
+                  : null;
               const tgtWeight =
-                typeof item.target_weight === 'string'
-                  ? parseFloat(item.target_weight)
-                  : item.target_weight;
+                item.target_weight !== null && item.target_weight !== undefined
+                  ? typeof item.target_weight === 'string'
+                    ? parseFloat(item.target_weight)
+                    : item.target_weight
+                  : null;
               const delta =
                 item.weight_difference !== undefined && item.weight_difference !== null
                   ? typeof item.weight_difference === 'string'
                     ? parseFloat(item.weight_difference)
                     : item.weight_difference
-                  : tgtWeight - curWeight;
+                  : (tgtWeight !== null && curWeight !== null ? tgtWeight - curWeight : null);
 
               const targetCapValue =
                 portfolioValue && tgtWeight !== null
@@ -134,25 +146,29 @@ export const AllocationComparisonTable: React.FC<AllocationComparisonTableProps>
                   </td>
 
                   <td className="py-3 px-4 text-right font-mono font-semibold text-text-primary">
-                    {formatPercent(curWeight, false)}
+                    {curWeight !== null ? formatPercent(curWeight, false) : '—'}
                   </td>
 
                   <td className="py-3 px-4 text-right font-mono font-bold text-status-positive">
-                    {formatPercent(tgtWeight, false)}
+                    {tgtWeight !== null ? formatPercent(tgtWeight, false) : '—'}
                   </td>
 
                   <td className="py-3 px-4 text-right font-mono font-bold">
-                    <span
-                      className={
-                        delta > 0
-                          ? 'text-status-positive'
-                          : delta < 0
-                          ? 'text-status-negative'
-                          : 'text-text-muted'
-                      }
-                    >
-                      {delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`}
-                    </span>
+                    {delta !== null ? (
+                      <span
+                        className={
+                          delta > 0
+                            ? 'text-status-positive'
+                            : delta < 0
+                            ? 'text-status-negative'
+                            : 'text-text-muted'
+                        }
+                      >
+                        {delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`}
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">—</span>
+                    )}
                   </td>
 
                   {portfolioValue ? (
