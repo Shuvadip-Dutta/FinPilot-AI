@@ -106,9 +106,9 @@ PORTFOLIO_MODEL = os.getenv("PORTFOLIO_MODEL", "qwen/qwen3.8-27b")
 SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL", "qwen/qwen3.8-27b")
 
 # Model tier defaults
-REASONING_MODEL = os.getenv("REASONING_MODEL", "qwen/qwen3.6-27b")
+REASONING_MODEL = os.getenv("REASONING_MODEL", "qwen/qwen3.8-27b")
 FAST_MODEL = os.getenv("FAST_MODEL", "qwen/qwen3.8-27b")
-EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", "qwen/qwen3.6-27b")
+EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", "qwen/qwen3.8-27b")
 
 # Legacy setting kept for backward compatibility.
 GROQ_MODEL = os.getenv(

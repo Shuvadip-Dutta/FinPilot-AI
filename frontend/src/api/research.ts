@@ -24,7 +24,7 @@ export const researchApi = {
    */
   async chat(payload: ChatRequest): Promise<ChatResponse> {
     return apiClient.post<ChatResponse>('ai/chat/', payload, {
-      timeoutMs: 60000, // LangGraph agent synthesis might take a few seconds
+      timeoutMs: 360000, // LangGraph multi-agent synthesis budget (360s / 6min)
     });
   },
 

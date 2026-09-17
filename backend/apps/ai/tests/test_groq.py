@@ -41,6 +41,7 @@ class GroqProviderTestCase(SimpleTestCase):
 
         request_kwargs = mock_client.chat.completions.create.call_args.kwargs
 
+        self.assertEqual(request_kwargs["model"], "qwen/qwen3.8-27b")
         self.assertNotIn("reasoning_format", request_kwargs)
 
         self.assertEqual(
@@ -216,11 +217,11 @@ class GroqProviderTestCase(SimpleTestCase):
 
     @override_settings(
         GROQ_API_KEY=None,
-        GROQ_MODEL="qwen/qwen3.6-27b",
+        GROQ_MODEL="qwen/qwen3.8-27b",
     )
     def test_missing_api_key(self):
         with self.assertRaises(ValueError) as context:
-            GroqProvider(model="qwen/qwen3.6-27b")
+            GroqProvider(model="qwen/qwen3.8-27b")
 
         self.assertEqual(
             str(context.exception),
@@ -267,3 +268,22 @@ class GroqProviderTestCase(SimpleTestCase):
         self.assertTrue(
             GroqProvider(model="qwen/qwen3.8-27b")._is_reasoning_model()
         )
+
+    def test_provider_model_resolution_and_compatibility(self):
+        # 1. qwen/qwen3.6-27b resolves to qwen/qwen3.8-27b on Groq
+        p36 = GroqProvider(model="qwen/qwen3.6-27b")
+        self.assertEqual(p36.model, "qwen/qwen3.6-27b")
+        self.assertEqual(p36.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertFalse(p36._is_reasoning_model())
+
+        # 2. qwen/qwen3.8-27b resolves to itself
+        p38 = GroqProvider(model="qwen/qwen3.8-27b")
+        self.assertEqual(p38.model, "qwen/qwen3.8-27b")
+        self.assertEqual(p38.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertTrue(p38._is_reasoning_model())
+
+        # 3. Unmapped models resolve to themselves
+        p_llama = GroqProvider(model="llama-3.1-8b-instant")
+        self.assertEqual(p_llama.model, "llama-3.1-8b-instant")
+        self.assertEqual(p_llama.get_effective_model(), "llama-3.1-8b-instant")
+        self.assertFalse(p_llama._is_reasoning_model())

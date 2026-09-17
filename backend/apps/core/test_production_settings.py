@@ -537,3 +537,35 @@ class CeleryBeatPersistenceConfigurationTest(TestCase):
             content,
             "celerybeat_data named volume must be declared in top-level volumes",
         )
+
+
+class GunicornTimeoutConfigurationTest(TestCase):
+    """Verify Gunicorn timeout configuration allows 360-second budget for Research workflow."""
+
+    def test_dockerfile_gunicorn_timeout(self):
+        dockerfile = _PROJECT_ROOT / "Dockerfile"
+        if not dockerfile.exists():
+            dockerfile = Path("/app/Dockerfile")
+        if not dockerfile.exists():
+            self.skipTest("Dockerfile not present in this test environment.")
+
+        content = dockerfile.read_text(encoding="utf-8")
+        self.assertIn(
+            '"--timeout", "360"',
+            content,
+            "Dockerfile CMD must configure --timeout 360 for Gunicorn",
+        )
+
+    def test_docker_compose_gunicorn_timeout(self):
+        compose_file = _PROJECT_ROOT / "docker-compose.yml"
+        if not compose_file.exists():
+            compose_file = Path("/app/docker-compose.yml")
+        if not compose_file.exists():
+            self.skipTest("docker-compose.yml not present in this test environment.")
+
+        content = compose_file.read_text(encoding="utf-8")
+        self.assertIn(
+            '"--timeout", "360"',
+            content,
+            "docker-compose.yml backend service must specify --timeout 360",
+        )

@@ -4,7 +4,7 @@ import { createClientError, parseApiError } from '../utils/errors';
 import { storage } from '../utils/storage';
 
 // Base API URL from environment variable or fallback to specified default
-const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1/';
+const RAW_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://127.0.0.1:8000/api/v1/';
 export const API_BASE_URL = RAW_BASE_URL.endsWith('/') ? RAW_BASE_URL : `${RAW_BASE_URL}/`;
 
 // Token refresh mutex state to prevent race conditions across concurrent requests

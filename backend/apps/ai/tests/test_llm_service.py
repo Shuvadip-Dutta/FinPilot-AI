@@ -297,6 +297,57 @@ class LLMServiceTestCase(SimpleTestCase):
         syn_model = syn.llm_service.__self__.model
         self.assertEqual(syn_model, "qwen/qwen3.8-27b")
 
+    @patch("apps.ai.services.llm_service.GroqProvider")
+    def test_exact_six_agent_logical_model_mapping(self, mock_groq_provider):
+        from apps.ai.agents.financial import FinancialAnalysisAgent
+        from apps.ai.agents.market import MarketAnalysisAgent
+        from apps.ai.agents.news import NewsIntelligenceAgent
+        from apps.ai.agents.portfolio_optimization import (
+            PortfolioOptimizationAgent,
+        )
+        from apps.ai.agents.risk import RiskAnalysisAgent
+        from apps.ai.agents.synthesis import FinalSynthesisAgent
+
+        fin = FinancialAnalysisAgent()
+        mkt = MarketAnalysisAgent()
+        news = NewsIntelligenceAgent()
+        risk = RiskAnalysisAgent()
+        port = PortfolioOptimizationAgent()
+        syn = FinalSynthesisAgent()
+
+        # Architectural design requirement: six-agent logical model mapping
+        self.assertEqual(fin.llm_service.model, "qwen/qwen3.6-27b")
+        self.assertEqual(mkt.llm_service.model, "qwen/qwen3.6-27b")
+        self.assertEqual(news.llm_service.model, "qwen/qwen3.8-27b")
+        self.assertEqual((risk.llm_service or LLMService(model="risk")).model, "qwen/qwen3.8-27b")
+        self.assertEqual((port.llm_service or LLMService(model="portfolio")).model, "qwen/qwen3.8-27b")
+        self.assertEqual(syn.llm_service.__self__.model, "qwen/qwen3.8-27b")
+
+    def test_provider_effective_model_resolution(self):
+        from apps.ai.agents.financial import FinancialAnalysisAgent
+        from apps.ai.agents.market import MarketAnalysisAgent
+        from apps.ai.agents.news import NewsIntelligenceAgent
+        from apps.ai.agents.portfolio_optimization import (
+            PortfolioOptimizationAgent,
+        )
+        from apps.ai.agents.risk import RiskAnalysisAgent
+        from apps.ai.agents.synthesis import FinalSynthesisAgent
+
+        fin = FinancialAnalysisAgent()
+        mkt = MarketAnalysisAgent()
+        news = NewsIntelligenceAgent()
+        risk = RiskAnalysisAgent()
+        port = PortfolioOptimizationAgent()
+        syn = FinalSynthesisAgent()
+
+        # Provider effective models sent to Groq
+        self.assertEqual(fin.llm_service.provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual(mkt.llm_service.provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual(news.llm_service.provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual((risk.llm_service or LLMService(model="risk")).provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual((port.llm_service or LLMService(model="portfolio")).provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual(syn.llm_service.__self__.provider.get_effective_model(), "qwen/qwen3.8-27b")
+
     def test_default_llm_services_share_same_token_budget_manager(self):
         s1 = LLMService()
         s2 = LLMService(model="fast")

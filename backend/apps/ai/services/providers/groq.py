@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from django.conf import settings
@@ -6,12 +7,19 @@ from groq import APIConnectionError, APIStatusError, APITimeoutError, Groq
 from apps.ai.exceptions import LLMError
 from apps.ai.services.token_budget import LLMUsage
 
+logger = logging.getLogger(__name__)
+
+
 
 class GroqProvider:
 
     REASONING_MODELS = {
         "qwen/qwen3.6-27b": False,
         "qwen/qwen3.8-27b": True,
+    }
+
+    MODEL_COMPATIBILITY_MAP = {
+        "qwen/qwen3.6-27b": "qwen/qwen3.8-27b",
     }
 
     def __init__(self, model: str | None = None):
@@ -36,6 +44,19 @@ class GroqProvider:
             api_key=settings.GROQ_API_KEY,
         )
         self.last_usage: LLMUsage | None = None
+
+    def get_effective_model(self) -> str:
+        """Resolve the effective model for Groq API calls via compatibility mapping."""
+        custom_map = getattr(settings, "GROQ_MODEL_COMPATIBILITY_MAP", None)
+        effective_map = custom_map if isinstance(custom_map, dict) else self.MODEL_COMPATIBILITY_MAP
+        resolved = effective_map.get(self.model, self.model)
+        if resolved != self.model:
+            logger.info(
+                "GroqProvider compatibility translation: '%s' -> '%s'",
+                self.model,
+                resolved,
+            )
+        return resolved
 
     def _is_reasoning_model(self) -> bool:
         normalized = str(self.model).lower()
@@ -86,7 +107,7 @@ class GroqProvider:
         max_completion_tokens: int | None = None,
     ) -> str:
         request_kwargs: dict[str, Any] = {
-            "model": self.model,
+            "model": self.get_effective_model(),
             "messages": messages,
         }
         if self._is_reasoning_model():
@@ -114,7 +135,7 @@ class GroqProvider:
         max_completion_tokens: int | None = None,
     ):
         request_kwargs: dict[str, Any] = {
-            "model": self.model,
+            "model": self.get_effective_model(),
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
