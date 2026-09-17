@@ -15,9 +15,12 @@ import {
 
 interface ResearchComposerProps {
   onSubmit: (prompt: string, ticker: string, market: string) => void;
+  onTickerChange?: (ticker: string, market: string) => void;
   isLoading: boolean;
   initialTicker?: string;
   initialMarket?: string;
+  initialQuery?: string;
+  autoFocus?: boolean;
   placeholder?: string;
 }
 
@@ -60,28 +63,86 @@ const POPULAR_TICKERS = [
 
 export const ResearchComposer: React.FC<ResearchComposerProps> = ({
   onSubmit,
+  onTickerChange,
   isLoading,
   initialTicker = 'RELIANCE',
   initialMarket = 'IN',
+  initialQuery = '',
+  autoFocus = false,
   placeholder = 'Ask FinPilot AI any financial question or synthesis request...',
 }) => {
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(initialQuery);
   const [ticker, setTicker] = useState(initialTicker);
   const [market, setMarket] = useState(initialMarket);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (initialTicker) setTicker(initialTicker);
+    if (initialTicker && initialTicker !== ticker) {
+      setTicker(initialTicker);
+    }
   }, [initialTicker]);
 
   useEffect(() => {
-    if (initialMarket) setMarket(initialMarket);
+    if (initialMarket && initialMarket !== market) {
+      setMarket(initialMarket);
+    }
   }, [initialMarket]);
+
+  useEffect(() => {
+    if (initialQuery !== undefined && initialQuery !== prompt) {
+      setPrompt(initialQuery);
+    }
+  }, [initialQuery]);
+
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [autoFocus, initialQuery]);
+
+  const commitTicker = (newTicker?: string, newMarket?: string) => {
+    const candidateTicker = (newTicker ?? ticker).trim().toUpperCase() || 'RELIANCE';
+    const candidateMarket = (newMarket ?? market).trim().toUpperCase() || 'IN';
+    setTicker(candidateTicker);
+    setMarket(candidateMarket);
+    if (onTickerChange && (candidateTicker !== initialTicker || candidateMarket !== initialMarket)) {
+      onTickerChange(candidateTicker, candidateMarket);
+    }
+  };
+
+  const handleTickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTicker(e.target.value.toUpperCase());
+  };
+
+  const handleTickerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitTicker();
+    }
+  };
+
+  const handleTickerBlur = () => {
+    commitTicker();
+  };
+
+  const handleMarketChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newMarket = e.target.value;
+    commitTicker(ticker, newMarket);
+  };
+
+  const handleQuickTickerClick = (qtTicker: string, qtMarket: string) => {
+    commitTicker(qtTicker, qtMarket);
+  };
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!prompt.trim() || isLoading) return;
-    onSubmit(prompt.trim(), ticker.trim().toUpperCase(), market.trim().toUpperCase());
+    const finalTicker = ticker.trim().toUpperCase() || 'RELIANCE';
+    const finalMarket = market.trim().toUpperCase() || 'IN';
+    if (onTickerChange && (finalTicker !== initialTicker || finalMarket !== initialMarket)) {
+      onTickerChange(finalTicker, finalMarket);
+    }
+    onSubmit(prompt.trim(), finalTicker, finalMarket);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -116,7 +177,9 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
             <input
               type="text"
               value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              onChange={handleTickerChange}
+              onKeyDown={handleTickerKeyDown}
+              onBlur={handleTickerBlur}
               placeholder="e.g. RELIANCE"
               className="w-32 px-2.5 py-1 text-xs font-mono font-bold uppercase rounded-lg bg-surface-secondary border border-border-theme text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30"
             />
@@ -125,7 +188,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
           {/* Market Selector */}
           <select
             value={market}
-            onChange={(e) => setMarket(e.target.value)}
+            onChange={handleMarketChange}
             className="px-2.5 py-1 text-xs font-mono rounded-lg bg-surface-secondary border border-border-theme text-text-primary focus:outline-none focus:border-accent-primary cursor-pointer"
           >
             <option value="IN">India (NSE/BSE)</option>
@@ -139,10 +202,7 @@ export const ResearchComposer: React.FC<ResearchComposerProps> = ({
               <button
                 key={t.ticker}
                 type="button"
-                onClick={() => {
-                  setTicker(t.ticker);
-                  setMarket(t.market);
-                }}
+                onClick={() => handleQuickTickerClick(t.ticker, t.market)}
                 className={`px-2 py-0.5 rounded-md text-[11px] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                   ticker === t.ticker
                     ? 'bg-accent-soft text-accent-primary border border-accent-primary font-semibold shadow-xs ring-1 ring-accent-primary/20'

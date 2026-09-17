@@ -1,4 +1,6 @@
 import { apiClient } from './client';
+import { researchDataCache } from './researchCache';
+export { researchDataCache };
 import {
   ChatRequest,
   ChatResponse,
@@ -58,7 +60,8 @@ export const researchApi = {
 
   /**
    * GET /api/v1/research/company/?ticker=&market=
-   * Retrieves fundamental company profile, sector, description, and market quotes from Django
+   * Retrieves fundamental company profile, sector, description, and market quotes from Django.
+   * Cached for 60 seconds with in-flight request deduplication.
    */
   async getCompany(ticker: string, market: string = 'IN'): Promise<CompanyResearchResponse> {
     const rawMarket = (market || 'IN').trim().toUpperCase();
@@ -66,15 +69,20 @@ export const researchApi = {
       rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
         ? 'US'
         : 'IN';
+    const normalizedTicker = ticker.trim().toUpperCase();
+    const cacheKey = researchDataCache.createKey('company', normalizedTicker, normalizedMarket);
 
-    return apiClient.get<CompanyResearchResponse>('research/company/', {
-      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
-    });
+    return researchDataCache.getOrFetch(cacheKey, () =>
+      apiClient.get<CompanyResearchResponse>('research/company/', {
+        params: { ticker: normalizedTicker, market: normalizedMarket },
+      })
+    );
   },
 
   /**
    * GET /api/v1/research/financials/?ticker=&market=
-   * Retrieves income statement (INC), balance sheet (BAL), and cash flow (CAS) statements
+   * Retrieves income statement (INC), balance sheet (BAL), and cash flow (CAS) statements.
+   * Cached for 60 seconds with in-flight request deduplication.
    */
   async getFinancials(ticker: string, market: string = 'IN'): Promise<FinancialsResponse> {
     const rawMarket = (market || 'IN').trim().toUpperCase();
@@ -82,15 +90,20 @@ export const researchApi = {
       rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
         ? 'US'
         : 'IN';
+    const normalizedTicker = ticker.trim().toUpperCase();
+    const cacheKey = researchDataCache.createKey('financials', normalizedTicker, normalizedMarket);
 
-    return apiClient.get<FinancialsResponse>('research/financials/', {
-      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
-    });
+    return researchDataCache.getOrFetch(cacheKey, () =>
+      apiClient.get<FinancialsResponse>('research/financials/', {
+        params: { ticker: normalizedTicker, market: normalizedMarket },
+      })
+    );
   },
 
   /**
    * GET /api/v1/research/metrics/?ticker=&market=
-   * Retrieves key valuation, profitability, and liquidity metrics from Django
+   * Retrieves key valuation, profitability, and liquidity metrics from Django.
+   * Cached for 60 seconds with in-flight request deduplication.
    */
   async getMetrics(ticker: string, market: string = 'IN'): Promise<KeyMetricsResponse> {
     const rawMarket = (market || 'IN').trim().toUpperCase();
@@ -98,15 +111,20 @@ export const researchApi = {
       rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
         ? 'US'
         : 'IN';
+    const normalizedTicker = ticker.trim().toUpperCase();
+    const cacheKey = researchDataCache.createKey('metrics', normalizedTicker, normalizedMarket);
 
-    return apiClient.get<KeyMetricsResponse>('research/metrics/', {
-      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
-    });
+    return researchDataCache.getOrFetch(cacheKey, () =>
+      apiClient.get<KeyMetricsResponse>('research/metrics/', {
+        params: { ticker: normalizedTicker, market: normalizedMarket },
+      })
+    );
   },
 
   /**
    * GET /api/v1/research/news/?ticker=&market=
-   * Retrieves verified market news and entity sentiment from Django
+   * Retrieves verified market news and entity sentiment from Django.
+   * Cached for 60 seconds with in-flight request deduplication.
    */
   async getNews(ticker: string, market: string = 'IN'): Promise<NewsResponse> {
     const rawMarket = (market || 'IN').trim().toUpperCase();
@@ -114,15 +132,20 @@ export const researchApi = {
       rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
         ? 'US'
         : 'IN';
+    const normalizedTicker = ticker.trim().toUpperCase();
+    const cacheKey = researchDataCache.createKey('news', normalizedTicker, normalizedMarket);
 
-    return apiClient.get<NewsResponse>('research/news/', {
-      params: { ticker: ticker.trim().toUpperCase(), market: normalizedMarket },
-    });
+    return researchDataCache.getOrFetch(cacheKey, () =>
+      apiClient.get<NewsResponse>('research/news/', {
+        params: { ticker: normalizedTicker, market: normalizedMarket },
+      })
+    );
   },
 
   /**
    * GET /api/v1/research/historical/?ticker=&market=&from_date=&to_date=
-   * Retrieves historical OHLCV price bars for the requested symbol
+   * Retrieves historical OHLCV price bars for the requested symbol.
+   * Cached for 60 seconds with in-flight request deduplication.
    */
   async getHistorical(
     ticker: string,
@@ -135,10 +158,13 @@ export const researchApi = {
       rawMarket === 'US' || rawMarket === 'USA' || rawMarket === 'NASDAQ' || rawMarket === 'NYSE'
         ? 'US'
         : 'IN';
-
+    const normalizedTicker = ticker.trim().toUpperCase();
     const resolvedToDate = toDate || new Date().toISOString().split('T')[0];
+    const cacheExtra = `${fromDate || ''}:${resolvedToDate}`;
+    const cacheKey = researchDataCache.createKey('historical', normalizedTicker, normalizedMarket, cacheExtra);
+
     const params: Record<string, string> = {
-      ticker: ticker.trim().toUpperCase(),
+      ticker: normalizedTicker,
       market: normalizedMarket,
       to_date: resolvedToDate,
     };
@@ -146,9 +172,11 @@ export const researchApi = {
       params.from_date = fromDate;
     }
 
-    return apiClient.get<HistoricalResponse>('research/historical/', {
-      params,
-    });
+    return researchDataCache.getOrFetch(cacheKey, () =>
+      apiClient.get<HistoricalResponse>('research/historical/', {
+        params,
+      })
+    );
   },
 };
 

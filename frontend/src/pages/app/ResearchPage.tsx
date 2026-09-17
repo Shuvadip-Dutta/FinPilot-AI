@@ -44,14 +44,19 @@ export const ResearchPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Authoritative URL navigation state
+  const urlTicker = (searchParams.get('ticker') || 'RELIANCE').trim().toUpperCase();
+  const urlMarket = (searchParams.get('market') || 'IN').trim().toUpperCase();
+  const urlTab = (searchParams.get('tab') as ResearchTab) || 'synthesis';
+  const urlQuery = searchParams.get('q') || '';
+  const shouldFocus = searchParams.get('focus') === 'composer';
+
   // Active target asset
-  const [ticker, setTicker] = useState<string>(searchParams.get('ticker') || 'RELIANCE');
-  const [market, setMarket] = useState<string>(searchParams.get('market') || 'IN');
+  const [ticker, setTicker] = useState<string>(urlTicker);
+  const [market, setMarket] = useState<string>(urlMarket);
 
   // Active view tab
-  const [activeTab, setActiveTab] = useState<ResearchTab>(
-    (searchParams.get('tab') as ResearchTab) || 'synthesis'
-  );
+  const [activeTab, setActiveTab] = useState<ResearchTab>(urlTab);
 
   // Chat conversation state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -66,14 +71,60 @@ export const ResearchPage: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Sync state to URL params cleanly
+  // Synchronize state when URL search parameters change (browser back/forward, direct URL navigation)
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (ticker) params.set('ticker', ticker);
-    if (market) params.set('market', market);
-    if (activeTab !== 'synthesis') params.set('tab', activeTab);
+    if (urlTicker && urlTicker !== ticker) {
+      setTicker(urlTicker);
+    }
+    if (urlMarket && urlMarket !== market) {
+      setMarket(urlMarket);
+    }
+    if (urlTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTicker, urlMarket, urlTab]);
+
+  // Ensure default ticker and market are present in URL on initial visit without adding extra history
+  useEffect(() => {
+    const hasTicker = searchParams.has('ticker');
+    const hasMarket = searchParams.has('market');
+    if (!hasTicker || !hasMarket) {
+      const params = new URLSearchParams(searchParams);
+      if (!hasTicker) params.set('ticker', ticker);
+      if (!hasMarket) params.set('market', market);
+      setSearchParams(params, { replace: true });
+    }
+  }, []);
+
+  // Update target asset and synchronize to URL search params
+  const updateTargetAsset = (newTicker: string, newMarket?: string, replaceHistory = false) => {
+    const normTicker = (newTicker.trim() || 'RELIANCE').toUpperCase();
+    const normMarket = (newMarket ? newMarket.trim() : market).toUpperCase();
+
+    if (normTicker === ticker && normMarket === market) {
+      return;
+    }
+
+    setTicker(normTicker);
+    setMarket(normMarket);
+
+    const params = new URLSearchParams(searchParams);
+    params.set('ticker', normTicker);
+    params.set('market', normMarket);
+    setSearchParams(params, { replace: replaceHistory });
+  };
+
+  // Switch research view tab and synchronize to URL search params
+  const handleTabChange = (newTab: ResearchTab) => {
+    setActiveTab(newTab);
+    const params = new URLSearchParams(searchParams);
+    if (newTab === 'synthesis') {
+      params.delete('tab');
+    } else {
+      params.set('tab', newTab);
+    }
     setSearchParams(params, { replace: true });
-  }, [ticker, market, activeTab, setSearchParams]);
+  };
 
   // Load recent research sessions for quick access
   const fetchRecentSessions = async () => {
@@ -105,8 +156,12 @@ export const ResearchPage: React.FC = () => {
     setIsLoading(true);
     setCurrentPrompt(prompt);
 
-    if (queryTicker !== ticker) setTicker(queryTicker);
-    if (queryMarket !== market) setMarket(queryMarket);
+    const normTicker = (queryTicker || ticker).trim().toUpperCase();
+    const normMarket = (queryMarket || market).trim().toUpperCase();
+
+    if (normTicker !== ticker || normMarket !== market) {
+      updateTargetAsset(normTicker, normMarket, false);
+    }
 
     // Append user query to conversation
     const userMsg: ChatMessage = {
@@ -114,8 +169,8 @@ export const ResearchPage: React.FC = () => {
       role: 'user',
       content: prompt,
       timestamp: new Date().toISOString(),
-      ticker: queryTicker,
-      market: queryMarket,
+      ticker: normTicker,
+      market: normMarket,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -124,8 +179,8 @@ export const ResearchPage: React.FC = () => {
       const response: ChatResponse = await researchApi.chat({
         message: prompt,
         session_id: sessionId,
-        ticker: queryTicker,
-        market: queryMarket,
+        ticker: normTicker,
+        market: normMarket,
       });
 
       // Update active session ID if returned
@@ -179,7 +234,7 @@ export const ResearchPage: React.FC = () => {
     setMessages([]);
     setSessionId(undefined);
     setError(null);
-    setActiveTab('synthesis');
+    handleTabChange('synthesis');
   };
 
   // Collect all accumulated evidence across current session
@@ -240,7 +295,7 @@ export const ResearchPage: React.FC = () => {
         {/* Tab Controls */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none text-xs font-mono">
           <button
-            onClick={() => setActiveTab('synthesis')}
+            onClick={() => handleTabChange('synthesis')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeTab === 'synthesis'
                 ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -257,7 +312,7 @@ export const ResearchPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('company')}
+            onClick={() => handleTabChange('company')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeTab === 'company'
                 ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -269,7 +324,7 @@ export const ResearchPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('financials')}
+            onClick={() => handleTabChange('financials')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeTab === 'financials'
                 ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -281,7 +336,7 @@ export const ResearchPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('market')}
+            onClick={() => handleTabChange('market')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeTab === 'market'
                 ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -293,7 +348,7 @@ export const ResearchPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('news')}
+            onClick={() => handleTabChange('news')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
               activeTab === 'news'
                 ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -306,7 +361,7 @@ export const ResearchPage: React.FC = () => {
 
           {accumulatedEvidence.length > 0 && (
             <button
-              onClick={() => setActiveTab('evidence')}
+              onClick={() => handleTabChange('evidence')}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'evidence'
                   ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -320,7 +375,7 @@ export const ResearchPage: React.FC = () => {
 
           {latestProvenance && (
             <button
-              onClick={() => setActiveTab('provenance')}
+              onClick={() => handleTabChange('provenance')}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
                 activeTab === 'provenance'
                   ? 'bg-accent-soft text-accent-primary font-semibold border border-accent-primary shadow-xs ring-1 ring-accent-primary/20'
@@ -342,9 +397,12 @@ export const ResearchPage: React.FC = () => {
             {/* Research Input Composer */}
             <ResearchComposer
               onSubmit={handleQuerySubmit}
+              onTickerChange={(newTicker, newMarket) => updateTargetAsset(newTicker, newMarket, false)}
               isLoading={isLoading}
               initialTicker={ticker}
               initialMarket={market}
+              initialQuery={urlQuery}
+              autoFocus={shouldFocus}
             />
 
             {/* Error State Banner */}
@@ -463,7 +521,7 @@ export const ResearchPage: React.FC = () => {
                     size="sm"
                     className="w-full text-xs justify-start"
                     leftIcon={<Building2 className="w-3.5 h-3.5 text-status-info" />}
-                    onClick={() => setActiveTab('company')}
+                    onClick={() => handleTabChange('company')}
                   >
                     View Company Profile
                   </Button>
@@ -472,7 +530,7 @@ export const ResearchPage: React.FC = () => {
                     size="sm"
                     className="w-full text-xs justify-start"
                     leftIcon={<FileSpreadsheet className="w-3.5 h-3.5 text-accent-primary" />}
-                    onClick={() => setActiveTab('financials')}
+                    onClick={() => handleTabChange('financials')}
                   >
                     View Financial Statements
                   </Button>
@@ -481,7 +539,7 @@ export const ResearchPage: React.FC = () => {
                     size="sm"
                     className="w-full text-xs justify-start"
                     leftIcon={<TrendingUp className="w-3.5 h-3.5 text-accent-primary" />}
-                    onClick={() => setActiveTab('market')}
+                    onClick={() => handleTabChange('market')}
                   >
                     View Valuation & Chart
                   </Button>
@@ -490,7 +548,7 @@ export const ResearchPage: React.FC = () => {
                     size="sm"
                     className="w-full text-xs justify-start"
                     leftIcon={<Newspaper className="w-3.5 h-3.5 text-status-warning" />}
-                    onClick={() => setActiveTab('news')}
+                    onClick={() => handleTabChange('news')}
                   >
                     View News & Sentiment
                   </Button>

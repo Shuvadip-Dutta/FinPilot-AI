@@ -23,7 +23,9 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobile, isSidebarCollapsed
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -35,13 +37,33 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobile, isSidebarCollapsed
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Global keyboard shortcut for Research omnibox (Ctrl+K / Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const handleGlobalSearchClick = () => {
-    navigate('/app/research');
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const query = searchQuery.trim();
+    if (query) {
+      navigate(`/app/research?q=${encodeURIComponent(query)}&focus=composer`);
+      setSearchQuery('');
+    } else {
+      navigate('/app/research?focus=composer');
+    }
   };
 
   return (
@@ -71,19 +93,33 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobile, isSidebarCollapsed
 
         {/* Center: Global Research / Search shortcut */}
         <div className="flex-1 max-w-md mx-auto hidden md:block">
-          <button
-            onClick={handleGlobalSearchClick}
-            className="w-full flex items-center justify-between px-3.5 py-1.5 rounded-lg bg-surface-secondary/70 border border-border-theme text-xs text-text-muted hover:border-accent-primary/40 hover:text-text-secondary transition-all cursor-pointer group shadow-xs"
+          <form
+            onSubmit={handleSearchSubmit}
+            className="relative w-full flex items-center group cursor-text"
+            onClick={() => searchInputRef.current?.focus()}
           >
-            <div className="flex items-center gap-2">
-              <Search className="w-3.5 h-3.5 text-text-muted group-hover:text-accent-primary transition-colors" />
-              <span>Ask FinPilot AI (e.g. &quot;Analyze RELIANCE&quot;)...</span>
-            </div>
-            <div className="flex items-center gap-1 font-mono text-[10px] text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border-theme">
+            <Search className="absolute left-3 w-3.5 h-3.5 text-text-muted group-focus-within:text-accent-primary transition-colors pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder='Ask FinPilot AI (e.g. "Analyze RELIANCE")...'
+              className="w-full pl-9 pr-14 py-1.5 rounded-lg bg-surface-secondary/70 border border-border-theme text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary/60 focus:bg-surface focus:ring-1 focus:ring-accent-primary/30 transition-all shadow-xs"
+              aria-label="Global Research Query Search"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                searchInputRef.current?.focus();
+              }}
+              className="absolute right-2 flex items-center gap-1 font-mono text-[10px] text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border-theme hover:border-accent-primary/40 transition-colors cursor-pointer"
+              title="Keyboard shortcut: Ctrl+K or Cmd+K"
+            >
               <Command className="w-3 h-3" />
               <span>K</span>
-            </div>
-          </button>
+            </button>
+          </form>
         </div>
 
         {/* Right: API Health Status, Theme Toggle & User Profile Menu */}

@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:timeout": "tsx src/api/research.test.ts"
+    "test:timeout": "tsx src/api/research.test.ts",
+    "test:asset-selector": "tsx src/tests/research_asset_selector.test.ts",
+    "test:topbar": "tsx src/tests/topbar_search.test.ts",
+    "test:cache": "tsx src/tests/research_cache.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
