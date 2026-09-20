@@ -1288,7 +1288,7 @@ class PortfolioBacktestInputBuilderTestCase(TestCase):
                 p_list = prices_b or [50.0 + i * 0.5 for i in range(len(self.dates))]
                 candles = [{"timestamp": d, "close": p} for d, p in zip(self.dates, p_list)]
                 return {"candles": candles}
-            elif "NSE_INDEX" in norm_ticker or norm_ticker in ("NIFTY 50", "BENCHMARK"):
+            elif "NSE_INDEX" in norm_ticker or "BSE_INDEX" in norm_ticker or norm_ticker in ("NIFTY 50", "BENCHMARK", "SENSEX"):
                 p_list = benchmark_prices or [200.0 + i * 2 for i in range(len(self.dates))]
                 candles = [{"timestamp": d, "close": p} for d, p in zip(self.dates, p_list)]
                 return {"candles": candles}
@@ -1382,6 +1382,39 @@ class PortfolioBacktestInputBuilderTestCase(TestCase):
         self.assertEqual(backtest_input.benchmark_ticker, "NIFTY 50")
         self.assertIsNotNone(backtest_input.benchmark_prices)
         self.assertEqual(len(backtest_input.benchmark_prices), len(self.dates))
+
+    def test_benchmark_instrument_resolution_and_provider_key(self):
+        """Prove benchmark aliases resolve to exact canonical Upstox key and provider does NOT receive uppercase."""
+        fetched_tickers = []
+
+        def spy_fetcher(ticker, to_date, from_date=None, market="IN"):
+            fetched_tickers.append(ticker)
+            return self._make_mock_fetcher()(ticker, to_date, from_date, market)
+
+        builder = PortfolioBacktestInputBuilder(historical_data_fetcher=spy_fetcher)
+
+        test_cases = [
+            ("NIFTY 50", "NSE_INDEX|Nifty 50", "NIFTY 50"),
+            ("nifty 50", "NSE_INDEX|Nifty 50", "NIFTY 50"),
+            ("NIFTY50", "NSE_INDEX|Nifty 50", "NIFTY50"),
+            ("^NSEI", "NSE_INDEX|Nifty 50", "^NSEI"),
+            ("NSE_INDEX|Nifty 50", "NSE_INDEX|Nifty 50", "NIFTY 50"),
+            ("NIFTY 500", "NSE_INDEX|Nifty 500", "NIFTY 500"),
+            ("BANKNIFTY", "NSE_INDEX|Nifty Bank", "BANKNIFTY"),
+            ("SENSEX", "BSE_INDEX|SENSEX", "SENSEX"),
+        ]
+
+        for input_alias, expected_provider_key, expected_canonical_name in test_cases:
+            fetched_tickers.clear()
+            b_input = builder.build_backtest_input(
+                portfolio=self.portfolio,
+                benchmark_ticker=input_alias,
+                in_sample_window_days=5,
+                out_of_sample_step_days=2,
+            )
+            self.assertEqual(b_input.benchmark_ticker, expected_canonical_name)
+            self.assertIn(expected_provider_key, fetched_tickers)
+            self.assertNotIn("NSE_INDEX|NIFTY 50", fetched_tickers)
 
     def test_benchmark_insufficient_overlapping_dates_rejection(self):
         """Verify rejection when benchmark prices have fewer than 3 overlapping dates."""

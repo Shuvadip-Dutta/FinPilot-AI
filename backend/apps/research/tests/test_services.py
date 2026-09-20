@@ -6,6 +6,7 @@ from apps.research.services.exceptions import ProviderResponseError
 from apps.research.services.research_service import ResearchService
 from apps.research.services.schemas import (
     CompanyProfile,
+    ExchangeQuote,
     FinancialMetric,
     FinancialStatement,
     HistoricalCandle,
@@ -275,6 +276,124 @@ class ResearchServiceTestCase(SimpleTestCase):
         self.assertEqual(result._provenance.source, "indian_api")
         self.assertTrue(result._provenance.fallback_used)
         self.assertEqual(result._provenance.fallback_reason, "upstox_empty_data")
+
+    @patch("apps.research.services.research_service.FinnhubProvider.get_quotes")
+    def test_us_get_market_data(self, mock_get_quotes):
+        mock_get_quotes.return_value = [
+            ExchangeQuote(
+                exchange="US",
+                price=125.5,
+                percent_change=2.03,
+                year_high=140.76,
+                year_low=75.60,
+            )
+        ]
+
+        service = ResearchService()
+        result = service.get_market_data("NVDA", Market.US)
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        q = result[0]
+        self.assertIsInstance(q, ExchangeQuote)
+        self.assertEqual(q.exchange, "US")
+        self.assertEqual(q.price, 125.5)
+        self.assertEqual(q.percent_change, 2.03)
+        self.assertEqual(q.year_high, 140.76)
+        self.assertEqual(q.year_low, 75.60)
+
+        self.assertIsNotNone(getattr(result, "_provenance", None))
+        self.assertEqual(result._provenance.primary_provider, "finnhub")
+        self.assertEqual(result._provenance.source, "finnhub")
+        self.assertFalse(result._provenance.fallback_used)
+        self.assertEqual(result._provenance.data_status, "complete")
+
+    @patch("apps.research.services.research_service.FinnhubProvider.get_key_metrics")
+    def test_us_get_key_metrics_complete(self, mock_get_metrics):
+        mock_get_metrics.return_value = KeyMetricsResearch(
+            ticker="NVDA",
+            metrics=[
+                KeyMetric(category="valuation", name="Trailing P/E", key="pe_ttm", value=27.77),
+                KeyMetric(category="valuation", name="Forward P/E", key="forward_pe", value=18.10),
+                KeyMetric(category="valuation", name="EV/EBITDA", key="ev_ebitda_ttm", value=26.68),
+                KeyMetric(category="valuation", name="Price/Book", key="pb", value=23.39),
+            ],
+        )
+
+        service = ResearchService()
+        result = service.get_key_metrics("NVDA", Market.US)
+
+        self.assertIsInstance(result, KeyMetricsResearch)
+        self.assertEqual(result.ticker, "NVDA")
+        metric_names = [m.name for m in result.metrics]
+        self.assertIn("Trailing P/E", metric_names)
+        self.assertIn("Forward P/E", metric_names)
+        self.assertIn("EV/EBITDA", metric_names)
+        self.assertIn("Price/Book", metric_names)
+
+        self.assertIsNotNone(getattr(result, "_provenance", None))
+        self.assertEqual(result._provenance.primary_provider, "finnhub")
+        self.assertEqual(result._provenance.source, "finnhub")
+        self.assertFalse(result._provenance.fallback_used)
+        self.assertEqual(result._provenance.data_status, "complete")
+
+    @patch("apps.research.services.research_service.FinnhubProvider.get_key_metrics")
+    def test_us_get_key_metrics_partial(self, mock_get_metrics):
+        # Missing forward_pe
+        mock_get_metrics.return_value = KeyMetricsResearch(
+            ticker="NVDA",
+            metrics=[
+                KeyMetric(category="valuation", name="Trailing P/E", key="pe_ttm", value=27.77),
+                KeyMetric(category="valuation", name="Forward P/E", key="forward_pe", value=None),
+                KeyMetric(category="valuation", name="EV/EBITDA", key="ev_ebitda_ttm", value=26.68),
+                KeyMetric(category="valuation", name="Price/Book", key="pb", value=23.39),
+            ],
+        )
+
+        service = ResearchService()
+        result = service.get_key_metrics("NVDA", Market.US)
+
+        self.assertIsNotNone(getattr(result, "_provenance", None))
+        self.assertEqual(result._provenance.data_status, "partial")
+
+    @patch("apps.research.services.research_service.FinnhubProvider.get_financials")
+    def test_us_get_financials_complete(self, mock_get_financials):
+        mock_get_financials.return_value = [
+            FinancialStatement(
+                statement_type="INC",
+                fiscal_year="2026",
+                end_date="2026-01-26",
+                period_type="Annual",
+                period_length=12,
+                metrics=[FinancialMetric(name="Revenue", key="Revenue", value=60922000000.0)],
+            ),
+            FinancialStatement(
+                statement_type="BAL",
+                fiscal_year="2026",
+                end_date="2026-01-26",
+                period_type="Annual",
+                period_length=12,
+                metrics=[FinancialMetric(name="Total Assets", key="Assets", value=65728000000.0)],
+            ),
+            FinancialStatement(
+                statement_type="CAS",
+                fiscal_year="2026",
+                end_date="2026-01-26",
+                period_type="Annual",
+                period_length=12,
+                metrics=[FinancialMetric(name="Operating Cash Flow", key="OCF", value=28090000000.0)],
+            ),
+        ]
+
+        service = ResearchService()
+        result = service.get_financials("NVDA", Market.US)
+
+        self.assertEqual(len(result), 3)
+        self.assertIsNotNone(getattr(result, "_provenance", None))
+        self.assertEqual(result._provenance.primary_provider, "finnhub")
+        self.assertEqual(result._provenance.source, "finnhub")
+        self.assertFalse(result._provenance.fallback_used)
+        self.assertEqual(result._provenance.data_status, "complete")
 
 
 class MarketNormalizeTestCase(SimpleTestCase):

@@ -93,3 +93,51 @@ class WorkflowRouterTestCase(SimpleTestCase):
             "What is the share price quote for TCS?"
         )
         self.assertEqual(route, "market")
+
+    def test_production_failed_nvda_valuation_query_routes_to_financial(self):
+        route = self.router.route(
+            "Assess the current valuation of NVDA (US) based on trailing and forward P/E, EV/EBITDA, and price-to-book ratios. Is it trading at a discount or premium to historical averages?"
+        )
+        self.assertEqual(route, "financial")
+
+    def test_pe_valuation_query_routes_to_financial(self):
+        self.assertEqual(
+            self.router.route("What is NVDA's P/E valuation?"),
+            "financial",
+        )
+
+    def test_ev_ebitda_and_pb_valuation_query_routes_to_financial(self):
+        self.assertEqual(
+            self.router.route("Compare NVDA EV/EBITDA and P/B"),
+            "financial",
+        )
+
+    def test_discount_to_historical_valuation_routes_to_financial(self):
+        self.assertEqual(
+            self.router.route("Is NVDA trading at a discount to its historical valuation?"),
+            "financial",
+        )
+
+    def test_numeric_trading_at_price_routes_to_market(self):
+        self.assertEqual(
+            self.router.route("Is NVDA trading at $180?"),
+            "market",
+        )
+
+    def test_current_stock_price_routes_to_market(self):
+        self.assertEqual(
+            self.router.route("Show me the current stock price of NVDA"),
+            "market",
+        )
+
+    def test_valuation_and_recent_news_routes_to_general(self):
+        self.assertEqual(
+            self.router.route("Assess NVDA valuation and recent news"),
+            "general",
+        )
+
+    def test_valuation_and_risk_routes_to_general(self):
+        self.assertEqual(
+            self.router.route("Assess NVDA valuation and risk"),
+            "general",
+        )

@@ -364,3 +364,33 @@ class ResearchToolsTestCase(SimpleTestCase):
         self.assertEqual(res["fallback_reason"], "upstox_exception")
         self.assertIn("provenance", res)
         self.assertEqual(res["provenance"]["source"], "indian_api")
+
+    @patch("apps.ai.services.research_tools.ResearchService")
+    def test_us_get_market_data_contract(self, mock_research_service):
+        mock_service = mock_research_service.return_value
+        mock_service.get_market_data.return_value = [
+            ExchangeQuote(
+                exchange="US",
+                price=125.5,
+                percent_change=2.03,
+                year_high=140.76,
+                year_low=75.60,
+            )
+        ]
+
+        result = get_market_data(ticker="NVDA", market="US")
+
+        self.assertEqual(result["ticker"], "NVDA")
+        self.assertEqual(result["market"], "US")
+        self.assertEqual(
+            result["quotes"],
+            [
+                {
+                    "exchange": "US",
+                    "price": 125.5,
+                    "percent_change": 2.03,
+                    "year_high": 140.76,
+                    "year_low": 75.60,
+                }
+            ],
+        )

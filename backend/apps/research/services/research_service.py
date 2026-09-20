@@ -128,7 +128,7 @@ class ResearchService:
         market: Market,
     ):
         if market == Market.US:
-            quotes = self.finnhub.get_quote(
+            quotes = self.finnhub.get_quotes(
                 ticker,
                 market,
             )
@@ -162,6 +162,25 @@ class ResearchService:
         ticker: str,
         market: Market,
     ):
+        if market == Market.US:
+            financials = self.finnhub.get_financials(
+                ticker,
+                market,
+            )
+            if isinstance(financials, list) and len(financials) > 0:
+                statement_types = {getattr(s, "statement_type", None) for s in financials}
+                status = DataStatus.COMPLETE.value if len(statement_types) >= 3 else DataStatus.PARTIAL.value
+            else:
+                status = DataStatus.EMPTY.value
+
+            prov = ProvenanceMetadata(
+                primary_provider="finnhub",
+                source="finnhub",
+                fallback_used=False,
+                data_status=status,
+            )
+            return _attach_provenance(financials, prov)
+
         if market == Market.INDIA:
             fallback_reason = None
             try:
@@ -207,6 +226,40 @@ class ResearchService:
         ticker: str,
         market: Market,
     ):
+        if market == Market.US:
+            metrics_res = self.finnhub.get_key_metrics(
+                ticker,
+                market,
+            )
+            if (
+                metrics_res
+                and hasattr(metrics_res, "metrics")
+                and isinstance(metrics_res.metrics, list)
+                and len(metrics_res.metrics) > 0
+            ):
+                present_keys = {
+                    m.key
+                    for m in metrics_res.metrics
+                    if getattr(m, "value", None) is not None
+                }
+                primary_valuation_keys = {"pe_ttm", "forward_pe", "ev_ebitda_ttm", "pb"}
+                if primary_valuation_keys.issubset(present_keys):
+                    status = DataStatus.COMPLETE.value
+                elif len(present_keys) > 0:
+                    status = DataStatus.PARTIAL.value
+                else:
+                    status = DataStatus.EMPTY.value
+            else:
+                status = DataStatus.EMPTY.value
+
+            prov = ProvenanceMetadata(
+                primary_provider="finnhub",
+                source="finnhub",
+                fallback_used=False,
+                data_status=status,
+            )
+            return _attach_provenance(metrics_res, prov)
+
         if market == Market.INDIA:
             fallback_reason = None
             try:

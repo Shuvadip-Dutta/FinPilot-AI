@@ -63,6 +63,37 @@ class WorkflowRouter:
         "risk assessment",
     )
 
+    VALUATION_KEYWORDS = (
+        "premium to historical averages",
+        "premium to historical average",
+        "discount to historical averages",
+        "discount to historical average",
+        "trading at a premium",
+        "trading at a discount",
+        "historical valuations",
+        "historical valuation",
+        "enterprise value / ebitda",
+        "enterprise value/ebitda",
+        "valuation multiples",
+        "valuation multiple",
+        "price-to-earnings",
+        "price to earnings",
+        "price-to-book",
+        "price to book",
+        "trailing p/e",
+        "forward p/e",
+        "price book",
+        "pe ratio",
+        "p/e ratio",
+        "pb ratio",
+        "p/b ratio",
+        "ev/ebitda",
+        "valuations",
+        "valuation",
+        "p/e",
+        "p/b",
+    )
+
     BACKTEST_KEYWORDS = (
         "backtest",
         "backtesting",
@@ -93,34 +124,51 @@ class WorkflowRouter:
         if self._contains_keyword(normalized_message, self.COMPREHENSIVE_KEYWORDS):
             return "general"
 
+        has_valuation = self._contains_keyword(normalized_message, self.VALUATION_KEYWORDS)
+        has_financial = self._contains_keyword(normalized_message, self.FINANCIAL_KEYWORDS) or has_valuation
+
+        # Avoid market keyword false positives for valuation phrases such as "price-to-book" or "trading at a discount"
+        market_eval_message = normalized_message
+        for kw in self.VALUATION_KEYWORDS:
+            if kw in market_eval_message:
+                market_eval_message = market_eval_message.replace(kw, " ")
+
+        has_market = self._contains_keyword(market_eval_message, self.MARKET_KEYWORDS)
+        has_news = self._contains_keyword(normalized_message, self.NEWS_KEYWORDS)
+        has_risk = self._contains_keyword(normalized_message, self.RISK_KEYWORDS)
+        has_portfolio = self._contains_keyword(normalized_message, self.PORTFOLIO_KEYWORDS)
+
         matching_domains = sum(
             1
-            for domain_keywords in (
-                self.NEWS_KEYWORDS,
-                self.MARKET_KEYWORDS,
-                self.FINANCIAL_KEYWORDS,
-                self.RISK_KEYWORDS,
-                self.PORTFOLIO_KEYWORDS,
+            for domain_active in (
+                has_news,
+                has_market,
+                has_financial,
+                has_risk,
+                has_portfolio,
             )
-            if self._contains_keyword(normalized_message, domain_keywords)
+            if domain_active
         )
 
         if matching_domains >= 2:
             return "general"
 
-        if self._contains_keyword(normalized_message, self.NEWS_KEYWORDS):
-            return "news"
-
-        if self._contains_keyword(normalized_message, self.MARKET_KEYWORDS):
-            return "market"
-
-        if self._contains_keyword(normalized_message, self.FINANCIAL_KEYWORDS):
+        if has_valuation:
             return "financial"
 
-        if self._contains_keyword(normalized_message, self.RISK_KEYWORDS):
+        if has_news:
+            return "news"
+
+        if has_market:
+            return "market"
+
+        if has_financial:
+            return "financial"
+
+        if has_risk:
             return "risk"
 
-        if self._contains_keyword(normalized_message, self.PORTFOLIO_KEYWORDS):
+        if has_portfolio:
             return "portfolio"
 
         return "general"

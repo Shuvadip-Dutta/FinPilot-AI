@@ -60,9 +60,23 @@ class UpstoxProvider:
         self.instrument_resolver = UpstoxInstrumentResolver()
 
     def _resolve_instrument_key(self, ticker: str) -> str:
+        from apps.portfolio.backtest_builder import INDEX_INSTRUMENT_MAP, resolve_benchmark_instrument_key
+
+        clean_ticker = ticker.strip()
+        # 1. Benchmark index resolution (e.g. 'NIFTY 50', 'nifty 50', '^NSEI' -> 'NSE_INDEX|Nifty 50')
+        if clean_ticker in INDEX_INSTRUMENT_MAP or clean_ticker.upper() in INDEX_INSTRUMENT_MAP:
+            return resolve_benchmark_instrument_key(clean_ticker)
+
+        # 2. Already an exact provider instrument key (contains '|')
+        if "|" in clean_ticker:
+            return clean_ticker
+
+        # 3. Equity alias resolution (normalize alias before mapping, e.g. 'reliance' -> 'RELIANCE')
+        upper_ticker = clean_ticker.upper()
+
         from apps.research.services.company_resolver import CanonicalCompanyResolver
 
-        identity = CanonicalCompanyResolver.resolve(ticker, Market.INDIA)
+        identity = CanonicalCompanyResolver.resolve(upper_ticker, Market.INDIA)
         if identity.instrument_key:
             return identity.instrument_key
 
@@ -70,7 +84,7 @@ class UpstoxProvider:
         if provider_sym and "|" in provider_sym:
             return provider_sym
 
-        return self.instrument_resolver.resolve_nse_equity(ticker)
+        return self.instrument_resolver.resolve_nse_equity(upper_ticker)
 
     def _resolve_isin(self, ticker: str, market: Market = Market.INDIA) -> str:
         from apps.research.services.company_resolver import CanonicalCompanyResolver
@@ -389,8 +403,8 @@ class UpstoxProvider:
         if market != Market.INDIA:
             raise ValueError("UpstoxProvider currently supports India only.")
 
-        ticker = ticker.upper()
         instrument_key = self._resolve_instrument_key(ticker)
+        norm_ticker = ticker if "|" in ticker else ticker.strip().upper()
 
         data = self._get(
             "market-quote/ltp",
@@ -400,7 +414,7 @@ class UpstoxProvider:
         )
         data = self._validate_dict_response(data)
 
-        quote = data["data"].get(f"NSE_EQ:{ticker}")
+        quote = data["data"].get(f"NSE_EQ:{norm_ticker}") or data["data"].get(instrument_key)
         if quote is None:
             raise ValueError(f"No market data found for {ticker}.")
 
@@ -423,7 +437,7 @@ class UpstoxProvider:
             )
 
         return {
-            "ticker": ticker,
+            "ticker": norm_ticker,
             "instrument_key": quote["instrument_token"],
             "last_price": quote["last_price"],
             "last_traded_quantity": quote["ltq"],
@@ -441,7 +455,6 @@ class UpstoxProvider:
         if market != Market.INDIA:
             raise ValueError("UpstoxProvider currently supports India only.")
 
-        ticker = ticker.upper()
         instrument_key = self._resolve_instrument_key(ticker)
 
         endpoint = f"historical-candle/{instrument_key}/days/1/{to_date}"
@@ -464,7 +477,7 @@ class UpstoxProvider:
                 )
 
         return HistoricalMarketData(
-            ticker=ticker,
+            ticker=ticker if "|" in ticker else ticker.strip().upper(),
             candles=[
                 HistoricalCandle(
                     timestamp=candle[0],
@@ -488,7 +501,6 @@ class UpstoxProvider:
         if market != Market.INDIA:
             raise ValueError("UpstoxProvider currently supports India only.")
 
-        ticker = ticker.upper()
         instrument_key = self._resolve_instrument_key(ticker)
 
         data = self._get(

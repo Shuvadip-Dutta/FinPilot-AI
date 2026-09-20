@@ -875,5 +875,63 @@ class FinalSynthesisAgentTestCase(SimpleTestCase):
         self.assertIn("provenance", fin_data)
         self.assertEqual(fin_data["provenance"]["financials"]["primary_provider"], "sec_edgar")
 
+    def test_historical_valuation_honesty_enforced(self):
+        """Test synthesis presents current metrics and enforces historical valuation honesty without fabricating averages."""
+        captured_messages = []
+
+        def mock_llm(messages, **kwargs):
+            captured_messages.extend(messages)
+            return (
+                "Current valuation metrics were retrieved: trailing P/E 27.77, forward P/E 18.10, "
+                "EV/EBITDA 26.68, and P/B 23.39. A verified historical multiple series was not retrieved, "
+                "so a premium/discount comparison against historical averages cannot be established from the available evidence."
+            )
+
+        agent = FinalSynthesisAgent(llm_service=mock_llm)
+
+        state = AgentState(
+            user_message=(
+                "Assess the current valuation of NVDA (US) based on trailing and forward P/E, "
+                "EV/EBITDA, and price-to-book ratios. Is it trading at a discount or premium to historical averages?"
+            ),
+            ticker="NVDA",
+            market="US",
+            results={
+                "financial": AgentResult(
+                    response=(
+                        "Current valuation multiples: Trailing P/E: 27.77, Forward P/E: 18.10, "
+                        "EV/EBITDA: 26.68, P/B: 23.39."
+                    ),
+                    tools_used=["get_financials", "get_key_metrics"],
+                    data={
+                        "ticker": "NVDA",
+                        "market": "US",
+                        "key_metrics_data": [
+                            {"category": "valuation", "name": "Trailing P/E", "key": "pe_ttm", "value": 27.77},
+                            {"category": "valuation", "name": "Forward P/E", "key": "forward_pe", "value": 18.10},
+                            {"category": "valuation", "name": "EV/EBITDA", "key": "ev_ebitda_ttm", "value": 26.68},
+                            {"category": "valuation", "name": "Price/Book", "key": "pb", "value": 23.39},
+                        ],
+                    },
+                ),
+            },
+        )
+
+        result = agent.run(state)
+
+        self.assertIsInstance(result, AgentResult)
+        self.assertIn("trailing P/E 27.77", result.response)
+        self.assertIn("forward P/E 18.10", result.response)
+        self.assertIn("EV/EBITDA 26.68", result.response)
+        self.assertIn("P/B 23.39", result.response)
+        self.assertIn("historical averages cannot be established", result.response)
+
+        # Verify prompt instructions enforced honesty regarding historical averages
+        self.assertTrue(len(captured_messages) >= 2)
+        system_content = captured_messages[0]["content"]
+        self.assertIn("When addressing questions about valuation or comparison to historical multiples", system_content)
+        self.assertIn("explicitly state that a verified historical-average comparison cannot be established", system_content)
+        self.assertIn("Never fabricate historical multiple averages", system_content)
+
 
 

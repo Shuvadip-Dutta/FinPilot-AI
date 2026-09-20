@@ -976,3 +976,139 @@ class FinancialAnalysisAgentTestCase(SimpleTestCase):
         result_failed = agent_failed.run("Analyze MSFT financials.")
         self.assertIn("SEC document retrieval failed: Qdrant connection timeout", result_failed.response)
         self.assertEqual(result_failed.tools_used, ["search_financial_documents"])
+
+    def test_context_builder_select_priority_metrics_preserves_valuation_metrics(self):
+        """Test that the 4 canonical valuation metrics survive structural reduction with limit=6."""
+        builder = FinancialAnalysisContextBuilder()
+        representative_metrics = [
+            {"category": "valuation", "name": "Trailing P/E", "key": "pe_ttm", "value": 27.77},
+            {"category": "valuation", "name": "Forward P/E", "key": "forward_pe", "value": 18.10},
+            {"category": "valuation", "name": "EV/EBITDA", "key": "ev_ebitda_ttm", "value": 26.68},
+            {"category": "valuation", "name": "Price/Book", "key": "pb", "value": 23.39},
+            {"category": "valuation", "name": "Market Capitalization", "key": "market_capitalization", "value": 3000000.0},
+            {"category": "valuation", "name": "Enterprise Value", "key": "enterprise_value", "value": 2950000.0},
+            {"category": "profitability", "name": "EPS TTM", "key": "eps_ttm", "value": 2.50},
+            {"category": "valuation", "name": "Book Value Per Share", "key": "book_value_per_share", "value": 5.20},
+            {"category": "trading", "name": "52 Week High", "key": "52_week_high", "value": 140.50},
+            {"category": "trading", "name": "52 Week Low", "key": "52_week_low", "value": 80.25},
+            {"category": "profitability", "name": "ROE TTM", "key": "roe_ttm", "value": 45.2},
+            {"category": "profitability", "name": "ROA TTM", "key": "roa_ttm", "value": 22.1},
+            {"category": "profitability", "name": "Net Profit Margin TTM", "key": "net_profit_margin_ttm", "value": 55.4},
+            {"category": "profitability", "name": "Operating Margin TTM", "key": "operating_margin_ttm", "value": 62.1},
+            {"category": "profitability", "name": "Gross Margin TTM", "key": "gross_margin_ttm", "value": 75.0},
+            {"category": "growth", "name": "Quarterly Revenue Growth YoY", "key": "revenue_growth_quarterly_yoy", "value": 122.0},
+        ]
+
+        selected = builder._select_priority_metrics(representative_metrics, limit=6)
+
+        self.assertEqual(len(selected), 6)
+        selected_keys = [m["key"] for m in selected]
+        self.assertIn("pe_ttm", selected_keys)
+        self.assertIn("forward_pe", selected_keys)
+        self.assertIn("ev_ebitda_ttm", selected_keys)
+        self.assertIn("pb", selected_keys)
+
+    def test_us_valuation_path_and_metrics_propagation(self):
+        """Test US fundamental/valuation path uses structured tools, propagates metrics under reduction, and enforces honesty."""
+        financials_tool = MagicMock(return_value={
+            "financials": [
+                {
+                    "statement_type": "INC",
+                    "period": "2026",
+                    "metrics": [
+                        {"name": "Revenue", "key": "revenue", "value": 60922000000.0},
+                        {"name": "Net Income", "key": "net_income", "value": 29760000000.0},
+                    ],
+                },
+                {
+                    "statement_type": "BAL",
+                    "period": "2026",
+                    "metrics": [
+                        {"name": "Total Assets", "key": "assets", "value": 65728000000.0},
+                        {"name": "Total Liabilities", "key": "liabilities", "value": 22750000000.0},
+                    ],
+                },
+                {
+                    "statement_type": "CAS",
+                    "period": "2026",
+                    "metrics": [
+                        {"name": "Operating Cash Flow", "key": "ocf", "value": 28090000000.0},
+                    ],
+                },
+            ]
+        })
+        representative_metrics = [
+            {"category": "valuation", "name": "Trailing P/E", "key": "pe_ttm", "value": 27.77},
+            {"category": "valuation", "name": "Forward P/E", "key": "forward_pe", "value": 18.10},
+            {"category": "valuation", "name": "EV/EBITDA", "key": "ev_ebitda_ttm", "value": 26.68},
+            {"category": "valuation", "name": "Price/Book", "key": "pb", "value": 23.39},
+            {"category": "valuation", "name": "Market Capitalization", "key": "market_capitalization", "value": 3000000.0},
+            {"category": "valuation", "name": "Enterprise Value", "key": "enterprise_value", "value": 2950000.0},
+            {"category": "profitability", "name": "EPS TTM", "key": "eps_ttm", "value": 2.50},
+            {"category": "valuation", "name": "Book Value Per Share", "key": "book_value_per_share", "value": 5.20},
+            {"category": "trading", "name": "52 Week High", "key": "52_week_high", "value": 140.50},
+            {"category": "trading", "name": "52 Week Low", "key": "52_week_low", "value": 80.25},
+            {"category": "profitability", "name": "ROE TTM", "key": "roe_ttm", "value": 45.2},
+            {"category": "profitability", "name": "ROA TTM", "key": "roa_ttm", "value": 22.1},
+            {"category": "profitability", "name": "Net Profit Margin TTM", "key": "net_profit_margin_ttm", "value": 55.4},
+            {"category": "profitability", "name": "Operating Margin TTM", "key": "operating_margin_ttm", "value": 62.1},
+            {"category": "profitability", "name": "Gross Margin TTM", "key": "gross_margin_ttm", "value": 75.0},
+            {"category": "growth", "name": "Quarterly Revenue Growth YoY", "key": "revenue_growth_quarterly_yoy", "value": 122.0},
+        ]
+        key_metrics_tool = MagicMock(return_value={"metrics": representative_metrics})
+        llm_service = MagicMock(return_value=(
+            "Current valuation metrics for NVDA: Trailing P/E is 27.77, Forward P/E is 18.10, "
+            "EV/EBITDA is 26.68, and P/B is 23.39. A verified historical multiple series was not "
+            "retrieved, so a premium/discount comparison against historical averages cannot be established."
+        ))
+
+        agent = FinancialAnalysisAgent(
+            financials_tool=financials_tool,
+            key_metrics_tool=key_metrics_tool,
+            ticker="NVDA",
+            market="US",
+            llm_service=llm_service,
+        )
+
+        query = (
+            "Assess the current valuation of NVDA (US) based on trailing and forward P/E, "
+            "EV/EBITDA, and price-to-book ratios. Is it trading at a discount or premium to historical averages?"
+        )
+        result = agent.run(query)
+
+        self.assertIsInstance(result, AgentResult)
+        financials_tool.assert_called_once_with(ticker="NVDA", market="US")
+        key_metrics_tool.assert_called_once_with(ticker="NVDA", market="US")
+        self.assertEqual(result.tools_used, ["get_financials", "get_key_metrics"])
+
+        # Check metrics propagation in structured data
+        km_data = result.data.get("key_metrics_data") or []
+        km_keys = {m.get("key"): m.get("value") for m in km_data}
+        self.assertIn("pe_ttm", km_keys)
+        self.assertEqual(km_keys["pe_ttm"], 27.77)
+        self.assertIn("forward_pe", km_keys)
+        self.assertEqual(km_keys["forward_pe"], 18.10)
+        self.assertIn("ev_ebitda_ttm", km_keys)
+        self.assertEqual(km_keys["ev_ebitda_ttm"], 26.68)
+        self.assertIn("pb", km_keys)
+        self.assertEqual(km_keys["pb"], 23.39)
+
+        # Verify prompt and LLM context contain all four valuation metrics
+        messages = llm_service.call_args[0][0]
+        user_content = json.loads(messages[1]["content"])
+        llm_km_data = user_content.get("key_metrics_data") or []
+        llm_km_keys = {m.get("key"): m.get("value") for m in llm_km_data}
+        self.assertIn("pe_ttm", llm_km_keys)
+        self.assertEqual(llm_km_keys["pe_ttm"], 27.77)
+        self.assertIn("forward_pe", llm_km_keys)
+        self.assertEqual(llm_km_keys["forward_pe"], 18.10)
+        self.assertIn("ev_ebitda_ttm", llm_km_keys)
+        self.assertEqual(llm_km_keys["ev_ebitda_ttm"], 26.68)
+        self.assertIn("pb", llm_km_keys)
+        self.assertEqual(llm_km_keys["pb"], 23.39)
+
+        # Verify prompt instructed honesty regarding historical averages
+        system_content = messages[0]["content"]
+        self.assertIn("present the available current metrics directly", system_content)
+        self.assertIn("verified historical-average comparison could not be established", system_content)
+        self.assertIn("Never fabricate historical averages", system_content)

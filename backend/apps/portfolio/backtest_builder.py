@@ -10,17 +10,45 @@ from apps.portfolio.builder import PortfolioWorkflowInputBuilder
 from apps.portfolio.models import Portfolio as PortfolioModel
 
 INDEX_INSTRUMENT_MAP: dict[str, str] = {
+    # NIFTY 50
     "NIFTY 50": "NSE_INDEX|Nifty 50",
     "NIFTY50": "NSE_INDEX|Nifty 50",
     "^NSEI": "NSE_INDEX|Nifty 50",
     "NIFTY": "NSE_INDEX|Nifty 50",
+    "NSE_INDEX|NIFTY 50": "NSE_INDEX|Nifty 50",
+    "NSE_INDEX|Nifty 50": "NSE_INDEX|Nifty 50",
+    # NIFTY 500
     "NIFTY 500": "NSE_INDEX|Nifty 500",
     "NIFTY500": "NSE_INDEX|Nifty 500",
+    "NSE_INDEX|NIFTY 500": "NSE_INDEX|Nifty 500",
+    "NSE_INDEX|Nifty 500": "NSE_INDEX|Nifty 500",
+    # BANKNIFTY
     "BANKNIFTY": "NSE_INDEX|Nifty Bank",
     "NIFTY BANK": "NSE_INDEX|Nifty Bank",
+    "NSE_INDEX|NIFTY BANK": "NSE_INDEX|Nifty Bank",
+    "NSE_INDEX|Nifty Bank": "NSE_INDEX|Nifty Bank",
+    # SENSEX
     "SENSEX": "BSE_INDEX|SENSEX",
     "^BSESN": "BSE_INDEX|SENSEX",
+    "BSE_INDEX|SENSEX": "BSE_INDEX|SENSEX",
 }
+
+
+def resolve_benchmark_instrument_key(symbol: str) -> str:
+    """Resolve user benchmark input/alias to exact canonical Upstox instrument key.
+
+    Normalizes user alias before mapping, returning the exact provider instrument
+    key (e.g. 'NSE_INDEX|Nifty 50') without blindly uppercasing provider keys.
+    """
+    if not symbol or not isinstance(symbol, str):
+        return symbol
+    clean = symbol.strip()
+    if clean in INDEX_INSTRUMENT_MAP:
+        return INDEX_INSTRUMENT_MAP[clean]
+    upper_alias = clean.upper()
+    if upper_alias in INDEX_INSTRUMENT_MAP:
+        return INDEX_INSTRUMENT_MAP[upper_alias]
+    return clean
 
 
 class PortfolioBacktestInputBuilder:
@@ -122,8 +150,15 @@ class PortfolioBacktestInputBuilder:
         norm_benchmark_ticker: str | None = None
 
         if benchmark_ticker:
-            norm_benchmark_ticker = benchmark_ticker.strip().upper()
-            lookup_symbol = INDEX_INSTRUMENT_MAP.get(norm_benchmark_ticker, norm_benchmark_ticker)
+            raw_bmark = benchmark_ticker.strip()
+            upper_alias = raw_bmark.upper()
+            from apps.ai.portfolio.backtest_extractor import CANONICAL_BENCHMARK_ALIASES
+
+            if "NSE_INDEX" in upper_alias or "BSE_INDEX" in upper_alias:
+                norm_benchmark_ticker = CANONICAL_BENCHMARK_ALIASES.get(upper_alias, upper_alias)
+            else:
+                norm_benchmark_ticker = upper_alias
+            lookup_symbol = resolve_benchmark_instrument_key(raw_bmark)
 
             resolved_to = to_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
             try:
