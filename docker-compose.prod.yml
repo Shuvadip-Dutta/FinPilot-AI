@@ -1,0 +1,10 @@
+services:
+  backend:
+    ports: !reset []
+
+  frontend:
+    build:
+      args:
+        VITE_API_BASE_URL: /api/v1/
+    ports: !override
+      - "127.0.0.1:3000:80"
