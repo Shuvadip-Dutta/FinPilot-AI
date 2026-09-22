@@ -10,11 +10,11 @@ The platform is designed to demonstrate how an agentic AI system can combine det
 
 ## Project Status
 
-FinPilot AI is now in the integration and deployment-hardening stage.
+FinPilot AI has reached the deployment and final-integration stage.
 
-The core research platform, multi-agent LangGraph workflow, RAG foundation, authentication and authorization, evidence/provenance persistence, deterministic portfolio optimization, quantitative risk analysis, walk-forward backtesting, SEC filing RAG, conversational backtest activation, portfolio monitoring, background processing, and the portfolio frontend and authenticated frontend workflows are implemented and validated.
+The core research platform, multi-agent LangGraph workflow, RAG foundation, authentication and authorization, evidence/provenance persistence, deterministic portfolio intelligence, portfolio optimization, quantitative risk analysis, walk-forward backtesting, SEC filing RAG, conversational backtest activation, portfolio monitoring, background processing, and the authenticated React/Vite frontend are implemented and validated.
 
-Current work is focused on production containerization, deployment hardening, and final end-to-end integration.
+The application has been deployed as a Dockerized multi-service stack on AWS EC2 and verified through local production smoke tests and public demo access.
 
 ### Current Status
 
@@ -49,8 +49,12 @@ Current work is focused on production containerization, deployment hardening, an
 | Portfolio Alerts | ✅ Implemented |
 | Portfolio Dashboard / Frontend | ✅ Implemented |
 | Production Backend Container | ✅ Implemented |
-| Full Production Deployment | 🚧 In Progress |
-| Final End-to-End Integration | 🚧 Planned |
+| AWS EC2 Deployment | ✅ Validated |
+| Public Demo Access | ✅ Validated |
+| Full Production Deployment | ✅ Implemented |
+| Final End-to-End Integration | 🚧 In Progress |
+| Cloudflare Quick Tunnel | ✅ Validated for demo |
+| Stable Custom-Domain Tunnel | ⏳ Future |
 
 ---
 
@@ -494,6 +498,32 @@ The high-level architecture is:
              └──────────────┘            └──────────────┘
 ```
 
+### Production Deployment Architecture
+
+The current deployment runs FinPilot AI as a Dockerized multi-service stack on AWS EC2.
+
+```text
+Public Browser
+      ↓ HTTPS
+Cloudflare Quick Tunnel
+      ↓
+    AWS EC2
+      ↓
+Frontend Nginx :3000
+      ↓ /api/
+Django / Gunicorn :8000
+      ↓
+PostgreSQL / Redis / Qdrant
+
+Celery Worker
+Celery Beat
+```
+
+Production networking keeps the backend, PostgreSQL, Redis, and Qdrant services off public host ports. The frontend is bound to `127.0.0.1:3000`, while Nginx proxies `/api/` requests to the internal Django backend.
+
+The current public demo uses a temporary Cloudflare Quick Tunnel. A stable domain-based Cloudflare Tunnel is planned for future production hardening.
+
+
 ---
 
 ## AI Agent Architecture
@@ -794,6 +824,16 @@ The SEC workflow includes:
 
 SEC documents remain grounded retrieval sources rather than authoritative numerical calculators.
 
+### SEC and EDGAR
+
+The SEC (U.S. Securities and Exchange Commission) is the U.S. securities regulator.
+
+EDGAR (Electronic Data Gathering, Analysis, and Retrieval) is the SEC's electronic filing system used to access corporate filings.
+
+FinPilot uses SEC/EDGAR filings as grounded document sources for retrieval and evidence.
+
+EDGAR is the source of filing data; it is not the application's portfolio alert engine.
+
 ---
 
 ## MCP Architecture
@@ -1035,7 +1075,7 @@ Sensitive information is filtered/redacted where appropriate.
 
 FinPilot has an extensive automated test suite.
 
-The last fully verified full-suite baseline was:
+The last fully verified **complete-suite** baseline was:
 
 | Metric | Value |
 |---|---:|
@@ -1044,7 +1084,19 @@ The last fully verified full-suite baseline was:
 | Failures | 0 |
 | Errors | 0 |
 
-The suite has since expanded through Phases 13–16. A fresh complete-suite count will be recorded after final deployment integration.
+The suite has since expanded significantly. The latest verified **backend regression** run is:
+
+| Metric | Value |
+|---|---:|
+| Tests | 1,015 |
+| Passed | 1,015 |
+| Failures | 0 |
+| Errors | 0 |
+| Skipped | 2 |
+
+This backend regression run is not yet a re-confirmed full-suite (backend + integration) count — the 705 figure above remains the last confirmed complete-suite baseline, and a fresh complete-suite count will be recorded after final deployment integration.
+
+Additional production verification covers Docker builds, service health, Nginx reverse proxying, frontend/API integration, and AWS deployment smoke tests.
 
 Tests cover areas including:
 
@@ -1128,43 +1180,49 @@ Natural-language backtest activation, conversational parameter handling, routing
 **Phase 15 — Portfolio Monitoring & Background Processing ✅**
 Deterministic portfolio monitoring, configurable monitoring thresholds, portfolio concentration detection, drawdown detection, unrealized loss detection, alert persistence, acknowledgement, cooldown/deduplication, concurrency-safe alert creation, Celery worker tasks, Celery Beat scheduling, Redis integration, retry handling, and portfolio monitoring fan-out.
 
-**Phase 16 — Deployment Hardening 🚧**
-Production Django configuration hardening, startup secret validation, production `DEBUG`/`ALLOWED_HOSTS` handling, static-file configuration, Gunicorn integration, production backend Docker image, non-root container execution, startup migrations, `collectstatic`, container health checks, and deployment preparation.
+**Phase 16 — Deployment Hardening ✅**
+Production Django configuration hardening, startup secret validation, production `DEBUG` / `ALLOWED_HOSTS` handling, static-file configuration, Gunicorn integration, non-root container execution, production Docker images, production Compose override, frontend Nginx reverse proxy, localhost-only service bindings, AWS EC2 deployment, and deployment smoke tests.
 
-**Phase 17 — Final Integration & Evaluation ⏳**
-Full backend/frontend integration, complete container stack validation, production deployment, end-to-end user workflow verification, final regression suite, performance checks, failure handling verification, and final project demonstration.
+**Phase 17 — Final Integration & Evaluation 🚧**
+Public end-to-end workflow verification, final regression validation, presentation/demo preparation, performance and reliability checks, stable public ingress planning, and final project evaluation.
 
-**Test suite status:** 705 tests / 705 passed / 0 failures / 0 errors was the last fully verified full-suite count, taken after the portfolio optimization, quantitative risk, and walk-forward backtesting work was completed. The suite has grown further through Phases 13–15, but a fresh full-suite count has not yet been confirmed — this README will be updated with the final verified number once deployment work (Phases 16–17) completes. See [Testing and Evaluation](#testing-and-evaluation).
+**Test suite status:** 705 tests / 705 passed / 0 failures / 0 errors was the last fully verified *complete-suite* baseline, taken after the portfolio optimization, quantitative risk, and walk-forward backtesting work was completed. The latest verified *backend regression* run is 1,015 tests / 1,015 passed / 0 failures / 0 errors / 2 skipped, following the SEC RAG, conversational backtest, monitoring, and deployment-hardening phases above — this is not yet a re-confirmed full-suite (backend + integration) count. See [Testing and Evaluation](#testing-and-evaluation).
 
 ---
 
 ## Current Limitations
 
-FinPilot is feature-complete across the core research, portfolio, RAG, monitoring, and conversational workflows, but final production integration is still in progress.
+FinPilot's core research, portfolio, RAG, monitoring, conversational, and authenticated frontend workflows are implemented. The remaining limitations are primarily deployment hardening and scalability concerns.
 
-### Production Deployment
+### Public Ingress
 
-The backend production container is implemented and validated locally.
+The current public demo uses a Cloudflare Quick Tunnel and therefore receives a temporary `trycloudflare.com` hostname. This is suitable for demonstration and testing, but it is not the final stable public URL.
 
-Remaining deployment work includes:
+A future stable deployment should use a domain-based, remotely managed Cloudflare Tunnel.
 
-- production Compose integration
-- frontend production container
-- Celery worker and Beat services as part of the orchestrated stack
-- complete multi-service integration
-- managed PostgreSQL / Redis configuration
-- production Qdrant configuration
-- cloud deployment
-- production environment configuration
-- deployment smoke tests
+### Infrastructure Model
+
+The current AWS deployment self-hosts:
+
+- PostgreSQL
+- Redis
+- Qdrant
+- Django/Gunicorn
+- Celery Worker
+- Celery Beat
+- React/Nginx
+
+This keeps the architecture simple for the academic project, but it does not yet provide the redundancy, managed backups, or horizontal scaling expected from a larger production system.
+
+### LLM Provider Capacity
+
+FinPilot currently uses a server-side Groq API key. Multiple users therefore consume the same provider quota. Application-level throttling and token budgets help control usage, but they do not increase the underlying provider capacity.
+
+A larger multi-user deployment would require stronger per-user quotas, concurrency controls, and/or higher-capacity provider plans.
 
 ### Final Integration
 
-The remaining work focuses on validating the complete system as a single deployable platform rather than adding major new application capabilities.
-
-### Minor Technical Debt
-
-Some smaller technical improvements remain and will be addressed incrementally without changing the core architecture.
+The remaining work focuses on final public workflow validation, regression testing, and project demonstration rather than major new application capabilities.
 
 ---
 
@@ -1190,35 +1248,29 @@ Some smaller technical improvements remain and will be addressed incrementally w
 - Celery/Redis background processing
 - Portfolio frontend
 - Production backend containerization
+- AWS EC2 deployment
+- Production Docker Compose deployment
+- Frontend Nginx reverse proxy
+- Production smoke testing
 
 ### Current
 
-**Module 16 — Deployment**
+**Module 17 — Final Integration & Evaluation**
 
 Current focus:
 
-- production configuration
-- backend containerization
-- Gunicorn
-- production startup
-- frontend production container
-- full service orchestration
-- container integration testing
-- cloud deployment preparation
+- public end-to-end workflow verification
+- final regression validation
+- presentation/demo preparation
+- production reliability checks
 
-### Final
+### Future
 
-**Module 17 — Final Integration & Evaluation**
-
-Planned:
-
-- full-stack integration
-- complete end-to-end workflow
-- deployment verification
-- regression testing
-- performance and reliability validation
-- final evaluation
-- final project demonstration
+- domain-based Cloudflare Tunnel
+- stronger multi-user quotas and concurrency management
+- managed database/cache/vector services when required
+- production backups and disaster recovery
+- richer deployment observability
 
 See [Development Phases](#development-phases) for the detailed phase-by-phase history behind this roadmap.
 
@@ -1293,19 +1345,27 @@ Provider-specific API keys and LLM configuration should also be supplied through
 
 ### Docker Services
 
-Current infrastructure includes PostgreSQL and Qdrant.
+The current Docker Compose deployment contains seven services:
 
-Example Qdrant startup:
+| Service | Role |
+|---|---|
+| `frontend` | React/Vite production build served by Nginx |
+| `backend` | Django + Gunicorn API |
+| `worker` | Celery background worker |
+| `beat` | Celery Beat scheduler |
+| `db` | PostgreSQL 16 |
+| `redis` | Redis 7 |
+| `qdrant` | Qdrant vector database |
+
+For local development, `docker-compose.yml` remains unchanged.
+
+For production:
 
 ```bash
-docker run -d \
-  --name finpilot-qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
-  qdrant/qdrant
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
-
-PostgreSQL is configured as the main relational persistence layer.
 
 ### Database Setup
 
@@ -1360,71 +1420,88 @@ Expected current result:
 
 ## Docker Build & Deployment
 
-FinPilot AI includes a production-oriented Docker image for the Django backend.
+FinPilot AI uses a production-oriented Docker Compose deployment.
 
-The current backend container:
+### Production Services
 
-- uses Python 3.12
-- runs Django through Gunicorn
-- runs database migrations automatically at startup
-- runs `collectstatic` automatically at startup
-- uses a non-root runtime user
-- exposes port `8000`
-- includes a container health check
-- supports `SKIP_DJANGO_STARTUP=true` for future Celery worker/Beat containers
+The production stack contains:
 
-### Build the Backend Image
+- React/Vite frontend served by Nginx
+- Django/Gunicorn backend
+- Celery Worker
+- Celery Beat
+- PostgreSQL
+- Redis
+- Qdrant
 
-From the repository root:
+### Production Compose
 
-```bash
-docker build -f Dockerfile -t finpilot-backend:phase2 .
-```
-
-### Run the Backend Container
-
-The backend requires a Django secret key and PostgreSQL host.
+Production is started with:
 
 ```bash
-docker run -p 8000:8000 \
-  -e DJANGO_SECRET_KEY=<your-secret> \
-  -e POSTGRES_HOST=<postgres-host> \
-  finpilot-backend:phase2
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-The example above demonstrates the required startup variables. A fully functional deployment also requires the configured PostgreSQL, Qdrant, Redis, provider, and LLM environment variables.
+The production override:
 
-### Container Startup
+- removes the backend host-port publication
+- sets `VITE_API_BASE_URL=/api/v1/`
+- binds the frontend to `127.0.0.1:3000`
+- keeps PostgreSQL, Redis, and Qdrant on localhost-only host bindings
 
-The container starts through `backend/docker/entrypoint.sh`.
+### Frontend Nginx Reverse Proxy
 
-Startup sequence:
+The production frontend Nginx serves the React SPA and proxies:
 
 ```text
-Container Start
+/api/v1/*
       ↓
-Environment Validation
-      ↓
-Django Migrations
-      ↓
-Collect Static Files
-      ↓
-   Gunicorn
-      ↓
-Django WSGI Application
+http://backend:8000/api/v1/*
 ```
 
-Gunicorn serves `config.wsgi:application` on `0.0.0.0:8000`.
+This allows the browser to use the same-origin `/api/v1/` path.
 
-### Celery Worker / Beat Extension
+### Backend Startup
 
-The backend image is designed to be reusable for future Celery worker and Beat services.
+The backend container starts through `backend/docker/entrypoint.sh` and performs:
 
-Set `SKIP_DJANGO_STARTUP=true` to skip automatic migrations and static-file collection and directly execute the supplied container command.
+```text
+Environment Validation
+        ↓
+Django Migrations
+        ↓
+  Collect Static
+        ↓
+   Gunicorn
+```
 
-### Container Health Check
+The backend exposes port `8000` only inside the Docker network.
 
-The image uses the existing health endpoint, `GET /api/v1/health/`, and exposes a Docker `HEALTHCHECK` against that endpoint.
+### AWS Deployment
+
+FinPilot is currently deployed on AWS EC2 using Ubuntu 24.04 and Docker Compose.
+
+The deployment has been verified through:
+
+- production image builds
+- seven-service startup
+- container health checks
+- Nginx reverse-proxy verification
+- database and Redis health verification
+- frontend root verification
+- `/api/v1/health/` verification
+- confirmation that backend port `8000` is not publicly published
+
+### Public Demo
+
+The current public demo uses a Cloudflare Quick Tunnel:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:3000
+```
+
+The Quick Tunnel provides a temporary HTTPS `trycloudflare.com` hostname for demonstration/testing. Because this hostname changes whenever the tunnel restarts, it is intentionally not hardcoded in this README — see [Current Limitations](#current-limitations) for the plan to move to a stable, domain-based tunnel.
 
 ---
 
@@ -1701,7 +1778,41 @@ Current background-processing architecture includes:
 - portfolio-level monitoring fan-out
 - retry handling for transient failures
 
-The current production containerization work is preparing the backend image for separate web, worker, and Beat services. The full production Compose stack that orchestrates all three together is the next deployment phase — see [Current Limitations](#current-limitations).
+The production Compose deployment runs the Django web service, Celery Worker, and Celery Beat as separate containers on the same Docker network.
+
+The monitoring architecture is:
+
+```text
+Celery Beat
+    ↓
+Scheduled Monitoring Task
+    ↓
+Celery Worker
+    ↓
+Portfolio Monitoring
+    ↓
+Alert Persistence
+```
+
+### Alert Mechanism
+
+Portfolio alerts are generated by FinPilot's deterministic monitoring layer.
+
+```text
+Portfolio State
+      ↓
+Monitoring Rules
+      ↓
+Threshold Check
+      ↓
+Alert Persistence
+      ↓
+Cooldown / Deduplication
+      ↓
+User-visible Alert
+```
+
+The alert mechanism is separate from SEC/EDGAR retrieval — see [SEC and EDGAR](#sec-and-edgar).
 
 ---
 
@@ -1900,6 +2011,13 @@ Current relational database: **PostgreSQL**, used for application persistence, r
 
 - Docker
 - Docker Compose
+
+### Cloud Deployment
+
+- AWS EC2
+- Ubuntu 24.04
+- Docker Compose
+- Cloudflare Tunnel
 
 ### Production-Oriented Design
 
