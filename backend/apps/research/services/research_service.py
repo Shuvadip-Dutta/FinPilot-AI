@@ -207,7 +207,11 @@ class ResearchService:
                 ticker,
                 market,
             )
-            status = DataStatus.COMPLETE.value if (isinstance(financials, list) and len(financials) > 0) else DataStatus.EMPTY.value
+            status = (
+                DataStatus.PARTIAL.value
+                if isinstance(financials, list) and len(financials) > 0
+                else DataStatus.EMPTY.value
+            )
             prov = ProvenanceMetadata(
                 primary_provider="upstox",
                 source="indian_api",
@@ -296,7 +300,7 @@ class ResearchService:
                 and isinstance(metrics_res.metrics, list)
                 and len(metrics_res.metrics) > 0
             )
-            status = DataStatus.COMPLETE.value if has_metrics else DataStatus.EMPTY.value
+            status = DataStatus.PARTIAL.value if has_metrics else DataStatus.EMPTY.value
             prov = ProvenanceMetadata(
                 primary_provider="upstox",
                 source="indian_api",

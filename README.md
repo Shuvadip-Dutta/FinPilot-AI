@@ -879,12 +879,12 @@ These are intentionally separate concerns.
 
 | Agent | Model |
 |---|---|
-| Financial | qwen/qwen3.6-27b |
-| Market | qwen/qwen3.6-27b |
-| News | qwen/qwen3.8-27b |
-| Risk | qwen/qwen3.8-27b |
-| Portfolio | qwen/qwen3.8-27b |
-| Synthesis | qwen/qwen3.8-27b |
+| Financial | openai/gpt-oss-20b |
+| Market | qwen/qwen3.8-27b |
+| News | openai/gpt-oss-20b |
+| Risk | openai/gpt-oss-120b |
+| Portfolio | openai/gpt-oss-20b |
+| Synthesis | openai/gpt-oss-20b |
 
 Financial news sentiment uses: `ProsusAI/finbert`
 

@@ -93,7 +93,7 @@ class TokenBudgetManagerTestCase(SimpleTestCase):
                 prompt_tokens=500,
                 completion_tokens=1000,
                 total_tokens=1500,
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-20b",
             )
         )
 
@@ -123,7 +123,7 @@ class TokenBudgetManagerTestCase(SimpleTestCase):
                     prompt_tokens=500,
                     completion_tokens=1000,
                     total_tokens=1500,
-                    model="qwen/qwen3.6-27b",
+                    model="openai/gpt-oss-20b",
                 )
             )
             snapshot_at_start = manager.get_usage_snapshot()
@@ -148,7 +148,7 @@ class TokenBudgetManagerTestCase(SimpleTestCase):
                 prompt_tokens=2000,
                 completion_tokens=2500,
                 total_tokens=4500,
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-20b",
             )
         )
 
@@ -180,7 +180,7 @@ class TokenBudgetManagerTestCase(SimpleTestCase):
                     prompt_tokens=2000,
                     completion_tokens=2500,
                     total_tokens=4500,
-                    model="qwen/qwen3.6-27b",
+                    model="openai/gpt-oss-20b",
                 )
             )
             snapshot_day1 = manager.get_usage_snapshot()
@@ -204,7 +204,7 @@ class TokenBudgetManagerTestCase(SimpleTestCase):
                 prompt_tokens=100,
                 completion_tokens=200,
                 total_tokens=300,
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-20b",
             )
         )
 
@@ -245,12 +245,12 @@ class TokenBudgetManagerTestCase(SimpleTestCase):
             prompt_tokens=10,
             completion_tokens=20,
             total_tokens=30,
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-20b",
         )
         self.assertEqual(usage.prompt_tokens, 10)
         self.assertEqual(usage.completion_tokens, 20)
         self.assertEqual(usage.total_tokens, 30)
-        self.assertEqual(usage.model, "qwen/qwen3.6-27b")
+        self.assertEqual(usage.model, "openai/gpt-oss-20b")
 
         with self.assertRaises(ValueError):
             LLMUsage(

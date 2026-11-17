@@ -46,6 +46,10 @@ class LLMService:
         model: str | ModelTier | None = None,
         token_budget_manager: TokenBudgetManager | None = None,
     ):
+        normalized_model = self._normalize_model_input(model)
+        self.model_tier = (
+            normalized_model if normalized_model in self._MODEL_TIER_MAP else None
+        )
         self.model = self._resolve_model(model)
         self.provider = GroqProvider(model=self.model)
         self.token_budget_manager = (
@@ -53,9 +57,18 @@ class LLMService:
             if token_budget_manager is not None
             else get_default_token_budget_manager()
         )
+        self.last_call_metadata: dict[str, object] | None = None
 
     def __call__(self, messages: list[dict[str, str]]) -> str:
         return self.generate(messages)
+
+    @classmethod
+    def _normalize_model_input(cls, model: str | ModelTier | None) -> str:
+        if model is None:
+            return ""
+        if isinstance(model, ModelTier):
+            return model.value
+        return str(model).strip().lower()
 
     @classmethod
     def _resolve_model(cls, model: str | ModelTier | None) -> str | None:
@@ -66,7 +79,7 @@ class LLMService:
                 None,
             )
 
-        normalized = str(model).strip().lower()
+        normalized = cls._normalize_model_input(model)
         if normalized in cls._MODEL_TIER_MAP:
             return (
                 getattr(settings, cls._MODEL_TIER_MAP[normalized], None)
@@ -76,6 +89,14 @@ class LLMService:
         return model
 
     def _get_provider_output_ceiling(self) -> int:
+        if self.model_tier == ModelTier.SYNTHESIS.value:
+            return int(
+                getattr(
+                    settings,
+                    "SYNTHESIS_MAX_COMPLETION_TOKENS",
+                    getattr(settings, "REASONING_MAX_COMPLETION_TOKENS", 4096),
+                )
+            )
         return int(
             getattr(settings, "GROQ_MAX_OUTPUT_TOKENS", 1000)
         )
@@ -86,13 +107,21 @@ class LLMService:
             configured = int(
                 getattr(settings, "TOOL_CALL_MAX_COMPLETION_TOKENS", 512)
             )
+        elif self.model_tier == ModelTier.SYNTHESIS.value:
+            configured = int(
+                getattr(
+                    settings,
+                    "SYNTHESIS_MAX_COMPLETION_TOKENS",
+                    getattr(settings, "REASONING_MAX_COMPLETION_TOKENS", 4096),
+                )
+            )
         else:
             configured = int(
                 getattr(settings, "REASONING_MAX_COMPLETION_TOKENS", 4096)
             )
         return min(configured, ceiling)
 
-    def _record_provider_usage(self, response: Any = None) -> None:
+    def _record_provider_usage(self, response: Any = None) -> LLMUsage | None:
         usage = getattr(self.provider, "last_usage", None)
         if usage is None and response is not None:
             usage_obj = getattr(response, "usage", None)
@@ -120,6 +149,22 @@ class LLMService:
                 self.token_budget_manager.record_actual_usage(usage)
             except Exception:
                 pass
+        return usage
+
+    def _record_call_metadata(self, usage: LLMUsage | None) -> None:
+        metadata: dict[str, object] = {"model": str(self.model)}
+        if usage is not None:
+            metadata.update(
+                {
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                }
+            )
+        finish_reason = getattr(self.provider, "last_finish_reason", None)
+        if isinstance(finish_reason, str) and finish_reason:
+            metadata["finish_reason"] = finish_reason
+        self.last_call_metadata = metadata
 
     def generate(
         self,
@@ -141,7 +186,8 @@ class LLMService:
             messages=messages,
             max_completion_tokens=max_output_tokens,
         )
-        self._record_provider_usage()
+        usage = self._record_provider_usage()
+        self._record_call_metadata(usage)
         return content
 
     def generate_with_tools(
@@ -160,5 +206,6 @@ class LLMService:
             tools=tools,
             max_completion_tokens=max_output_tokens,
         )
-        self._record_provider_usage(response=response)
+        usage = self._record_provider_usage(response=response)
+        self._record_call_metadata(usage)
         return response

@@ -98,26 +98,32 @@ SEC_EDGAR_USER_AGENT = os.getenv(
 )
 
 # Frozen benchmark per-agent model assignments (quota-aware)
-FINANCIAL_MODEL = os.getenv("FINANCIAL_MODEL", "qwen/qwen3.6-27b")
-MARKET_MODEL = os.getenv("MARKET_MODEL", "qwen/qwen3.6-27b")
-NEWS_MODEL = os.getenv("NEWS_MODEL", "qwen/qwen3.8-27b")
-RISK_MODEL = os.getenv("RISK_MODEL", "qwen/qwen3.8-27b")
-PORTFOLIO_MODEL = os.getenv("PORTFOLIO_MODEL", "qwen/qwen3.8-27b")
-SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL", "qwen/qwen3.8-27b")
+FINANCIAL_MODEL = os.getenv("FINANCIAL_MODEL", "openai/gpt-oss-20b")
+MARKET_MODEL = os.getenv("MARKET_MODEL", "qwen/qwen3.8-27b")
+NEWS_MODEL = os.getenv("NEWS_MODEL", "openai/gpt-oss-20b")
+RISK_MODEL = os.getenv("RISK_MODEL", "openai/gpt-oss-120b")
+PORTFOLIO_MODEL = os.getenv("PORTFOLIO_MODEL", "openai/gpt-oss-20b")
+SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL", "openai/gpt-oss-20b")
 
 # Model tier defaults
-REASONING_MODEL = os.getenv("REASONING_MODEL", "qwen/qwen3.8-27b")
-FAST_MODEL = os.getenv("FAST_MODEL", "qwen/qwen3.8-27b")
-EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", "qwen/qwen3.8-27b")
+REASONING_MODEL = os.getenv("REASONING_MODEL", "openai/gpt-oss-120b")
+FAST_MODEL = os.getenv("FAST_MODEL", "openai/gpt-oss-20b")
+EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", "openai/gpt-oss-20b")
 
 # Legacy setting kept for backward compatibility.
 GROQ_MODEL = os.getenv(
     "GROQ_MODEL",
-    REASONING_MODEL,
+    "openai/gpt-oss-20b",
 )
 REASONING_MAX_COMPLETION_TOKENS = int(
     os.getenv(
         "REASONING_MAX_COMPLETION_TOKENS",
+        "4096",
+    )
+)
+SYNTHESIS_MAX_COMPLETION_TOKENS = int(
+    os.getenv(
+        "SYNTHESIS_MAX_COMPLETION_TOKENS",
         "4096",
     )
 )

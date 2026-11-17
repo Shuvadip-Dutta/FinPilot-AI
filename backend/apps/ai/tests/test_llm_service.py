@@ -4,7 +4,7 @@ from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 
 from apps.ai.exceptions import LLMError
-from apps.ai.services.llm_service import LLMService
+from apps.ai.services.llm_service import LLMService, ModelTier
 from apps.ai.services.token_budget import (
     LLMUsage,
     TokenBudgetExceededError,
@@ -56,7 +56,7 @@ class LLMServiceTestCase(SimpleTestCase):
             prompt_tokens=10,
             completion_tokens=20,
             total_tokens=30,
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-20b",
         )
 
         budget_manager = TokenBudgetManager()
@@ -85,7 +85,7 @@ class LLMServiceTestCase(SimpleTestCase):
             prompt_tokens=15,
             completion_tokens=25,
             total_tokens=40,
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-20b",
         )
 
         budget_manager = TokenBudgetManager()
@@ -105,7 +105,7 @@ class LLMServiceTestCase(SimpleTestCase):
                 prompt_tokens=15,
                 completion_tokens=25,
                 total_tokens=40,
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-20b",
             ),
         )
 
@@ -266,6 +266,14 @@ class LLMServiceTestCase(SimpleTestCase):
             LLMService(model="qwen/custom-model").model, "qwen/custom-model"
         )
 
+    @override_settings(
+        FINANCIAL_MODEL="openai/gpt-oss-20b",
+        MARKET_MODEL="qwen/qwen3.8-27b",
+        NEWS_MODEL="openai/gpt-oss-20b",
+        RISK_MODEL="openai/gpt-oss-120b",
+        PORTFOLIO_MODEL="openai/gpt-oss-20b",
+        SYNTHESIS_MODEL="openai/gpt-oss-20b",
+    )
     @patch("apps.ai.services.llm_service.GroqProvider")
     def test_frozen_per_agent_model_resolution(self, mock_groq_provider):
         from apps.ai.agents.financial import FinancialAnalysisAgent
@@ -284,19 +292,27 @@ class LLMServiceTestCase(SimpleTestCase):
         port = PortfolioOptimizationAgent()
         syn = FinalSynthesisAgent()
 
-        self.assertEqual(fin.llm_service.model, "qwen/qwen3.6-27b")
-        self.assertEqual(mkt.llm_service.model, "qwen/qwen3.6-27b")
-        self.assertEqual(news.llm_service.model, "qwen/qwen3.8-27b")
+        self.assertEqual(fin.llm_service.model, "openai/gpt-oss-20b")
+        self.assertEqual(mkt.llm_service.model, "qwen/qwen3.8-27b")
+        self.assertEqual(news.llm_service.model, "openai/gpt-oss-20b")
 
         risk_service = risk.llm_service or LLMService(model="risk")
-        self.assertEqual(risk_service.model, "qwen/qwen3.8-27b")
+        self.assertEqual(risk_service.model, "openai/gpt-oss-120b")
 
         port_service = port.llm_service or LLMService(model="portfolio")
-        self.assertEqual(port_service.model, "qwen/qwen3.8-27b")
+        self.assertEqual(port_service.model, "openai/gpt-oss-20b")
 
         syn_model = syn.llm_service.__self__.model
-        self.assertEqual(syn_model, "qwen/qwen3.8-27b")
+        self.assertEqual(syn_model, "openai/gpt-oss-20b")
 
+    @override_settings(
+        FINANCIAL_MODEL="openai/gpt-oss-20b",
+        MARKET_MODEL="qwen/qwen3.8-27b",
+        NEWS_MODEL="openai/gpt-oss-20b",
+        RISK_MODEL="openai/gpt-oss-120b",
+        PORTFOLIO_MODEL="openai/gpt-oss-20b",
+        SYNTHESIS_MODEL="openai/gpt-oss-20b",
+    )
     @patch("apps.ai.services.llm_service.GroqProvider")
     def test_exact_six_agent_logical_model_mapping(self, mock_groq_provider):
         from apps.ai.agents.financial import FinancialAnalysisAgent
@@ -316,13 +332,21 @@ class LLMServiceTestCase(SimpleTestCase):
         syn = FinalSynthesisAgent()
 
         # Architectural design requirement: six-agent logical model mapping
-        self.assertEqual(fin.llm_service.model, "qwen/qwen3.6-27b")
-        self.assertEqual(mkt.llm_service.model, "qwen/qwen3.6-27b")
-        self.assertEqual(news.llm_service.model, "qwen/qwen3.8-27b")
-        self.assertEqual((risk.llm_service or LLMService(model="risk")).model, "qwen/qwen3.8-27b")
-        self.assertEqual((port.llm_service or LLMService(model="portfolio")).model, "qwen/qwen3.8-27b")
-        self.assertEqual(syn.llm_service.__self__.model, "qwen/qwen3.8-27b")
+        self.assertEqual(fin.llm_service.model, "openai/gpt-oss-20b")
+        self.assertEqual(mkt.llm_service.model, "qwen/qwen3.8-27b")
+        self.assertEqual(news.llm_service.model, "openai/gpt-oss-20b")
+        self.assertEqual((risk.llm_service or LLMService(model="risk")).model, "openai/gpt-oss-120b")
+        self.assertEqual((port.llm_service or LLMService(model="portfolio")).model, "openai/gpt-oss-20b")
+        self.assertEqual(syn.llm_service.__self__.model, "openai/gpt-oss-20b")
 
+    @override_settings(
+        FINANCIAL_MODEL="openai/gpt-oss-20b",
+        MARKET_MODEL="qwen/qwen3.8-27b",
+        NEWS_MODEL="openai/gpt-oss-20b",
+        RISK_MODEL="openai/gpt-oss-120b",
+        PORTFOLIO_MODEL="openai/gpt-oss-20b",
+        SYNTHESIS_MODEL="openai/gpt-oss-20b",
+    )
     def test_provider_effective_model_resolution(self):
         from apps.ai.agents.financial import FinancialAnalysisAgent
         from apps.ai.agents.market import MarketAnalysisAgent
@@ -341,12 +365,12 @@ class LLMServiceTestCase(SimpleTestCase):
         syn = FinalSynthesisAgent()
 
         # Provider effective models sent to Groq
-        self.assertEqual(fin.llm_service.provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual(fin.llm_service.provider.get_effective_model(), "openai/gpt-oss-20b")
         self.assertEqual(mkt.llm_service.provider.get_effective_model(), "qwen/qwen3.8-27b")
-        self.assertEqual(news.llm_service.provider.get_effective_model(), "qwen/qwen3.8-27b")
-        self.assertEqual((risk.llm_service or LLMService(model="risk")).provider.get_effective_model(), "qwen/qwen3.8-27b")
-        self.assertEqual((port.llm_service or LLMService(model="portfolio")).provider.get_effective_model(), "qwen/qwen3.8-27b")
-        self.assertEqual(syn.llm_service.__self__.provider.get_effective_model(), "qwen/qwen3.8-27b")
+        self.assertEqual(news.llm_service.provider.get_effective_model(), "openai/gpt-oss-20b")
+        self.assertEqual((risk.llm_service or LLMService(model="risk")).provider.get_effective_model(), "openai/gpt-oss-120b")
+        self.assertEqual((port.llm_service or LLMService(model="portfolio")).provider.get_effective_model(), "openai/gpt-oss-20b")
+        self.assertEqual(syn.llm_service.__self__.provider.get_effective_model(), "openai/gpt-oss-20b")
 
     def test_default_llm_services_share_same_token_budget_manager(self):
         s1 = LLMService()
@@ -407,7 +431,7 @@ class LLMServiceTestCase(SimpleTestCase):
             prompt_tokens=100,
             completion_tokens=50,
             total_tokens=150,
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-20b",
         )
 
         s1 = LLMService()
@@ -494,4 +518,82 @@ class LLMServiceTestCase(SimpleTestCase):
         mock_provider.generate.assert_called_with(
             messages=messages,
             max_completion_tokens=512,
+        )
+
+    @override_settings(
+        GROQ_MAX_OUTPUT_TOKENS=1000,
+        SYNTHESIS_MAX_COMPLETION_TOKENS=4096,
+        REASONING_MAX_COMPLETION_TOKENS=4096,
+    )
+    @patch("apps.ai.services.llm_service.GroqProvider")
+    def test_synthesis_uses_dedicated_output_budget_and_records_metadata(
+        self, mock_groq_provider
+    ):
+        mock_provider = mock_groq_provider.return_value
+        mock_provider.generate.return_value = "Complete synthesis."
+        mock_provider.last_usage = LLMUsage(
+            prompt_tokens=100,
+            completion_tokens=250,
+            total_tokens=350,
+            model="openai/gpt-oss-20b",
+        )
+        mock_provider.last_finish_reason = "stop"
+
+        service = LLMService(model="synthesis")
+        service.generate([{"role": "user", "content": "Research HDFCBANK."}])
+
+        self.assertEqual(
+            mock_provider.generate.call_args.kwargs["max_completion_tokens"],
+            4096,
+        )
+        self.assertEqual(
+            service.last_call_metadata,
+            {
+                "model": "openai/gpt-oss-20b",
+                "prompt_tokens": 100,
+                "completion_tokens": 250,
+                "total_tokens": 350,
+                "finish_reason": "stop",
+            },
+        )
+
+    @override_settings(
+        GROQ_MAX_OUTPUT_TOKENS=1000,
+        SYNTHESIS_MAX_COMPLETION_TOKENS=4096,
+        SYNTHESIS_MODEL="synthesis-model",
+    )
+    @patch("apps.ai.services.llm_service.GroqProvider")
+    def test_synthesis_enum_uses_dedicated_output_budget(
+        self, mock_groq_provider
+    ):
+        mock_provider = mock_groq_provider.return_value
+        mock_provider.generate.return_value = "Complete synthesis."
+        mock_provider.last_usage = None
+
+        service = LLMService(model=ModelTier.SYNTHESIS)
+        service.generate([{"role": "user", "content": "Research HDFCBANK."}])
+
+        self.assertEqual(service.model_tier, ModelTier.SYNTHESIS.value)
+        self.assertEqual(
+            mock_provider.generate.call_args.kwargs["max_completion_tokens"],
+            4096,
+        )
+
+    @override_settings(
+        GROQ_MAX_OUTPUT_TOKENS=1000,
+        SYNTHESIS_MAX_COMPLETION_TOKENS=4096,
+    )
+    @patch("apps.ai.services.llm_service.GroqProvider")
+    def test_non_synthesis_agents_keep_global_output_ceiling(
+        self, mock_groq_provider
+    ):
+        mock_provider = mock_groq_provider.return_value
+        mock_provider.generate.return_value = "Response"
+
+        service = LLMService(model="financial")
+        service.generate([{"role": "user", "content": "Research."}])
+
+        self.assertEqual(
+            mock_provider.generate.call_args.kwargs["max_completion_tokens"],
+            1000,
         )

@@ -28,12 +28,16 @@ class NewsIntelligenceAgentTestCase(SimpleTestCase):
                         "title": "Reliance update",
                         "summary": "Expansion continues at a strong pace.",
                         "source": "upstox.com",
+                        "url": "https://example.com/reliance-update",
+                        "published_at": "2026-11-17T09:00:00Z",
                         "relevance_type": "DIRECT",
                     },
                     {
                         "title": "Market update",
                         "summary": "Broader market sentiment is mixed.",
                         "source": "livemint.com",
+                        "url": "https://example.com/market-update",
+                        "published_at": "2026-11-16T09:00:00Z",
                         "relevance_type": "RELATED",
                     },
                 ],
@@ -73,12 +77,18 @@ class NewsIntelligenceAgentTestCase(SimpleTestCase):
         self.assertIn("RELIANCE", messages[1]["content"])
         self.assertIn("article_titles", messages[1]["content"])
         self.assertIn("aggregated_sentiment", messages[1]["content"])
+        self.assertIn("https://example.com/reliance-update", messages[1]["content"])
+        self.assertIn("2026-11-17T09:00:00Z", messages[1]["content"])
         self.assertIn("do not recalculate them", messages[0]["content"])
         self.assertIn("positive=1", result.response)
         self.assertIn("neutral=1", result.response)
         self.assertIn("negative=0", result.response)
         self.assertEqual(len(result.data["articles"]), 2)
         self.assertEqual(result.data["articles"][0]["sentiment"]["label"], "positive")
+        self.assertEqual(result.data["articles"][0]["summary"], "Expansion continues at a strong pace.")
+        self.assertEqual(result.data["articles"][0]["source"], "upstox.com")
+        self.assertEqual(result.data["articles"][0]["url"], "https://example.com/reliance-update")
+        self.assertEqual(result.data["articles"][0]["published_at"], "2026-11-17T09:00:00Z")
         self.assertEqual(
             result.data["aggregated_sentiment"],
             {
@@ -552,8 +562,39 @@ class NewsIntelligenceAgentTestCase(SimpleTestCase):
         result = agent.run(ctx)
 
         self.assertEqual(result.data["articles"][0]["source"], "Bloomberg")
+        self.assertEqual(result.data["articles"][0]["url"], "https://example.com/q1-earnings")
+        self.assertEqual(result.data["articles"][0]["published_at"], "2026-09-01T10:00:00Z")
         self.assertEqual(result.data["provenance"]["news"]["source"], "upstox_news_api")
         self.assertNotEqual(result.data["articles"][0]["source"], result.data["provenance"]["news"]["source"])
+
+    def test_missing_news_metadata_is_preserved_as_missing(self):
+        agent = NewsIntelligenceAgent(
+            news_tool=lambda **kwargs: {
+                "ticker": "INFY",
+                "articles": [
+                    {
+                        "title": "Infosys update",
+                        "summary": "Reported company development.",
+                        "source": "Reuters",
+                    }
+                ],
+            },
+            sentiment_classifier=MagicMock(return_value={"label": "neutral", "confidence": 0.5}),
+            llm_service=MagicMock(return_value="No verified source link was available."),
+        )
+
+        result = agent.run("Analyze INFY news.")
+
+        article = result.data["articles"][0]
+        self.assertIsNone(article["url"])
+        self.assertIsNone(article["published_at"])
+        prompt = agent._build_analysis_messages(
+            "Analyze INFY news.",
+            "INFY",
+            [{"title": "Infosys update", "summary": "Reported company development.", "source": "Reuters"}],
+            result.data["articles"],
+        )[1]["content"]
+        self.assertNotIn("https://", prompt)
 
     def test_provenance_survives_from_news_tool_dict_into_agent_context(self):
         news_dict = {

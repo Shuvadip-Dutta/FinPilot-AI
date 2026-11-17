@@ -190,6 +190,7 @@ class ResearchServiceTestCase(SimpleTestCase):
         self.assertEqual(result, fallback_res)
         mock_upstox.assert_called_once_with("LT", Market.INDIA)
         mock_indian_api.assert_called_once_with("LT", Market.INDIA)
+        self.assertEqual(result._provenance.data_status, "partial")
 
     @patch("apps.research.services.research_service.IndianAPIProvider.get_company_profile")
     @patch("apps.research.services.research_service.UpstoxProvider.get_company_profile")
@@ -276,6 +277,7 @@ class ResearchServiceTestCase(SimpleTestCase):
         self.assertEqual(result._provenance.source, "indian_api")
         self.assertTrue(result._provenance.fallback_used)
         self.assertEqual(result._provenance.fallback_reason, "upstox_empty_data")
+        self.assertEqual(result._provenance.data_status, "partial")
 
     @patch("apps.research.services.research_service.FinnhubProvider.get_quotes")
     def test_us_get_market_data(self, mock_get_quotes):

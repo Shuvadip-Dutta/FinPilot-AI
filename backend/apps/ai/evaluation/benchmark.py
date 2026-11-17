@@ -18,8 +18,8 @@ from apps.ai.services.llm_service import LLMService, ModelTier
 class ModelIdentifier(str, Enum):
     """Supported explicit model identifiers for benchmark runs."""
 
-    QWEN_3_6_27B = "qwen/qwen3.6-27b"
     QWEN_3_8_27B = "qwen/qwen3.8-27b"
+    GPT_OSS_120B = "openai/gpt-oss-120b"
     GPT_OSS_20B = "openai/gpt-oss-20b"
 
 

@@ -361,6 +361,9 @@ class NewsIntelligenceAgent(BaseAgent):
             title = self._get_article_field(article, "title")
             summary = self._get_article_field(article, "summary")
             source = self._get_article_field(article, "source")
+            url = self._get_article_field(article, "url")
+            published_at = self._get_article_field(article, "published_at")
+            image_url = self._get_article_field(article, "image_url")
             relevance_type = self._get_article_field(article, "relevance_type")
 
             combined_text = self._coalesce_article_text(title, summary)
@@ -370,6 +373,9 @@ class NewsIntelligenceAgent(BaseAgent):
                         "title": title,
                         "summary": summary,
                         "source": source,
+                        "url": url,
+                        "published_at": published_at,
+                        "image_url": image_url,
                         "relevance_type": relevance_type,
                         "sentiment": {"label": "unavailable", "confidence": 0.0},
                     }
@@ -383,6 +389,9 @@ class NewsIntelligenceAgent(BaseAgent):
                     "title": title,
                     "summary": summary,
                     "source": source,
+                    "url": url,
+                    "published_at": published_at,
+                    "image_url": image_url,
                     "relevance_type": relevance_type,
                     "sentiment": normalized,
                 }
@@ -483,6 +492,8 @@ class NewsIntelligenceAgent(BaseAgent):
                     "title": NewsIntelligenceAgent._get_article_field(article, "title"),
                     "summary": NewsIntelligenceAgent._get_article_field(article, "summary"),
                     "source": NewsIntelligenceAgent._get_article_field(article, "source"),
+                    "url": NewsIntelligenceAgent._get_article_field(article, "url"),
+                    "published_at": NewsIntelligenceAgent._get_article_field(article, "published_at"),
                     "relevance_type": NewsIntelligenceAgent._get_article_field(article, "relevance_type"),
                 }
                 for article in articles

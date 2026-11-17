@@ -64,11 +64,11 @@ class ModelBenchmarkTestCase(SimpleTestCase):
         result = runner.evaluate_case(
             EVALUATION_DATASET[0],
             ModelTier.REASONING,
-            model_identifier=ModelIdentifier.QWEN_3_6_27B,
+            model_identifier=ModelIdentifier.GPT_OSS_120B,
         )
 
-        self.assertEqual(seen, [ModelIdentifier.QWEN_3_6_27B])
-        self.assertEqual(result.model_identifier, "qwen/qwen3.6-27b")
+        self.assertEqual(seen, [ModelIdentifier.GPT_OSS_120B])
+        self.assertEqual(result.model_identifier, "openai/gpt-oss-120b")
 
     def test_phase_8_model_identifiers_align_to_same_case(self):
         def factory(model):

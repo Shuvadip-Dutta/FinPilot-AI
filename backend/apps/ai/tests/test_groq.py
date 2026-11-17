@@ -9,7 +9,7 @@ from apps.ai.services.token_budget import LLMUsage
 class GroqProviderTestCase(SimpleTestCase):
 
     @patch("apps.ai.services.providers.groq.Groq")
-    def test_generate_qwen36_preserves_visible_reasoning(self, mock_groq):
+    def test_generate_gpt_oss_20b_uses_medium_reasoning(self, mock_groq):
         mock_client = MagicMock()
         mock_groq.return_value = mock_client
 
@@ -17,13 +17,14 @@ class GroqProviderTestCase(SimpleTestCase):
         mock_response.choices[0].message.content = (
             "<think>Reasoning content</think>\nFinal answer."
         )
+        mock_response.choices[0].finish_reason = "stop"
         mock_response.usage.prompt_tokens = 15
         mock_response.usage.completion_tokens = 25
         mock_response.usage.total_tokens = 40
 
         mock_client.chat.completions.create.return_value = mock_response
 
-        provider = GroqProvider(model="qwen/qwen3.6-27b")
+        provider = GroqProvider(model="openai/gpt-oss-20b")
 
         result = provider.generate(
             [
@@ -41,7 +42,8 @@ class GroqProviderTestCase(SimpleTestCase):
 
         request_kwargs = mock_client.chat.completions.create.call_args.kwargs
 
-        self.assertEqual(request_kwargs["model"], "qwen/qwen3.8-27b")
+        self.assertEqual(request_kwargs["model"], "openai/gpt-oss-20b")
+        self.assertEqual(request_kwargs["reasoning_effort"], "medium")
         self.assertNotIn("reasoning_format", request_kwargs)
 
         self.assertEqual(
@@ -50,9 +52,10 @@ class GroqProviderTestCase(SimpleTestCase):
                 prompt_tokens=15,
                 completion_tokens=25,
                 total_tokens=40,
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-20b",
             ),
         )
+        self.assertEqual(provider.last_finish_reason, "stop")
 
     @override_settings(REASONING_MAX_COMPLETION_TOKENS=4096)
     @patch("apps.ai.services.providers.groq.Groq")
@@ -78,6 +81,7 @@ class GroqProviderTestCase(SimpleTestCase):
             request_kwargs["reasoning_format"],
             "hidden",
         )
+        self.assertEqual(request_kwargs["reasoning_effort"], "medium")
         self.assertEqual(
             request_kwargs["max_completion_tokens"],
             4096,
@@ -109,7 +113,7 @@ class GroqProviderTestCase(SimpleTestCase):
         mock_response.usage = None
         mock_client.chat.completions.create.return_value = mock_response
 
-        provider = GroqProvider(model="qwen/qwen3.6-27b")
+        provider = GroqProvider(model="qwen/qwen3.8-27b")
         result = provider.generate([{"role": "user", "content": "Hi"}])
 
         self.assertEqual(result, "Answer without usage")
@@ -140,7 +144,7 @@ class GroqProviderTestCase(SimpleTestCase):
         )
 
     @patch("apps.ai.services.providers.groq.Groq")
-    def test_generate_with_tools_uses_tool_call_request_without_reasoning_format(
+    def test_generate_with_tools_uses_model_reasoning_configuration(
         self, mock_groq
     ):
         mock_client = MagicMock()
@@ -151,7 +155,7 @@ class GroqProviderTestCase(SimpleTestCase):
         mock_response.choices[0].message.content = None
         mock_client.chat.completions.create.return_value = mock_response
 
-        provider = GroqProvider(model="qwen/qwen3.6-27b")
+        provider = GroqProvider(model="qwen/qwen3.8-27b")
         result = provider.generate_with_tools(
             messages=[{"role": "user", "content": "Analyze Reliance."}],
             tools=[
@@ -173,10 +177,9 @@ class GroqProviderTestCase(SimpleTestCase):
             ],
             "auto",
         )
-        self.assertNotIn(
-            "reasoning_format",
-            mock_client.chat.completions.create.call_args.kwargs,
-        )
+        request_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        self.assertEqual(request_kwargs["reasoning_format"], "hidden")
+        self.assertEqual(request_kwargs["reasoning_effort"], "medium")
 
     @patch("apps.ai.services.providers.groq.Groq")
     def test_generate_with_tools_forwards_max_completion_tokens_and_captures_usage(
@@ -191,7 +194,7 @@ class GroqProviderTestCase(SimpleTestCase):
         mock_response.usage.total_tokens = 150
         mock_client.chat.completions.create.return_value = mock_response
 
-        provider = GroqProvider(model="qwen/qwen3.6-27b")
+        provider = GroqProvider(model="openai/gpt-oss-20b")
         result = provider.generate_with_tools(
             messages=[{"role": "user", "content": "Test"}],
             tools=[],
@@ -211,7 +214,7 @@ class GroqProviderTestCase(SimpleTestCase):
                 prompt_tokens=50,
                 completion_tokens=100,
                 total_tokens=150,
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-20b",
             ),
         )
 
@@ -262,27 +265,28 @@ class GroqProviderTestCase(SimpleTestCase):
             
             
     def test_reasoning_model_classification(self):
-        self.assertFalse(
-            GroqProvider(model="qwen/qwen3.6-27b")._is_reasoning_model()
-        )
         self.assertTrue(
             GroqProvider(model="qwen/qwen3.8-27b")._is_reasoning_model()
         )
+        self.assertTrue(
+            GroqProvider(model="openai/gpt-oss-120b")._is_reasoning_model()
+        )
+        self.assertTrue(
+            GroqProvider(model="openai/gpt-oss-20b")._is_reasoning_model()
+        )
+        self.assertFalse(
+            GroqProvider(model="llama-3.1-8b-instant")._is_reasoning_model()
+        )
 
-    def test_provider_model_resolution_and_compatibility(self):
-        # 1. qwen/qwen3.6-27b resolves to qwen/qwen3.8-27b on Groq
-        p36 = GroqProvider(model="qwen/qwen3.6-27b")
-        self.assertEqual(p36.model, "qwen/qwen3.6-27b")
-        self.assertEqual(p36.get_effective_model(), "qwen/qwen3.8-27b")
-        self.assertFalse(p36._is_reasoning_model())
-
-        # 2. qwen/qwen3.8-27b resolves to itself
+    def test_provider_model_resolution_does_not_translate_models(self):
         p38 = GroqProvider(model="qwen/qwen3.8-27b")
         self.assertEqual(p38.model, "qwen/qwen3.8-27b")
         self.assertEqual(p38.get_effective_model(), "qwen/qwen3.8-27b")
         self.assertTrue(p38._is_reasoning_model())
 
-        # 3. Unmapped models resolve to themselves
+        p120 = GroqProvider(model="openai/gpt-oss-120b")
+        self.assertEqual(p120.get_effective_model(), "openai/gpt-oss-120b")
+
         p_llama = GroqProvider(model="llama-3.1-8b-instant")
         self.assertEqual(p_llama.model, "llama-3.1-8b-instant")
         self.assertEqual(p_llama.get_effective_model(), "llama-3.1-8b-instant")
